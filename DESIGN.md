@@ -12,8 +12,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Radius | `FoamyStyle.radius` | `Style.cornerRadius * 2` on surfaces, rows, inputs, buttons. `radiusSmall` (= Hyprland rounding) for nested chips. Pills via `pillRadius(h)`, only when `rounded`. Never write `cornerRadius * 2` yourself *(lint)* |
 | Popup border | `FoamyStyle.popupBorderSpec` | 1px `alpha(popups.text, 0.15)` (`FoamyPalette.border`) |
 | Body font | `FoamyStyle.fontFamily` | `"sans-serif"`; never the literal *(lint)*. `monoFamily` (the Omarchy font) for numbers, code, glyphs |
-| Type scale | `FoamyStyle.font.*` | caption 10, bodySmall 11, body 12, subtitle 13, title 14, heading 16, iconLarge 18, display 24, displayLarge 28 (all `Style.space(n)`). No other sizes |
-| Widths | `popupWidth` / `popupWidthWide` | 420 standard; 560 for data-dense panels (vitals, weather, monitor). The settings page uses the same width. Height cap `popupMaxHeight` 640 |
+| Type scale | `FoamyStyle.font.*` | caption 10, bodySmall 11, body 12, subtitle 13, title 14, heading 16, iconLarge 18, display 24, displayLarge 28 (all `Style.space(n)`). Hero numbers (clock face, temperature, volume, countdown): `numeral` 56, `numeralCompact` 40, their unit in `display`. No other sizes |
+| Widths | `popupWidth` / `popupWidthWide` | 420 standard; 560 for data-dense panels (vitals, weather, monitor). The settings page uses the same width. Height cap `popupMaxHeight` 640 (FoamyPopup `maxHeight`; 0 for panels that compact themselves by screen height). Menus: `menuWidth` 232, `menuPadding` 8 |
 | Spacing | `padding` 20, `gapTiny` 2, `gapSmall` 4, `gap` 8, `gapLarge` 12, `sectionGap` 14, `rowPadding` 10, `rowHeight` 36 | Popup card padding is 0; content insets by `padding` so lists scroll edge to edge |
 | Controls | `controlHeight` 32, `actionSize` 28, `iconSize` 15, `settingsButtonSize` 32, `settingsIconSize` 16, `iconStroke` 1.7 | |
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
@@ -29,7 +29,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   panels; `FoamyPopupCard` (stock `PopupCard`) for menus. Content goes in
   `body: Component { … }` (built on first open). Never fork KeyboardPanel, never
   override `borderSpec`/`padding`/radius per plugin. Layer namespace stays
-  `omarchy-keyboard-panel`.
+  `omarchy-keyboard-panel`. Always set `owner: root` so closing goes through
+  the panel (without it the stock close() assigns over your `open:` binding).
 - **Header**: `FoamyHeader`: icon (18), title (title, DemiBold), meta (bodySmall,
   secondary), trailing actions, settings button (tooltip "Settings"). One per popup.
 - **Rows**: `FoamyCursorSurface` (stock CursorSurface, foamy radius), insets
@@ -37,12 +38,21 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Actions**: `FoamyAction` (28, icon 15, hover fill, tooltip). Settings button =
   `settings: true` (32/16). Destructive: `destructive: true`. Spinners only via
   `spinning`.
-- **Icons**: `FoamyIcon` (Lucide superset). Add icons to the kit, not to plugins.
+- **Icons**: `FoamyIcon` (Lucide superset, 102 names). Add icons to the kit
+  (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`.
-- **Choices**: `FoamyDropdown`. **Toggles**: `FoamyToggle`.
+- **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
+  `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
+  (`checked` bound, save in `onClicked`).
+- **Controlled values**: kit controls never assign over a caller's binding.
+  Bind `value`/`checked`/`open` to state and change the state in handlers.
+  (Text fields are the exception every toolkit has: typing edits `text`;
+  write back in `onTextEdited`, reset by assigning.)
 - **Settings page**: `FoamySettingsPage` (back, "Settings", "Saving…", error +
   Retry, sections). Sections: `FoamySettingsSection`, sentence-case titles.
+  Whether it shows: `FoamySettingsState` (`show()` opens the popup on
+  Settings; resets on close, never on open).
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
   period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
   with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
@@ -68,8 +78,19 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   Singleton`; open popups raise demand.
 - **IPC**: `FoamyIpc` only *(lint: no raw `IpcHandler`/`ShellIpc`)*, `enabled:
   member.isLeader`.
-- **Settings**: save through `FoamyPrefs.save()` (inline `updateEntryInline`,
-  else `omarchy bar set … --json`). Never a hand-built `setBarWidget` call.
+  A target shared with another service: `FoamyIpcPreference`. Calling another
+  plugin: `FoamyPeerIpc` (never read its files or run its scripts).
+- **Settings**: save through `FoamyPrefsQueue` (inline `updateEntryInline`,
+  else the CLI; serialised, newest value per key, never merging over a stale
+  entry). Arrays/objects are schema types (`array`, `object` + `validate`).
+  Never a hand-built `setBarWidget` call or a plugin-local save queue.
+- **Letter shortcuts**: `onTextKey: function(text, modifiers)` and skip unless
+  `cursor.plain(modifiers)` (`modifiers` is undefined on 4.0, which has
+  `textKey(text)`). Tests emit with `cursor.emitTextKey(catcher, text)`.
+- **Effects**: MultiEffect, ShaderEffect and layer effects draw nothing under
+  the software renderer (Omarchy CPU rendering, the preview harness). Gate them
+  with `layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software` and keep the
+  content readable without them.
 
 ## Copy
 
@@ -83,7 +104,10 @@ Dates with `Qt.locale(FoamyI18n.formatLocale)`.
 ## Lint
 
 `check.sh` fails on: `unqualified-color`, `bare-duration`, `sans-serif`,
-`radius-x2`, `hex-colour`, `unguarded-loop`, `raw-ipc`. Kit files that own a
+`radius-x2`, `hex-colour`, `unguarded-loop`, `raw-ipc`, `empty-glyph` (a
+`*Glyph { text: "" }`: an icon character was lost). It warns on `pua-literal`
+(an icon-font character written literally; editors and tools strip them, so
+write `"\u{f0e7}"`); `--strict` fails on warnings too. Kit files that own a
 rule are exempt by name. A justified exception (art surface, shader clock)
 carries a reasoned opt-out on the line or the line above:
 

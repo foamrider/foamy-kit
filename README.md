@@ -20,16 +20,17 @@ edited in a plugin: change it here, then sync.
 | FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; 4.5 Translations, English on 4.0 |
 | FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
-| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js` | IpcHandler that also registers with 4.5's IpcRegistry (omarchy-shell socket) |
+| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with 4.5's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
+| FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process on 4.5, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions, settings button |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset (ISC, `LICENSE-LUCIDE`) |
-| FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, value-on-select + RTL (`LICENSE-OMARCHY`) |
-| SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste |
-| FoamySettings | `FoamySettingsPage/Header/Section/Error.qml`, `FoamyToggle.qml` | Settings page skeleton |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 102 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
+| SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
+| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton and open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
-| FoamyPrefs | `FoamyPrefs.js` | Schema validation and settings saving (inline, else `omarchy bar set`) |
+| FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
 
@@ -39,6 +40,7 @@ Each file's header documents its API. Dependencies are in `kit/components.json`.
 ./sync.sh ../foamy-audio                                   # first time: every component
 ./sync.sh ../foamy-audio --components FoamyPopup,FoamyI18n # or a subset (+ dependencies)
 ./sync.sh ../foamy-*                                       # later: refresh, keeping each plugin's set
+./sync.sh ../foamy-lock --add FoamyPeerIpc                 # add a component to the plugin's set
 ```
 
 Sync writes `kit/` (components, a generated `kit/qmldir` registering the
@@ -84,7 +86,12 @@ QML is loaded, no host script or binary is ever run). Offscreen Qt has no
 layer shell, so the host's own `Ui/KeyboardPanel.qml` is loaded with its
 `PanelWindow` swapped for an item that draws into a simulated 1920x1080
 screen; its geometry and motion code is the host's. 4.5 runs use a full-screen
-bar window, 4.0 runs a strip window, like the real bars.
+bar window, 4.0 runs a strip window, like the real bars. Each run gets a
+private D-Bus session (no service activation: the desktop's MPRIS players
+and notifications are invisible), and `qs` dies with the render, even when
+the render itself is killed; the temp dir is removed (`--keep` keeps it).
+The plugin is loaded over `file://`, like the shell loads it, so plugin
+subdirectories need no qmldir.
 
 The plugin provides `preview/Preview.qml` (mock data, no processes):
 
@@ -111,7 +118,19 @@ Item {
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da` (4.5), `--position`,
-`--rounding`.
+`--rounding`, `--timeout`, `--bus private|none`, `--keep`.
+
+Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
+
+- a **FoamyPopupCard** menu: declare `readonly property var popup` (a card is a
+  window, not an Item); its card is copied onto the screen at its anchor;
+- a **service plugin** (toasts, no bar popup): leave out `bar`/`anchorItem`;
+  `popup` is any Item with a `cardItem`, placed in screen coordinates (the
+  preview fills the screen); without a `cardItem` only the screen is captured.
+
+MultiEffect, ShaderEffect and layer effects draw nothing under the software
+renderer the harness uses (as under Omarchy CPU rendering): gate them so the
+content still reads without them (DESIGN.md, "Effects").
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
 branch through a temporary worktree (the working tree is untouched), prints
@@ -131,13 +150,20 @@ PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
 tests/run-all.sh
 ```
 
-Runs FoamyPrefs unit tests (node), sync/check/lint on throwaway copies, the
-FoamyPopup geometry test (4 bar positions, both hosts, plus the old fork as a
-negative control), runtime tests of i18n/motion/palette/prefs/cursor/leader
-election/IPC on both hosts (English, Danish, Arabic), and the demo preview.
+Runs FoamyPrefs unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
+on throwaway copies, the FoamyPopup geometry test (4 bar positions, both hosts,
+max height, menu padding, plus the old fork as a negative control), runtime
+tests of i18n/motion/palette/prefs/cursor/leader election/IPC on both hosts
+(English, Danish, Arabic), the 0.2 features (icons, tokens, dropdown binding,
+prefs queue inline and CLI with fake `omarchy`, IPC preference and peer
+calls, settings state, private D-Bus), a `qs ipc` argument probe, harness
+leak tests, and the demo, menu-card and service previews.
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 
 ## Versioning
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 
 `VERSION` is the kit version stamped into every copy. Bump it for any change
 under `kit/` or `tools/kit-check.sh.in`, then sync every plugin so `check.sh`
