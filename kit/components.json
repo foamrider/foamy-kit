@@ -9,11 +9,12 @@
   "FoamyIcon": {"files": ["FoamyIcon.qml"], "deps": ["FoamyStyle", "FoamyPalette", "FoamyI18n"], "notices": ["LICENSE-LUCIDE"]},
   "FoamyAction": {"files": ["FoamyAction.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyMotion"]},
   "FoamyHeader": {"files": ["FoamyHeader.qml"], "deps": ["FoamyAction", "FoamyI18n"]},
+  "FoamyHeroBand": {"files": ["FoamyHeroBand.qml"], "deps": ["FoamyHeader", "FoamySettings", "FoamyPalette", "FoamyStyle", "FoamyI18n"]},
   "FoamyPopup": {"files": ["FoamyPopup.qml"], "deps": ["FoamyStyle", "FoamyI18n"]},
   "FoamyPopupCard": {"files": ["FoamyPopupCard.qml"], "deps": ["FoamyStyle", "FoamyI18n"]},
   "FoamyDropdown": {"files": ["FoamyDropdown.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyI18n"], "notices": ["LICENSE-OMARCHY"]},
   "SafeTextField": {"files": ["SafeTextField.qml", "clipboard.sh"], "deps": ["FoamyStyle"]},
-  "FoamySettings": {"files": ["FoamySettingsPage.qml", "FoamySettingsHeader.qml", "FoamySettingsSection.qml", "FoamySettingsError.qml", "FoamyToggle.qml", "FoamySettingsState.qml"], "deps": ["FoamyAction", "FoamyI18n", "FoamyPalette", "FoamyStyle"]},
+  "FoamySettings": {"files": ["FoamySettingsPage.qml", "FoamySettingsHeader.qml", "FoamySettingsSection.qml", "FoamySettingsError.qml", "FoamyToggle.qml", "FoamySettingsState.qml"], "deps": ["FoamyAction", "FoamyHeroBand", "FoamyI18n", "FoamyPalette", "FoamyStyle"]},
   "FoamyCursor": {"files": ["FoamyCursor.qml", "FoamyCursorSurface.qml"], "deps": ["FoamyStyle"]},
   "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []}
 }

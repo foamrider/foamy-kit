@@ -25,19 +25,26 @@ Item {
   property bool showSettings: true
   property bool settingsHasCursor: false
   property color foreground: FoamyPalette.text
+  // Insets around the row (FoamyHeroBand sets the vertical ones to 0).
+  property real horizontalPadding: FoamyStyle.padding
+  property real topPadding: FoamyStyle.padding
+  property real bottomPadding: FoamyStyle.padding
   property alias settingsButton: settingsButton
   default property alias trailing: trailingRow.data
 
   signal settingsClicked()
   signal settingsHovered(bool hovered)
 
-  implicitWidth: row.implicitWidth + FoamyStyle.padding * 2
-  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, textColumn.implicitHeight) + FoamyStyle.padding * 2
+  implicitWidth: row.implicitWidth + horizontalPadding * 2
+  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, textColumn.implicitHeight) + topPadding + bottomPadding
 
   RowLayout {
     id: row
     anchors.fill: parent
-    anchors.margins: FoamyStyle.padding
+    anchors.leftMargin: root.horizontalPadding
+    anchors.rightMargin: root.horizontalPadding
+    anchors.topMargin: root.topPadding
+    anchors.bottomMargin: root.bottomPadding
     spacing: FoamyStyle.gapLarge
 
     FoamyIcon {

@@ -58,6 +58,12 @@ QtObject {
   readonly property int popupWidthWide: Style.space(560)
   readonly property int popupMaxHeight: Style.space(640)
   readonly property int menuWidth: Style.space(232)
+  // Hero band (FoamyHeroBand): compact paddings around the title row and hero.
+  readonly property int bandPaddingTop: Style.space(16)
+  readonly property int bandPaddingBottom: Style.space(16)
+  readonly property int bandGap: Style.space(14)
+  // Band corners meet the inside of the 1px popup border.
+  readonly property real bandRadius: innerRadius(radius, borderWidth)
   // Inner padding of FoamyPopupCard menus (the stock tray menu uses 8 too).
   readonly property int menuPadding: Style.space(8)
   // Inner padding of popup content (the card itself has padding 0 so lists

@@ -9,14 +9,20 @@ Item {
   property string title: FoamyI18n.t("Settings")
   property bool saving: false
   property alias backButton: backButton
+  property real horizontalPadding: FoamyStyle.padding
+  property real topPadding: FoamyStyle.padding
+  property real bottomPadding: FoamyStyle.padding
 
   signal back()
 
-  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + FoamyStyle.padding * 2
+  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + topPadding + bottomPadding
 
   RowLayout {
     anchors.fill: parent
-    anchors.margins: FoamyStyle.padding
+    anchors.leftMargin: root.horizontalPadding
+    anchors.rightMargin: root.horizontalPadding
+    anchors.topMargin: root.topPadding
+    anchors.bottomMargin: root.bottomPadding
     spacing: FoamyStyle.gap
 
     FoamyAction {
