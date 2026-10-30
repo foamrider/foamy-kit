@@ -16,7 +16,19 @@ DISPLAY, points HOME and every XDG_* directory into the root, and uses the
 offscreen platform with a 1920x1080 screen and the software renderer, so
 nothing reaches the live session. OMARCHY_PATH points at a stub holding only
 the host's i18n catalogs (data); no host script or binary is ever run.
+
+D-Bus: by default each run gets a private dbus-daemon (no service
+activation), so MPRIS players, notifications and other session services of
+the live desktop are invisible; bus="none" points the session bus at a dead
+socket instead.
+
+Processes: qs (and the private bus) run in their own process group with a
+parent-death signal, so they die with the Python process even when it is
+killed; stop() kills the whole group, and every live run is stopped at exit.
+Use a Run as a context manager (or call cleanup()) to remove its temp dir.
 """
+import atexit
+import ctypes
 import json
 import os
 import re
@@ -24,6 +36,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +48,63 @@ HOSTS = {
 SCREEN = (1920, 1080)
 FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration",
                    "Cannot assign", "Unable to assign", "Non-existent attached object", "SAVE FAILED")
+
+
+_LIVE = set()
+try:
+    _LIBC = ctypes.CDLL(None, use_errno=True)
+except OSError:
+    _LIBC = None
+PR_SET_PDEATHSIG = 1
+
+
+def _die_with_parent():
+    """preexec_fn: SIGKILL this child when the Python process dies."""
+    if _LIBC is not None:
+        _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+
+
+def _kill_group(process, sig=signal.SIGKILL):
+    if process is None:
+        return
+    try:
+        os.killpg(process.pid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+@atexit.register
+def _stop_all():
+    for run in list(_LIVE):
+        run.stop()
+
+
+def install_signal_cleanup():
+    """Turn SIGTERM/SIGHUP into SystemExit so finally blocks and atexit run."""
+    def handler(signum, frame):
+        raise SystemExit(128 + signum)
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, handler)
+
+
+def processes_under(path):
+    """PIDs whose command line mentions `path` (leak checks)."""
+    found = []
+    needle = str(path).encode()
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit() or int(entry.name) == os.getpid():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if needle in cmdline:
+            found.append(int(entry.name))
+    return found
 
 
 def host_dir(name):
@@ -90,8 +160,14 @@ def build_ui(host, dest):
 
 
 class Run:
-    def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-"):
+    def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-",
+                 bus="private", fakebin=None):
         self.host_name = host
+        self.bus = bus
+        self.process = None
+        self.bus_process = None
+        self.log = ""
+        self.ok = False
         self.host = host_dir(host)
         self.base = Path(tempfile.mkdtemp(prefix=prefix))
         self.root = self.base / "shell"
@@ -111,7 +187,16 @@ class Run:
             target.write_text(text)
         self.out = self.base / "out"
         self.out.mkdir()
+        self.plugin = Path(plugin).resolve() if plugin else None
         self.env = self._environment(theme, language)
+        # Stand-ins for CLIs a test must never run for real (omarchy, omarchy-shell…).
+        if fakebin:
+            bin_dir = self.base / "bin"
+            bin_dir.mkdir()
+            for name, text in fakebin.items():
+                (bin_dir / name).write_text(text)
+                (bin_dir / name).chmod(0o755)
+            self.env["PATH"] = f"{bin_dir}:{self.env.get('PATH', '/usr/bin:/bin')}"
 
     def _environment(self, theme, language):
         home = self.base / "home"
@@ -153,32 +238,94 @@ class Run:
             "OMARCHY_LANGUAGE_FILE": str(language_file),
             "FOAMY_OUT": str(self.out),
             "FOAMY_HOST": self.host_name,
+            # A dead address until start() brings up the private bus.
+            "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
         })
+        env.pop("DBUS_SYSTEM_BUS_ADDRESS", None)
+        if self.plugin:
+            env["FOAMY_PLUGIN_URL"] = self.plugin.as_uri()
         return env
 
-    def run(self, timeout=40, done="FOAMY DONE"):
+    def _start_bus(self):
+        config = self.base / "bus.conf"
+        socket = self.base / "bus"
+        config.write_text(f"""<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:path={socket}</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+""")
+        daemon = shutil.which("dbus-daemon")
+        if not daemon:
+            return  # stays on the dead address
+        self.bus_process = subprocess.Popen([daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                            start_new_session=True, preexec_fn=_die_with_parent)
+        for _ in range(100):
+            if socket.exists():
+                self.env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={socket}"
+                return
+            time.sleep(0.02)
+
+    def start(self):
+        """Start qs (and the private bus). Pair with stop()."""
+        _LIVE.add(self)
+        if self.bus == "private":
+            self._start_bus()
+        self._log_file = (self.base / "qs.log").open("w")
+        self.process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=self._log_file,
+                                        stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=_die_with_parent)
+        return self
+
+    def stop(self):
+        """Kill qs's whole process group and the private bus; read the log."""
+        if self.process is not None and self.process.poll() is None:
+            _kill_group(self.process, signal.SIGTERM)
+        _kill_group(self.process)
+        _kill_group(self.bus_process)
+        self.process = self.bus_process = None
+        log_file = getattr(self, "_log_file", None)
+        if log_file and not log_file.closed:
+            log_file.close()
         log_path = self.base / "qs.log"
-        with log_path.open("w") as log:
-            process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=log, stderr=log,
-                                       start_new_session=True)
-            try:
-                process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                pass
-            finally:
-                if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGTERM)
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(process.pid, signal.SIGKILL)
-        self.log = log_path.read_text(errors="replace")
+        if log_path.exists():
+            self.log = log_path.read_text(errors="replace")
+        _LIVE.discard(self)
+
+    def wait(self, timeout=40):
+        try:
+            self.process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
+
+    def run(self, timeout=40, done="FOAMY DONE"):
+        self.start()
+        try:
+            self.wait(timeout)
+        finally:
+            self.stop()
         self.ok = done in self.log and not any(marker in self.log for marker in FAILURE_MARKERS) and "FOAMY FAIL" not in self.log
         return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.stop()
+        self.cleanup()
+        return False
 
     def failures(self):
         return [line for line in self.log.splitlines()
                 if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)]
 
     def cleanup(self):
+        self.stop()
         shutil.rmtree(self.base, ignore_errors=True)

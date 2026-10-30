@@ -17,6 +17,7 @@ Item {
   property color iconColor: "white"
   readonly property bool vertical: position === "left" || position === "right"
   readonly property alias overlay: overlay
+  readonly property alias content: content
   readonly property alias anchor: anchorIcon
 
   width: 1920
@@ -61,9 +62,17 @@ Item {
     y: root.vertical ? root.height * root.anchorAlong : strip.y + (root.thickness - height) / 2
   }
 
+  // Preview items drawn in screen coordinates (service toasts, card copies).
+  Item {
+    id: content
+    anchors.fill: parent
+    z: 50
+  }
+
   Item {
     id: overlay
     anchors.fill: parent
+    z: 100
     Component.onCompleted: FakeDisplay.overlay = overlay
   }
 }
