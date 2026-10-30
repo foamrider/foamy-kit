@@ -21,6 +21,9 @@ From the Codex review of the plugin PRs (/tmp/foamy-fix/reviews/unanswered.md).
   within `from`..`to`, `decimals`, invalid-input message (`invalidText`, AlertMessage), language
   digits and decimal mark accepted, RTL row, `hasCursor`. Replaces hand-rolled numeric rows that did
   `text = …` (bolt, vitals, media, notification center: see KIT-0.3.2-HANDOFF).
+- **FoamyTextSettingField** (component FoamyNumberField): the same draft/commit/Escape rules for
+  free-text settings, with `validate(text)` (true, or false / a message) and `trim`. Replaces
+  media's hand-rolled text rows.
 - Demo plugin settings use FoamyNumberField.
 
 ### Checked, nothing to change

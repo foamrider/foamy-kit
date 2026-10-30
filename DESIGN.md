@@ -77,8 +77,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
-- **Numbers in settings**: `FoamyNumberField` (bound `value`, save in
-  `onCommitted`). Never hand-roll a numeric row that assigns `text`.
+- **Numbers and text in settings**: `FoamyNumberField` / `FoamyTextSettingField`
+  (bound `value`, save in `onCommitted`). Never hand-roll a row that assigns `text`.
 - **Controlled values**: kit controls never assign over a caller's binding.
   Bind `value`/`checked`/`open` to state and change the state in handlers.
   (Text fields are the exception every toolkit has: typing edits `text`;
