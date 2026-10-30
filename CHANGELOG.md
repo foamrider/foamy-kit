@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 — 2026-10-30
+
+### Fixed
+- **Stacked FoamyNumberFields didn't line up with mixed units** (foamy-vitals): the unit label's
+  width set the field width, so "%" and "°C" fields ended a few pixels apart. The unit now sits in a
+  fixed column (`unitWidth`, default `FoamyStyle.unitWidth` 32), so stacked fields share x and width
+  in LTR and RTL. A unitless field among them sets `reserveUnit: true`. Units wider than the column
+  widen it: use short symbols, or the same larger `unitWidth` across a section.
+
 ## 0.3.2 — 2026-10-30
 
 From the Codex review of the plugin PRs (/tmp/foamy-fix/reviews/unanswered.md).

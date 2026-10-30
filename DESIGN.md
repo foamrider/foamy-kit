@@ -79,6 +79,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (`checked` bound, save in `onClicked`).
 - **Numbers and text in settings**: `FoamyNumberField` / `FoamyTextSettingField`
   (bound `value`, save in `onCommitted`). Never hand-roll a row that assigns `text`.
+  Units are short symbols ("%", "°C", "ms") in the fixed unit column, so a
+  section's fields line up; a unitless field among them sets `reserveUnit`.
 - **Controlled values**: kit controls never assign over a caller's binding.
   Bind `value`/`checked`/`open` to state and change the state in handlers.
   (Text fields are the exception every toolkit has: typing edits `text`;
