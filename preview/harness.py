@@ -26,6 +26,12 @@ Processes: qs (and the private bus) run in their own process group with a
 parent-death signal, so they die with the Python process even when it is
 killed; stop() kills the whole group, and every live run is stopped at exit.
 Use a Run as a context manager (or call cleanup()) to remove its temp dir.
+
+Temp dirs: each run owns one directory, `<prefix><pid>-<random>` (mode 0700,
+created by mkdtemp), and only ever removes that one. Never `rm -rf` other
+runs' directories (`/tmp/foamy-kit-preview-*`): concurrent renders by other
+agents live there. Stale dirs of dead runs: `python3 preview/harness.py --gc`
+removes only those whose owner PID is gone and that no process still uses.
 """
 import atexit
 import ctypes
@@ -118,13 +124,43 @@ def host_dir(name):
     return path
 
 
-def transform_keyboard_panel(text):
-    """The host KeyboardPanel with PanelWindow -> FakePanelWindow.
+def _code_only(line):
+    """The line with string contents and // comments removed (brace counting)."""
+    out, quote, i = [], None, 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in "\"'`":
+            quote = ch
+        elif ch == "/" and line[i + 1:i + 2] == "/":
+            break
+        else:
+            out.append(ch)
+        i += 1
+    return "".join(out)
 
-    Layer-shell attached properties are dropped (the namespace is kept as
-    `layerNamespace` so tests can check it); `anchors { … }` window blocks
-    become `windowAnchors { … }`. Geometry, motion and content are untouched."""
-    out, skipping = [], False
+
+def transform_panel_windows(text, qualified=False):
+    """Make layer-shell windows loadable offscreen, touching nothing else.
+
+    Every `PanelWindow {` becomes `FakePanelWindow {` (an item drawn into the
+    simulated screen); `WlrLayershell.*` lines are dropped (the namespace is
+    kept as `layerNamespace`); and an `anchors { … }` block is renamed
+    `windowAnchors { … }` only when it is a direct property of such a
+    window. Ordinary items' `anchors { … }` blocks stay as they are. Used for
+    the host's KeyboardPanel and for pre-kit dev trees (popup forks, overlay
+    windows such as monitor's Identify). Files outside the Ui directory use
+    `qualified=True`: the stand-in is imported as FoamyFakeUi.FakePanelWindow,
+    whatever the file itself imports."""
+    fake = "FoamyFakeUi.FakePanelWindow" if qualified else "FakePanelWindow"
+    out, stack, skipping = [], [], False
     for line in text.splitlines():
         stripped = line.strip()
         if skipping:
@@ -132,18 +168,34 @@ def transform_keyboard_panel(text):
                 continue
             skipping = False
         match = re.match(r"(\s*)WlrLayershell\.namespace\s*:(.*)$", line)
-        if match:
+        if match and stack and stack[-1] == fake:
             out.append(f"{match.group(1)}layerNamespace:{match.group(2)}")
             continue
         if re.match(r"WlrLayershell\.\w+\s*:", stripped):
             skipping = True
             continue
-        line = re.sub(r"\bPanelWindow\s*\{", "FakePanelWindow {", line)
-        line = re.sub(r"^(\s*)anchors\s*\{\s*$", r"\1windowAnchors {", line)
+        line = re.sub(r"(?<![\w.])PanelWindow\s*\{", fake + " {", line)
+        if re.match(r"^\s*anchors\s*\{\s*$", line) and stack and stack[-1] == fake:
+            line = re.sub(r"anchors(\s*)\{", r"windowAnchors\1{", line, count=1)
+        for token in re.finditer(r"([A-Za-z_][\w.]*)?\s*\{|\}", _code_only(line)):
+            if token.group(0) == "}":
+                if stack:
+                    stack.pop()
+            else:
+                stack.append(token.group(1) or "")
         out.append(line)
     result = "\n".join(out) + "\n"
+    if qualified and fake in result:
+        result = re.sub(r"^(import QtQuick\s*\n)", r"\1import qs.Ui as FoamyFakeUi\n", result, count=1, flags=re.M)
+    return result
+
+
+def transform_keyboard_panel(text):
+    """The host KeyboardPanel (or a pre-kit fork of it) with its PanelWindow
+    swapped for FakePanelWindow; geometry, motion and content untouched."""
+    result = transform_panel_windows(text)
     if "FakePanelWindow {" not in result:
-        raise SystemExit("host KeyboardPanel.qml changed shape: no PanelWindow root to replace")
+        raise SystemExit("KeyboardPanel.qml changed shape: no PanelWindow root to replace")
     return result
 
 
@@ -171,7 +223,7 @@ class Run:
         self.log = ""
         self.ok = False
         self.host = host_dir(host)
-        self.base = Path(tempfile.mkdtemp(prefix=prefix))
+        self.base = Path(tempfile.mkdtemp(prefix=f"{prefix}{os.getpid()}-"))
         self.root = self.base / "shell"
         self.root.mkdir()
         (self.root / "Commons").symlink_to(self.host / "Commons", target_is_directory=True)
@@ -330,5 +382,35 @@ class Run:
                 if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)]
 
     def cleanup(self):
+        """Remove this run's own temp dir (and nothing else)."""
         self.stop()
         shutil.rmtree(self.base, ignore_errors=True)
+
+
+OWNED_DIR = re.compile(r"^foamy-kit-[\w.-]*?-(\d+)-[\w]+$")
+
+
+def gc(tmp=None, dry_run=False):
+    """Remove harness temp dirs whose owner process is gone and that no live
+    process references. Returns the removed paths."""
+    removed = []
+    for path in sorted(Path(tmp or tempfile.gettempdir()).glob("foamy-kit-*")):
+        match = OWNED_DIR.match(path.name)
+        if not match or not path.is_dir() or path.is_symlink() or path.stat().st_uid != os.getuid():
+            continue
+        if Path(f"/proc/{match.group(1)}").exists() or processes_under(path):
+            continue
+        removed.append(path)
+        if not dry_run:
+            shutil.rmtree(path, ignore_errors=True)
+    return removed
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:2] == ["--gc"]:
+        for path in gc(dry_run="--dry-run" in sys.argv):
+            print(f"removed {path}")
+    else:
+        print("usage: harness.py --gc [--dry-run]   remove temp dirs of dead foamy-kit runs", file=sys.stderr)
+        sys.exit(2)

@@ -20,6 +20,7 @@ Nothing touches ~/.config, the live session or its D-Bus: see preview/harness.py
 """
 import argparse
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -87,7 +88,7 @@ def dev_copy(plugin, ref, before_preview):
                               capture_output=True, check=True, timeout=60).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
-    base = Path(tempfile.mkdtemp(prefix="foamy-kit-dev-"))
+    base = Path(tempfile.mkdtemp(prefix=f"foamy-kit-dev-{os.getpid()}-"))
     copy = base / plugin.name
     copy.mkdir()
     with tarfile.open(fileobj=io.BytesIO(data)) as archive:
@@ -100,10 +101,11 @@ def dev_copy(plugin, ref, before_preview):
     for qml in copy.rglob("*.qml"):
         text = qml.read_text(errors="replace")
         original = text
-        # Pre-kit popups fork KeyboardPanel (a PanelWindow): swap the window
-        # like the host's own KeyboardPanel, keep the fork's geometry.
-        if re.search(r"\bPanelWindow\s*\{", text):
-            text = harness.transform_keyboard_panel(text)
+        # Pre-kit popups fork KeyboardPanel (a PanelWindow), and some panels
+        # own overlay windows: swap only the windows (and their own anchors
+        # blocks) for the offscreen stand-in; everything else stays as written.
+        if re.search(r"\bPanelWindow\s*\{|WlrLayershell\.", text):
+            text = harness.transform_panel_windows(text, qualified=True)
         # Qt 6.12 shadows a bare `Color` with QtQuick's: qualify it so the dev
         # UI looks the way it did when it was written.
         if re.search(r"(?<![\w.$])Color\.[a-z]", text):
@@ -122,7 +124,7 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("
     plugin = Path(plugin).resolve()
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="foamy-kit-trio-"))
+    work = Path(tempfile.mkdtemp(prefix=f"foamy-kit-trio-{os.getpid()}-"))
     after = {}
     try:
         for host in ("4.0", "4.5"):
