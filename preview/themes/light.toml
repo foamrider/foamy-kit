@@ -1,0 +1,11 @@
+# Preview theme (light). Values only; not a real Omarchy theme.
+mode = "light"
+accent = "#1e66f5"
+background = "#eff1f5"
+foreground = "#4c4f69"
+muted = "#9ca0b0"
+red = "#d20f39"
+yellow = "#df8e1d"
+green = "#40a02b"
+cyan = "#179299"
+blue = "#1e66f5"
