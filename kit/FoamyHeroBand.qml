@@ -82,6 +82,10 @@ Item {
   readonly property bool mirrored: LayoutMirroring.enabled
   readonly property Item backgroundItem: backgroundLoader.item
   readonly property alias titleRow: header
+  // The picture the band's Canvas holds decoded right now ("" when none). At
+  // most one: the previous one is unloaded on change, and the current one is
+  // unloaded while the band is hidden (the popup is closed) or the source clears.
+  readonly property string loadedImage: surface.loaded
 
   Component.onCompleted: {
     // The popup card: the nearest ancestor that is a BorderSurface.
@@ -108,7 +112,9 @@ Item {
     property color glow: FoamyPalette.bandGlow
     property color scrimTop: FoamyPalette.bandScrimTop
     property color scrimBottom: FoamyPalette.bandScrimBottom
-    readonly property string image: band.imageSource.toString()
+    // Only load a picture while the band is shown.
+    readonly property string image: band.visible ? band.imageSource.toString() : ""
+    property string loaded: ""
     readonly property real radius: Math.max(0, Math.min(band.topRadius, width / 2, height))
     readonly property real bottomRadius: band.roundBottom ? Math.max(0, Math.min(band.topRadius, width / 2, height / 2)) : 0
     onBottomRadiusChanged: requestPaint()
@@ -120,7 +126,13 @@ Item {
     onRadiusChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
-    onImageChanged: { if (image !== "") loadImage(image); requestPaint() }
+    onImageChanged: {
+      if (loaded !== "" && loaded !== image) unloadImage(loaded)
+      loaded = image
+      if (image !== "") loadImage(image)
+      requestPaint()
+    }
+    Component.onDestruction: if (loaded !== "") unloadImage(loaded)
     onImageLoaded: requestPaint()
     Connections {
       target: band
