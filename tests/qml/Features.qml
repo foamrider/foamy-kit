@@ -60,6 +60,13 @@ ShellRoot {
         validate: function(text) { return text.length <= 5 || "Too long" }
         onCommitted: function(v) { shell.textCommits = shell.textCommits.concat([v]) }
       }
+      Column {
+        id: unitStack
+        width: 300
+        FoamyNumberField { id: percentField; width: parent.width; unit: "%"; value: 95 }
+        FoamyNumberField { id: celsiusField; width: parent.width; unit: "°C"; value: 15 }
+        FoamyNumberField { id: plainField; width: parent.width; reserveUnit: true; value: 3 }
+      }
       FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
       FoamyDropdown {
         id: dropdown
@@ -202,6 +209,12 @@ ShellRoot {
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
 
+    // --- FoamyNumberField: mixed units stack flush (LTR and RTL) ---------------------------
+    checkUnitStack("LTR")
+    unitStack.LayoutMirroring.childrenInherit = true
+    unitStack.LayoutMirroring.enabled = true
+    unitStackRtl.start()
+
     // --- FoamyTextSettingField: the same rules for free text --------------------------------
     eq(textSetting.field.text, "abc", "text field shows the bound value")
     shell.textSetting = "xyz"
@@ -243,6 +256,22 @@ ShellRoot {
   }
 
   FileViewProbe { id: callLog; path: shell.calls }
+
+  function checkUnitStack(label) {
+    var fields = [percentField, celsiusField, plainField].map(function(f) {
+      var p = f.field.mapToItem(unitStack, 0, 0)
+      return [Math.round(p.x), Math.round(f.field.width)]
+    })
+    eq(fields[1], fields[0], label + ": % and °C fields have the same x and width")
+    eq(fields[2], fields[0], label + ": a unitless field with reserveUnit lines up too")
+    if (label === "RTL") check(fields[0][0] > 0, "RTL: the unit column is on the left, the field after it")
+    else eq(fields[0][0], 0, "LTR: fields start at the row's start")
+  }
+  Timer {
+    id: unitStackRtl
+    interval: 200
+    onTriggered: { shell.checkUnitStack("RTL"); unitStack.LayoutMirroring.enabled = false }
+  }
 
   Timer {
     id: coverCycle
