@@ -44,6 +44,16 @@ ShellRoot {
       SafeTextField { id: field; width: 200; maximumLength: 5 }
       FoamyCursorSurface { id: row; width: 100; height: 20 }
       FoamyIcon { id: icon; width: 16; height: 16 }
+      FoamyHeroBand { id: coverBand; width: 400; title: "Covers" }
+      FoamyNumberField {
+        id: numberField
+        width: 300
+        label: "Refresh every"
+        value: shell.numberSetting
+        from: 1; to: 100; stepSize: 5
+        onCommitted: function(v) { shell.numberCommits = shell.numberCommits.concat([v]) }
+      }
+      FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
       FoamyDropdown {
         id: dropdown
         width: 200
@@ -57,6 +67,15 @@ ShellRoot {
 
   FoamyCursor { id: cursor; count: 2 }
   property string dropdownSetting: "a"
+  property real numberSetting: 5
+  property var numberCommits: []
+  property int coverIndex: 0
+  function coverUrl(i) { return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png") }
+  function coverSurface() {
+    for (var i = 0; i < coverBand.children.length; i++)
+      if (coverBand.children[i].objectName === "foamyHeroBandSurface") return coverBand.children[i]
+    return null
+  }
   property var dropdownChanges: []
 
   // --- prefs fixtures -------------------------------------------------------------
@@ -142,6 +161,41 @@ ShellRoot {
     dropdown.select("a")   // a save that never lands
     dropdownRevert.start()
 
+    // --- FoamyNumberField: binding-safe numeric settings ------------------------------------
+    eq(numberField.field.text, "5", "shows the bound value")
+    shell.numberSetting = 7
+    eq(numberField.field.text, "7", "follows an external change while not editing")
+    numberField.field.text = "9"; numberField.field.textEdited()
+    check(numberField.editing, "typing starts a draft")
+    shell.numberSetting = 8
+    eq(numberField.field.text, "9", "an external change doesn't overwrite the draft")
+    check(numberField.commitEdit(false), "Enter commits")
+    eq(shell.numberCommits, [9], "a valid changed draft commits once")
+    numberField.commitEdit(false)
+    numberField.field.editingFinished()
+    eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
+    shell.numberSetting = 9
+    eq(numberField.field.text, "9", "shows the saved value")
+    shell.numberSetting = 12
+    eq(numberField.field.text, "12", "binding still drives the field after a commit")
+    numberField.field.text = "12"; numberField.field.textEdited(); numberField.commitEdit(false)
+    eq(shell.numberCommits, [9], "an unchanged draft doesn't commit")
+    numberField.field.text = "abc"; numberField.field.textEdited()
+    check(!numberField.commitEdit(false) && numberField.error !== "" && numberField.field.text === "abc", "Enter on invalid input keeps the draft and says why")
+    numberField.field.text = "500"; numberField.field.textEdited()
+    check(numberField.commitEdit(true) && numberField.field.text === "12" && numberField.error !== "", "focus-out on an out-of-range draft restores the value")
+    eq(shell.numberCommits, [9], "invalid drafts never commit")
+    numberField.field.text = "33"; numberField.field.textEdited()
+    check(numberField.handleKey(Qt.Key_Escape) && numberField.field.text === "12" && !numberField.editing, "Escape restores the value and is consumed (page stays)")
+    check(numberField.handleKey(Qt.Key_Up) && numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize")
+    check(!numberField.handleKey(Qt.Key_A), "other keys pass through")
+    numberField.cancelEdit()
+    eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
+    eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
+
+    // --- FoamyHeroBand keeps at most one cover decoded ----------------------------------------
+    coverCycle.start()
+
     // --- FoamyPrefsQueue: inline, two saves before the host reflects the first -------
     check(inlineQueue.save("a", "one"), "inline save a")
     check(inlineQueue.save("b", "two"), "inline save b")
@@ -164,6 +218,38 @@ ShellRoot {
   }
 
   FileViewProbe { id: callLog; path: shell.calls }
+
+  Timer {
+    id: coverCycle
+    interval: 15
+    repeat: true
+    onTriggered: {
+      if (shell.coverIndex < 50) {
+        coverBand.imageSource = shell.coverUrl(shell.coverIndex)
+        shell.coverIndex++
+        return
+      }
+      stop()
+      coverCheck.start()
+    }
+  }
+  Timer {
+    id: coverCheck
+    interval: 500
+    onTriggered: {
+      var surface = shell.coverSurface()
+      var stale = 0
+      for (var i = 0; i < 49; i++) if (surface.isImageLoaded(shell.coverUrl(i))) stale++
+      shell.eq(stale, 0, "50 covers cycled: no earlier cover stays decoded")
+      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)) && surface.isImageLoaded(shell.coverUrl(49)), "only the current cover is loaded")
+      coverBand.visible = false
+      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "a hidden band (closed popup) unloads its cover")
+      coverBand.visible = true
+      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)), "showing the band again reloads it")
+      coverBand.imageSource = ""
+      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "clearing the source unloads the cover")
+    }
+  }
 
   Timer {
     id: dropdownRevert

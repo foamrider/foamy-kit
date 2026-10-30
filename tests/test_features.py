@@ -42,6 +42,10 @@ QtObject {
 
 def run(host):
     plugin = synced_demo()
+    covers = plugin / "preview/covers"
+    covers.mkdir()
+    for i in range(50):
+        shutil.copyfile(plugin / "preview/artwork.png", covers / f"cover-{i}.png")
     shell = (KIT_ROOT / "tests/qml/Features.qml").read_text()
     r = harness.Run(host, shell, plugin=plugin, extra={"FileViewProbe.qml": PROBE}, prefix=f"foamy-kit-features-{host}-",
                     fakebin={"omarchy": FAKE_OMARCHY, "omarchy-shell": FAKE_OMARCHY_SHELL})

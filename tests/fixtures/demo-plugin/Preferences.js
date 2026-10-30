@@ -2,6 +2,7 @@
 var fields = [
   { key: "showCount", type: "boolean", defaultValue: true },
   { key: "refreshSeconds", type: "integer", min: 30, max: 3600, step: 30, defaultValue: 60 },
-  { key: "layout", type: "enum", options: ["list", "tiles"], defaultValue: "list" }
+  { key: "layout", type: "enum", options: ["list", "tiles"], defaultValue: "list" },
+  { key: "lowBattery", type: "integer", min: 1, max: 100, step: 5, defaultValue: 20 }
 ]
 if (typeof module !== "undefined") module.exports = { fields: fields }

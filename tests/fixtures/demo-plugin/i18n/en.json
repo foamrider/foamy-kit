@@ -24,5 +24,7 @@
   "That value isn't allowed.": "That value isn't allowed.",
   "Couldn't save the setting.": "Couldn't save the setting.",
   "Lowest battery": "Lowest battery",
-  "%1% left": "%1% left"
+  "%1% left": "%1% left",
+  "Warn below": "Warn below",
+  "Enter a number from %1 to %2": "Enter a number from %1 to %2"
 }

@@ -184,6 +184,14 @@ PanelKeyCatcher {
         options: [{ value: "30", label: FoamyI18n.t("30 seconds") }, { value: "60", label: FoamyI18n.t("1 minute") }, { value: "300", label: FoamyI18n.t("5 minutes") }]
         onChanged: function(v) { root.saveRequested("refreshSeconds", Number(v)) }
       }
+      FoamyNumberField {
+        width: parent.width
+        label: FoamyI18n.t("Warn below")
+        unit: "%"
+        value: root.settings.lowBattery !== undefined ? root.settings.lowBattery : 20
+        from: 1; to: 100; stepSize: 5
+        onCommitted: function(v) { root.saveRequested("lowBattery", v) }
+      }
       SafeTextField {
         width: parent.width
         placeholderText: FoamyI18n.t("Name filter")
