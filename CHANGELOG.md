@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.3.0 — 2026-10-30
+
+The foamy header band is back, as part of the design language: the tinted,
+full-bleed header area many plugins had on `dev` (power, audio, github,
+vitals, syncthing, notification center, weather), with the compact 4.5
+header layout on it.
+
+### Added
+- **FoamyHeroBand**: the band. Title row (FoamyHeader: icon, title, meta,
+  trailing actions, settings button) and a hero slot (a ColumnLayout, so it
+  mirrors in RTL) on the popup surface tinted toward the accent: a diagonal
+  wash with a soft glow at the trailing top corner (`FoamyPalette.bandFill`,
+  `bandFillEnd`, `bandGlow`; dark and light), a hairline into the body
+  (`bandEdge`). Full bleed; top corners at the popup radius minus the border
+  (`FoamyStyle.bandRadius`). Compact paddings (`bandPaddingTop/Bottom` 16,
+  `bandGap` 14). Drawn with Canvas: identical under the software renderer,
+  static (nothing for reduced motion to stop), mirrored in RTL.
+  `imageSource` (artwork, cover-fitted and clipped by the band) and
+  `background: Component` (a scene such as a sky) keep the geometry and text
+  treatment under a readability scrim (`bandScrimTop/Bottom`). `compact: true`
+  is the settings form (back, "Settings", "Saving…").
+- FoamySettingsPage shows the compact band instead of a plain header row.
+- FoamyHeader and FoamySettingsHeader: `horizontalPadding`, `topPadding`,
+  `bottomPadding` (the band sets them).
+- `render.py --trio`: Before (`origin/dev`, via `git archive`) / After 4.0.6 /
+  After 4.5 per view, `<view>-before.png` / `-after-4.0.png` / `-after-4.5.png`
+  and a `trio.md` PR table (`--url-prefix`). Pre-kit popup forks are swapped for
+  the offscreen window and bare `Color.` is qualified in the dev copy, so dev
+  renders as it looked; Before falls back from 4.5 to the 4.0.6 host (labelled)
+  when dev doesn't render or its fork is clipped there. `preview/Before.qml` or
+  `--before-preview` describes the dev UI.
+- Previews can capture pre-kit fork popups (no `cardItem`): the harness finds the card.
+- Tests: test_band.py (both hosts × dark/light × LTR/RTL: geometry in a real
+  FoamyPopup card, rounded transparent corners, tint vs body, hairline, glow side,
+  hero alignment, clipped picture), test_trio.py (dev fork on a throwaway repo,
+  clipped-fork and failure fallbacks, missing ref, untouched repo, no leaks);
+  the demo plugin uses the band with a hero, an artwork state and the compact
+  settings band.
+
+### Not changed
+- **Exact dev recipes per plugin** (power's flat 0.075 tint, NC's 58 px band):
+  one band for all; plugins keep their own picture through `imageSource` /
+  `background`, not their own tint.
+- **MultiEffect blur under artwork** (dev media): optional per plugin, gated on the
+  renderer; the base band never depends on it.
+
 ## 0.2.0 — 2026-10-30
 
 Triage of the kit issues filed while migrating the 18 plugins to 0.1.0

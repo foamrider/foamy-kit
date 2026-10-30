@@ -24,6 +24,7 @@ edited in a plugin: change it here, then sync.
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process on 4.5, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions, settings button |
+| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, compact settings form, own picture or scene |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 102 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
@@ -122,6 +123,9 @@ FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
 
 Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 
+- a **pre-kit fork** (for `--trio` Before): `popup` may be the old
+  `<Name>Popup`; the harness finds its card;
+
 - a **FoamyPopupCard** menu: declare `readonly property var popup` (a card is a
   window, not an Item); its card is copied onto the screen at its anchor;
 - a **service plugin** (toasts, no bar popup): leave out `bar`/`anchorItem`;
@@ -131,6 +135,24 @@ Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 MultiEffect, ShaderEffect and layer effects draw nothing under the software
 renderer the harness uses (as under Omarchy CPU rendering): gate them so the
 content still reads without them (DESIGN.md, "Effects").
+
+### Before / after trio
+
+```bash
+preview/render.py ../foamy-power --trio --url-prefix https://raw.githubusercontent.com/foamrider/foamy-power/pr-assets/fix-omarchy-45/power
+```
+
+Renders each view three times: `<view>-before.png` (the `origin/dev` tree,
+`--dev-ref`), `<view>-after-4.0.png` and `<view>-after-4.5.png` (the working
+tree), and writes `trio.md`, a PR-body table. Before comes from `git archive`
+(the plugin repo is not touched), with pre-kit popup forks swapped for the
+offscreen window like the host's KeyboardPanel and bare `Color.` qualified
+(Qt 6.12 shadows it), so dev looks as it did. Describe the dev UI in
+`preview/Before.qml` in the current tree (or `--before-preview FILE`); else dev's
+own `preview/Preview.qml` is used. Before tries `--before-host 4.5,4.0` in order:
+when dev doesn't render on 4.5, or its popup fork is clipped there (the 120 px
+card the kit fixed), it falls back to the 4.0.6 host and the column header says
+so. Card images only; `--states` limits the views.
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
 branch through a temporary worktree (the working tree is untouched), prints

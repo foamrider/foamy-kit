@@ -31,8 +31,37 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   override `borderSpec`/`padding`/radius per plugin. Layer namespace stays
   `omarchy-keyboard-panel`. Always set `owner: root` so closing goes through
   the panel (without it the stock close() assigns over your `open:` binding).
-- **Header**: `FoamyHeader`: icon (18), title (title, DemiBold), meta (bodySmall,
-  secondary), trailing actions, settings button (tooltip "Settings"). One per popup.
+- **Hero band** (`FoamyHeroBand`): every foamy popup starts with one band — the
+  foamy header area. Rules:
+  - First item of the popup body, x 0, full body width: it bleeds to the card
+    border and its top corners follow the popup radius (`FoamyStyle.bandRadius`).
+  - Surface: the popup background tinted toward the accent, a diagonal wash
+    (`FoamyPalette.bandFill` → `bandFillEnd`) with a soft glow at the trailing
+    top corner (`bandGlow`), drawn by the kit in any renderer, dark and light.
+    No hex, no MultiEffect, no motion. Bottom: a hairline (`bandEdge`) into the
+    body, which continues on the plain popup surface.
+  - Compact: padding top/bottom 16 (`bandPaddingTop/Bottom`), 20 at the sides,
+    14 between the title row and the hero. The title row is FoamyHeader's:
+    icon 18, title (title, DemiBold), meta (bodySmall, secondary), trailing
+    actions, settings button (tooltip "Settings").
+  - **Hero slot**: use it when the panel is about one state or value the user
+    opens it for — a ring and status (power), the volume (audio), the next
+    departure (train), sky and temperature (weather), artwork (media), the
+    clock face (clock), a host line (vitals), a sync summary (syncthing), the
+    unread count (notification center), a repository summary (github). Keep it
+    compact: numerals in `font.numeral`/`numeralCompact`, rings ≤ 96 px, one or
+    two lines of context. Full-width hero items set `Layout.fillWidth: true`.
+  - **Title only**: list and manager panels where every row is equal (bolt,
+    monitor, teams): the band holds just the title row.
+  - **Own picture**: `imageSource` for artwork (cover-fitted and clipped by the
+    band) or `background: Component` for a scene (weather sky; it must keep to
+    the rounded top using `topRadius`). Same geometry and text treatment; a
+    readability scrim is drawn over pictures.
+  - Settings pages show the compact band (back, "Settings", "Saving…");
+    `FoamySettingsPage` does it.
+  - No band on menus (`FoamyPopupCard`) or toasts.
+- **Header row only** (`FoamyHeader`): inside the band; standalone only where a
+  band can't sit (a sub-view header inside the body).
 - **Rows**: `FoamyCursorSurface` (stock CursorSurface, foamy radius), insets
   `gapLarge`, icon `iconSize`, name `body`, detail `caption` secondary.
 - **Actions**: `FoamyAction` (28, icon 15, hover fill, tooltip). Settings button =
