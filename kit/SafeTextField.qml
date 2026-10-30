@@ -273,7 +273,8 @@ Flickable {
                 root.contentX = Math.min(root.contentWidth - root.width, right - root.width);
         }
         onTextChanged: {
-            var limit = Math.max(0, Math.min(32767, root.maximumLength));
+            var wanted = root.maximumLength;
+            var limit = wanted > 32767 ? 32767 : (wanted > 0 ? wanted : 0);
             if (length > limit)
                 remove(limit, length);
             root.revision++;
@@ -295,8 +296,16 @@ Flickable {
     }
 
     Component.onCompleted: editorReady = true
-    onMaximumLengthChanged: if (editor.length > Math.max(0, maximumLength))
-        editor.remove(Math.max(0, maximumLength), editor.length)
+    // Runs when maximumLength changes after creation only, and uses no JS
+    // globals: this can fire while a page is being built or torn down (a
+    // settings state switch), when the global object may already be gone.
+    onMaximumLengthChanged: {
+        if (!editorReady)
+            return;
+        var limit = maximumLength > 0 ? maximumLength : 0;
+        if (editor.length > limit)
+            editor.remove(limit, editor.length);
+    }
     Component.onDestruction: cancelPaste()
     onActiveFocusChanged: if (activeFocus)
         editor.forceActiveFocus()
