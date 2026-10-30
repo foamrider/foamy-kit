@@ -26,6 +26,10 @@ import qs.Ui
 //   bodyItem, bodyImplicitHeight the built body (null until first open)
 //   ensureBody()                 build the body without opening
 //   wide: bool                   560 instead of 420
+//   maxHeight: real              height cap for the fitted card (default
+//                                FoamyStyle.popupMaxHeight 640; 0 = only the
+//                                screen limit, for panels that compact
+//                                themselves by screen height)
 //   contentWidth/contentHeight   override the defaults if needed
 //   cornerRadius, surfaceColor   foamy surface (rarely overridden)
 //   cardItem                     the drawn card (for screenshots/tests)
@@ -47,6 +51,7 @@ KeyboardPanel {
   id: root
 
   property bool wide: false
+  property real maxHeight: FoamyStyle.popupMaxHeight
   property real cornerRadius: FoamyStyle.radius
   property color surfaceColor: Commons.Color.popups.background
 
@@ -64,7 +69,7 @@ KeyboardPanel {
   padding: 0
   borderSpec: FoamyStyle.popupBorderSpec
   contentWidth: fittedContentWidth(wide ? FoamyStyle.popupWidthWide : FoamyStyle.popupWidth)
-  contentHeight: fittedContentHeight(bodyImplicitHeight, FoamyStyle.popupMaxHeight)
+  contentHeight: fittedContentHeight(bodyImplicitHeight, maxHeight)
   focusTarget: bodyLoader
 
   onOpenChanged: if (open && body) bodyRequested = true

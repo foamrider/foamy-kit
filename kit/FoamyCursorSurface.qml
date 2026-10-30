@@ -11,15 +11,21 @@ import qs.Ui
 //     onHovered: cursor.hover(index)
 //     onClicked: root.activate(index)
 //   }
+//
+// The pointer shows a hand over the row; set cursorShape (e.g.
+// Qt.ArrowCursor) for rows that do nothing on click.
 CursorSurface {
   id: root
 
   signal hovered()
   signal clicked()
 
+  property int cursorShape: Qt.PointingHandCursor
+
   radius: FoamyStyle.radius
 
   HoverHandler {
+    cursorShape: root.cursorShape
     onHoveredChanged: if (hovered) root.hovered()
   }
   TapHandler {

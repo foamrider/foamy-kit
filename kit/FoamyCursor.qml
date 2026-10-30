@@ -10,12 +10,20 @@ import QtQuick
 //     onActivateRequested: root.activate(cursor.index)
 //     onCloseRequested: root.close()
 //     onTabRequested: function(direction) { root.switchPanel(direction) }
-//     onTextKey: function(text) { if (text === "s") root.openSettings() }
+//     onTextKey: function(text, modifiers) {
+//       if (!cursor.plain(modifiers)) return            // leave Alt+S etc. alone
+//       if (text === "s") root.openSettings()
+//     }
 //   }
 //   FoamyCursorSurface { hasCursor: cursor.at(index); onHovered: cursor.hover(index) }
 //
 // index is -1 until the first move or hover (no highlight on open). reset()
 // on close; clamp happens automatically when count shrinks.
+//
+// PanelKeyCatcher.textKey is textKey(text) on 4.0 and textKey(text, modifiers)
+// on 4.5. Declare handlers as function(text, modifiers): `modifiers` is
+// undefined on 4.0, and plain(modifiers) is true then. Tests that emit the
+// signal must match the host's arity: emitTextKey(catcher, text) does that.
 QtObject {
   id: root
 
@@ -27,6 +35,19 @@ QtObject {
   function at(i) { return index === i }
   function hover(i) { if (i >= 0 && i < count) index = i }
   function reset() { index = -1 }
+  // A letter shortcut with no Ctrl/Alt/Meta held (Shift is fine).
+  function plain(modifiers) {
+    if (modifiers === undefined || modifiers === null) return true
+    return (modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) === 0
+  }
+  // Emit a catcher's textKey with the host's signature (tests, synthetic keys).
+  function emitTextKey(catcher, text, modifiers) {
+    try {
+      catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
+    } catch (error) {
+      catcher.textKey(text)
+    }
+  }
   function move(delta) {
     if (count <= 0) { index = -1; return }
     if (index < 0) { index = delta < 0 ? count - 1 : 0; return }

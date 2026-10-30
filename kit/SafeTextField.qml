@@ -33,6 +33,8 @@ Flickable {
     property color foreground: Commons.Color.foreground
     property color accent: Commons.Color.accent
     property string clipboardScript: "clipboard.sh"
+    // Longest text the field keeps (typing and paste), like TextField.maximumLength.
+    property int maximumLength: 32767
     property real cornerRadius: FoamyStyle.radius
     property color selectionTint: Style.selectionFillFor(foreground, accent)
     property bool hasCursor: false
@@ -99,8 +101,8 @@ Flickable {
                 throw new Error("Invalid clipboard result");
             if (value === "" && pasteStart === pasteEnd)
                 return;
-            // Preserve TextInput's default length limit, including repeated pastes.
-            value = value.slice(0, Math.max(0, 32767 - editor.length + pasteEnd - pasteStart));
+            // Keep maximumLength (TextInput's 32767 by default), including repeated pastes.
+            value = value.slice(0, Math.max(0, root.maximumLength - editor.length + pasteEnd - pasteStart));
             if (value === "" && pasteStart === pasteEnd)
                 return;
             // These fields are not file-backed. Reset the document's modified
@@ -271,8 +273,9 @@ Flickable {
                 root.contentX = Math.min(root.contentWidth - root.width, right - root.width);
         }
         onTextChanged: {
-            if (length > 32767)
-                remove(32767, length);
+            var limit = Math.max(0, Math.min(32767, root.maximumLength));
+            if (length > limit)
+                remove(limit, length);
             root.revision++;
             root.pasteError = "";
         }
@@ -292,6 +295,8 @@ Flickable {
     }
 
     Component.onCompleted: editorReady = true
+    onMaximumLengthChanged: if (editor.length > Math.max(0, maximumLength))
+        editor.remove(Math.max(0, maximumLength), editor.length)
     Component.onDestruction: cancelPaste()
     onActiveFocusChanged: if (activeFocus)
         editor.forceActiveFocus()

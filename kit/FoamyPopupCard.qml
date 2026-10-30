@@ -12,7 +12,8 @@ import qs.Ui
 // triggerMode "click"|"hover", containsMouse, fittedContentWidth/Height()), plus:
 //   body: Component, bodyItem, bodyImplicitHeight, ensureBody()   lazy content
 //   cornerRadius, surfaceColor, cardItem
-// Defaults: contentWidth FoamyStyle.menuWidth, height fitted to the body.
+// Defaults: contentWidth FoamyStyle.menuWidth, padding FoamyStyle.menuPadding,
+// height fitted to the body.
 PopupCard {
   id: root
 
@@ -31,6 +32,7 @@ PopupCard {
   }
 
   borderSpec: FoamyStyle.popupBorderSpec
+  padding: FoamyStyle.menuPadding
   contentWidth: fittedContentWidth(FoamyStyle.menuWidth)
   contentHeight: fittedContentHeight(bodyImplicitHeight)
 
