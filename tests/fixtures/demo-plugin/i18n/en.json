@@ -22,5 +22,7 @@
   "Name filter": "Name filter",
   "Battery %1%": "Battery %1%",
   "That value isn't allowed.": "That value isn't allowed.",
-  "Couldn't save the setting.": "Couldn't save the setting."
+  "Couldn't save the setting.": "Couldn't save the setting.",
+  "Lowest battery": "Lowest battery",
+  "%1% left": "%1% left"
 }

@@ -9,7 +9,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["devices", "empty", "settings", "settings-error"]
+  property var previewStates: ["devices", "empty", "artwork", "settings", "settings-error"]
   property string previewState: "devices"
   readonly property Item popup: popup
 
@@ -31,6 +31,7 @@ Item {
         editingSettings: preview.previewState.indexOf("settings") === 0
         settingsError: preview.previewState === "settings-error" ? "Couldn't save the setting." : ""
         canRetry: preview.previewState === "settings-error"
+        artwork: preview.previewState === "artwork" ? Qt.resolvedUrl("artwork.png") : ""
       }
     }
   }

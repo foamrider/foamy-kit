@@ -16,6 +16,8 @@ PanelKeyCatcher {
   property string settingsError: ""
   property bool loading: false
   property bool canRetry: false
+  property url artwork: ""
+  readonly property int lowestBattery: devices.length ? Math.min.apply(null, devices.map(function(d) { return d.battery })) : 0
 
   signal closeRequestedByView()
   signal settingsRequested()
@@ -47,21 +49,59 @@ PanelKeyCatcher {
     width: parent.width
     bottomPadding: FoamyStyle.padding
 
-    FoamyHeader {
+    FoamyHeroBand {
+      id: band
       width: parent.width
       iconName: "laptop"
       title: FoamyI18n.t("Devices")
       meta: FoamyI18n.tn("%1 devices", root.devices.length)
+      imageSource: root.artwork
       settingsHasCursor: cursor.at(root.devices.length)
       onSettingsClicked: root.settingsRequested()
       onSettingsHovered: function(hovered) { if (hovered) cursor.hover(root.devices.length) }
-      FoamyAction {
-        iconName: "refresh-cw"
-        tooltipText: FoamyI18n.t("Refresh")
-        spinning: root.loading
-        onClicked: root.refreshRequested()
+      trailing: [
+        FoamyAction {
+          iconName: "refresh-cw"
+          tooltipText: FoamyI18n.t("Refresh")
+          spinning: root.loading
+          onClicked: root.refreshRequested()
+        }
+      ]
+
+      // Hero: the one number this panel is about, and its context.
+      Row {
+        visible: root.devices.length > 0
+        spacing: FoamyStyle.gapLarge
+        Text {
+          text: FoamyI18n.number(root.lowestBattery)
+          textFormat: Text.PlainText
+          color: FoamyPalette.text
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.numeralCompact
+          font.weight: Font.Light
+        }
+        Column {
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: FoamyStyle.gapTiny
+          Text {
+            text: FoamyI18n.t("Lowest battery")
+            textFormat: Text.PlainText
+            color: FoamyPalette.text
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.subtitle
+          }
+          Text {
+            text: FoamyI18n.t("%1% left", root.lowestBattery)
+            textFormat: Text.PlainText
+            color: FoamyPalette.secondaryText
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.bodySmall
+          }
+        }
       }
     }
+
+    Item { width: 1; height: FoamyStyle.gap }
 
     Text {
       visible: root.devices.length === 0

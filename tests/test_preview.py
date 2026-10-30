@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Demo preview render under both hosts, plus publish-screenshots.sh on a
 throwaway git repository (orphan branch, untouched working tree, no push)."""
+import re
 import shutil
 import struct
 import subprocess
@@ -14,7 +15,7 @@ from common import KIT_ROOT, report, synced_demo  # noqa: E402
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import render  # noqa: E402
 
-STATES = ["devices", "empty", "settings", "settings-error"]
+STATES = ["devices", "empty", "artwork", "settings", "settings-error"]
 
 
 def size(png):
@@ -82,7 +83,7 @@ def main():
         card = size(out / "devices.png")
         ok &= report(f"preview render {host}: screen 1920x1080, card 420 wide", screen == (1920, 1080) and card and card[0] == 420, f"{screen} {card}")
         placed = dict((p.name, info) for p, info in shots)["devices.png"]
-        ok &= report(f"preview render {host}: card hangs under the top bar (y = 34 + gap)", placed.endswith(",39"), placed)
+        ok &= report(f"preview render {host}: card hangs under the top bar (y = 34 + gap)", re.search(r" at \d+,39\b", placed) is not None, placed)
         log = (out / "render.log").read_text()
         ok &= report(f"preview render {host}: plugin subdirectory types load without a qmldir",
                      "Demo" in (plugin / "DemoView.qml").read_text() and "DemoTag is not a type" not in log
@@ -93,7 +94,8 @@ def main():
         shots = render.render(plugin, host, card_out, preview=plugin / "preview/MenuPreview.qml")
         info = dict((p.name, i) for p, i in shots or [])
         at = info.get("menu.png", "")
-        x, y = (int(v) for v in at.rsplit(" at ", 1)[1].split(",")) if " at " in at else (-1, -1)
+        found = re.search(r" at (-?\d+),(-?\d+)", at)
+        x, y = (int(found.group(1)), int(found.group(2))) if found else (-1, -1)
         # PopupCard hangs from the anchor item (stock geometry), not the strip edge.
         ok &= report(f"card preview {host}: menu card captured and placed below the bar button", shots is not None
                      and size(card_out / "menu.png") is not None and 1300 < x < 1700 and 28 < y < 80, at)

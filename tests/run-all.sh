@@ -16,7 +16,9 @@ run python3 -I test_runtime.py
 run python3 -I test_features.py
 run python3 -I test_ipc_cli.py
 run python3 -I test_harness.py
+run python3 -I test_band.py
 run python3 -I test_preview.py
+run python3 -I test_trio.py
 echo
 if (( status == 0 )); then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
 exit $status
