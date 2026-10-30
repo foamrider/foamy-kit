@@ -53,6 +53,13 @@ ShellRoot {
         from: 1; to: 100; stepSize: 5
         onCommitted: function(v) { shell.numberCommits = shell.numberCommits.concat([v]) }
       }
+      FoamyTextSettingField {
+        id: textSetting
+        width: 300
+        value: shell.textSetting
+        validate: function(text) { return text.length <= 5 || "Too long" }
+        onCommitted: function(v) { shell.textCommits = shell.textCommits.concat([v]) }
+      }
       FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
       FoamyDropdown {
         id: dropdown
@@ -69,6 +76,8 @@ ShellRoot {
   property string dropdownSetting: "a"
   property real numberSetting: 5
   property var numberCommits: []
+  property string textSetting: "abc"
+  property var textCommits: []
   property int coverIndex: 0
   function coverUrl(i) { return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png") }
   function coverSurface() {
@@ -192,6 +201,22 @@ ShellRoot {
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
+
+    // --- FoamyTextSettingField: the same rules for free text --------------------------------
+    eq(textSetting.field.text, "abc", "text field shows the bound value")
+    shell.textSetting = "xyz"
+    eq(textSetting.field.text, "xyz", "text field follows an external change")
+    textSetting.field.text = " new "; textSetting.field.textEdited()
+    shell.textSetting = "other"
+    eq(textSetting.field.text, " new ", "draft survives an external change")
+    check(textSetting.commitEdit(false) && JSON.stringify(shell.textCommits) === JSON.stringify(["new"]), "commits the trimmed draft once")
+    textSetting.field.editingFinished()
+    eq(shell.textCommits, ["new"], "no second commit on focus-out")
+    textSetting.field.text = "toolong"; textSetting.field.textEdited()
+    check(!textSetting.commitEdit(false) && textSetting.error === "Too long", "validate() message on Enter")
+    check(textSetting.handleKey(Qt.Key_Escape) && textSetting.field.text === "other" && !textSetting.editing, "Escape restores the bound value")
+    shell.textSetting = "later"
+    eq(textSetting.field.text, "later", "binding intact after Escape")
 
     // --- FoamyHeroBand keeps at most one cover decoded ----------------------------------------
     coverCycle.start()
