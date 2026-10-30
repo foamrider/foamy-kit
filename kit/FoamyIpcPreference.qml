@@ -5,8 +5,10 @@ import "FoamyIpcResolver.js" as Resolver
 // omarchy-shell socket answers from it even when another service registers
 // the same target (foamy-lock vs the stock omarchy.lock on target "lock").
 // IpcRegistry has no change signal, so it re-claims on start, on recheck(),
-// and every `interval` ms on 4.5 (one short array scan; 0 turns the timer
-// off and leaves re-claiming to recheck()). 4.0 has no registry: `answering` stays
+// and every `interval` ms while another handler shares the target (one short
+// array scan; 0 turns the timer off). With no rival it doesn't poll: a
+// handler registered later queues behind this one anyway. Call recheck()
+// when you need a fresh `others` count (e.g. in a status reply). 4.0 has no registry: `answering` stays
 // false and nothing happens.
 //
 //   FoamyIpc { id: lockIpc; target: "lock"; … }
@@ -36,7 +38,7 @@ QtObject {
   property Timer timer: Timer {
     interval: Math.max(250, preference.interval)
     repeat: true
-    running: preference.active && preference.interval > 0 && preference.handler !== null && Resolver.fastPath(preference)
+    running: preference.active && preference.interval > 0 && preference.handler !== null && preference.others > 0
     onTriggered: preference.recheck()
   }
 }
