@@ -112,6 +112,10 @@ QtObject {
     var hadPrevious = key in pending
     var previous = pending[key]
     setPending(key, value)
+    // 4.5 reflects an inline save synchronously: `settings` already changed
+    // inside Prefs.save(), before this value became pending, so settle now or
+    // it would mask later outside changes and be written back by the next save.
+    pending = Prefs.settle(settings, pending)
     if (result.inline) {
       saved(key, value)
       Qt.callLater(advance)
