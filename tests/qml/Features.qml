@@ -67,7 +67,24 @@ ShellRoot {
         FoamyNumberField { id: celsiusField; width: parent.width; unit: "°C"; value: 15 }
         FoamyNumberField { id: plainField; width: parent.width; reserveUnit: true; value: 3 }
       }
+      FoamyNumberField {
+        id: retryField
+        width: 300
+        value: 20
+        from: 1; to: 100
+        onCommitted: function(v) { shell.retryCommits = shell.retryCommits.concat([v]) }
+        onPasteFailed: function(message) { shell.pasteMessage = message }
+      }
       FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
+      // Switching between settings states (train: settings -> settings-schedule)
+      // destroys and builds pages with text and number fields.
+      Loader {
+        id: stateSwitcher
+        width: 300
+        property int flips: 0
+        asynchronous: flips % 4 >= 2
+        sourceComponent: flips % 2 === 0 ? pageA : pageB
+      }
       FoamyDropdown {
         id: dropdown
         width: 200
@@ -81,6 +98,32 @@ ShellRoot {
 
   FoamyCursor { id: cursor; count: 2 }
   property string dropdownSetting: "a"
+  Component {
+    id: pageA
+    FoamySettingsPage {
+      height: 300
+      FoamySettingsSection {
+        width: parent.width
+        FoamyNumberField { width: parent.width; unit: "%"; value: 50 }
+        SafeTextField { width: parent.width; maximumLength: 5; text: "abcdefgh" }
+      }
+    }
+  }
+  Component {
+    id: pageB
+    FoamySettingsPage {
+      height: 300
+      FoamySettingsSection {
+        width: parent.width
+        FoamyTextSettingField { width: parent.width; value: "schedule" }
+        SafeTextField { width: parent.width; maximumLength: 3; text: "06:00-18:00" }
+        Repeater {
+          model: 7
+          SafeTextField { required property int index; width: 80; maximumLength: 5; text: "06:00" }
+        }
+      }
+    }
+  }
   property real numberSetting: 5
   property var numberCommits: []
   property string textSetting: "abc"
@@ -117,6 +160,28 @@ ShellRoot {
   FoamyIpcPreference { id: preference; handler: mine; interval: 300 }
   Component { id: lateHandler; FoamyIpc { target: "foamy.shared-target"; function who(): string { return "late" } } }
   FoamyPeerIpc { id: peer }
+  // foamy-lock's scenario: the rival arrives after the preference settled.
+  FoamyIpc { id: guarded; target: "foamy.guarded"; function who(): string { return "guarded" } }
+  FoamyIpcPreference { id: guardPreference; handler: guarded; interval: 300 }
+  Component { id: rivalHandler; FoamyIpc { target: "foamy.guarded"; function who(): string { return "rival" } } }
+  property var rival: null
+
+  // 4.5 reflects inline saves synchronously (persistShellConfig -> settings).
+  QtObject {
+    id: syncBar
+    property var written: []
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) {
+        syncBar.written = syncBar.written.concat([JSON.parse(JSON.stringify(settings))])
+        var next = JSON.parse(JSON.stringify(settings)); next.id = id
+        syncQueue.settings = next
+        return true
+      }
+    }
+  }
+  FoamyPrefsQueue { id: syncQueue; bar: syncBar; moduleName: "foamy.sync"; fields: shell.fields; settings: ({ id: "foamy.sync", a: "", b: "" }) }
+  property var retryCommits: []
+  property string pasteMessage: ""
 
   QtObject {
     id: fakePanel
@@ -231,6 +296,29 @@ ShellRoot {
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
 
+    // --- FoamyPrefsQueue with a synchronously reflecting host (4.5) ---------------------------
+    syncQueue.save("a", "one")
+    eq(Object.keys(syncQueue.pending), [], "a save the host reflects at once doesn't stay pending")
+    syncQueue.settings = ({ id: "foamy.sync", a: "external", b: "" })   // another monitor changes a
+    eq(syncQueue.value("a"), "external", "an outside change after the save shows")
+    syncQueue.save("b", "two")
+    eq(syncBar.written[1], { a: "external", b: "two" }, "the next save keeps the outside change (no stale write-back)")
+
+    // --- FoamyNumberField: retry after a failed save; paste errors ------------------------------
+    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
+    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
+    eq(shell.retryCommits, [30, 30], "retyping the same value after a failed save commits again")
+    retryField.saveFailed()
+    eq(retryField.field.text, "20", "saveFailed() shows the saved value again")
+    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
+    eq(shell.retryCommits, [30, 30, 30], "and the same input can be committed after saveFailed()")
+    retryField.field.pasteError = "Clipboard paste timed out. Copy the text again."
+    eq(shell.pasteMessage, "Clipboard paste timed out. Copy the text again.", "a refused paste is reported (pasteFailed)")
+    retryField.field.pasteError = ""
+
+    // --- state switches build and destroy fields (no TypeError in the log) ----------------
+    stateFlip.start()
+
     // --- FoamyHeroBand keeps at most one cover decoded ----------------------------------------
     coverCycle.start()
 
@@ -271,6 +359,19 @@ ShellRoot {
     id: unitStackRtl
     interval: 200
     onTriggered: { shell.checkUnitStack("RTL"); unitStack.LayoutMirroring.enabled = false }
+  }
+
+  Timer {
+    id: stateFlip
+    interval: 40
+    repeat: true
+    onTriggered: {
+      stateSwitcher.flips++
+      if (stateSwitcher.flips >= 12) {
+        stop()
+        shell.check(stateSwitcher.item !== null, "settings states switch 12 times")
+      }
+    }
   }
 
   Timer {
@@ -350,6 +451,12 @@ ShellRoot {
   function stepThree() {
     // --- IPC: prefer / others / call -----------------------------------------------------
     if (v45) {
+      check(guardPreference.answering && guardPreference.others === 0, "guarded target settled with no rival")
+      var registry = Resolver.registry(shell)
+      rival = rivalHandler.createObject(shell)
+      registry.handlers.splice(registry.handlers.indexOf(rival), 1)
+      registry.handlers.unshift(rival)          // a later service jumps ahead
+      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "rival", "the rival took the route")
       eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: true, output: "mine" }, "FoamyIpcPreference puts its handler first")
       check(preference.answering && preference.others === 1, "preference reports one other handler")
       late = lateHandler.createObject(shell)
@@ -392,6 +499,7 @@ ShellRoot {
         eq(shell.peerResult, { ok: true, output: "late" }, "FoamyPeerIpc answers in-process on 4.5")
         // Re-claim within the preference interval.
         eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
+        eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
       } else {
         eq(shell.peerResult, { ok: true, output: "cli: foamy.shared-target who" }, "FoamyPeerIpc falls back to omarchy-shell on 4.0")
       }
