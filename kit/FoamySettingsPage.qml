@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls as Controls
 
 // The foamy settings page skeleton, shown in place of the popup content at
-// the same width: header (back, "Settings", "Saving…"), an error line with
+// the same width: the compact hero band (back, "Settings", "Saving…"), an error line with
 // optional Retry, then the plugin's sections in a scrolling column.
 //
 //   FoamySettingsPage {
@@ -58,10 +58,12 @@ FocusScope {
     function onActiveFocusItemChanged() { if (target && target.activeFocusItem) root.keepVisible(target.activeFocusItem) }
   }
 
-  FoamySettingsHeader {
+  // The same band as the popup's hero header, in its compact form.
+  FoamyHeroBand {
     id: header
+    compact: true
     width: parent.width
-    title: root.title
+    compactTitle: root.title
     saving: root.saving
     onBack: root.back()
   }
@@ -85,6 +87,7 @@ FocusScope {
       width: scroll.width
       leftPadding: FoamyStyle.padding
       rightPadding: FoamyStyle.padding
+      topPadding: FoamyStyle.sectionGap
       bottomPadding: FoamyStyle.padding
       spacing: FoamyStyle.sectionGap
 
