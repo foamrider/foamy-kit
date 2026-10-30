@@ -50,7 +50,11 @@ Item {
   property bool dirty: false
   property string errorText: ""
   property string lastCommitted: ""
+  property bool hasCommitted: false
 
+  // A refused paste (too large, timed out, not plain text): shown in the
+  // field's error line and emitted for callers with their own error area.
+  signal pasteFailed(string message)
   signal committed(real value)
 
   implicitWidth: FoamyStyle.popupWidth - FoamyStyle.padding * 2
@@ -88,6 +92,16 @@ Item {
     dirty = false
   }
 
+  // Tell the field its last commit was not saved: it shows `value` again
+  // (unless a newer draft is being edited) and the same input can be
+  // committed again. Wire it to the save's failure, e.g.
+  // FoamyPrefsQueue.onFailed: if (key === "x") field.saveFailed()
+  function saveFailed() {
+    lastCommitted = ""
+    hasCommitted = false
+    if (!dirty) show()
+  }
+
   function cancelEdit() {
     show()
     errorText = ""
@@ -104,8 +118,9 @@ Item {
     }
     errorText = ""
     var text = format(v)
-    if (v !== Number(Number(value).toFixed(decimals)) && text !== lastCommitted) {
+    if (v !== Number(Number(value).toFixed(decimals)) && !(hasCommitted && text === lastCommitted)) {
       lastCommitted = text
+      hasCommitted = true
       committed(v)
     }
     dirty = false
@@ -120,6 +135,8 @@ Item {
     field.text = format(next)
     dirty = true
     errorText = ""
+    lastCommitted = ""
+    hasCommitted = false
   }
 
   // Escape and Up/Down; true when the key was handled (and must be consumed).
@@ -131,6 +148,7 @@ Item {
 
   onValueChanged: {
     lastCommitted = ""
+    hasCommitted = false
     if (!dirty) show()
   }
   Component.onCompleted: show()
@@ -164,7 +182,8 @@ Item {
         maximumLength: 24
         horizontalAlignment: Text.AlignLeft
         Accessible.name: root.label
-        onTextEdited: { root.dirty = true; root.errorText = "" }
+        onTextEdited: { root.dirty = true; root.errorText = ""; root.lastCommitted = ""; root.hasCommitted = false }
+        onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(FoamyI18n.t(pasteError))
         onAccepted: root.commitEdit(false)
         onEditingFinished: if (!field.inputActiveFocus) root.commitEdit(true)
         onKeyPressed: function(event) { if (root.handleKey(event.key)) event.accepted = true }
@@ -185,9 +204,10 @@ Item {
     }
 
     Text {
-      visible: root.errorText !== ""
+      readonly property string message: root.errorText !== "" ? root.errorText : (root.field.pasteError !== "" ? FoamyI18n.t(root.field.pasteError) : "")
+      visible: message !== ""
       width: parent.width
-      text: root.errorText
+      text: message
       textFormat: Text.PlainText
       horizontalAlignment: Text.AlignLeft
       wrapMode: Text.WordWrap
@@ -195,7 +215,7 @@ Item {
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.caption
       Accessible.role: Accessible.AlertMessage
-      Accessible.name: root.errorText
+      Accessible.name: message
     }
   }
 }
