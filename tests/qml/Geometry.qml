@@ -81,7 +81,20 @@ ShellRoot {
   Component {
     id: tallPopup
     FoamyPopup {
-      contentHeight: fittedContentHeight(bodyImplicitHeight)
+      maxHeight: 0          // only the screen limits the card
+      body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
+    }
+  }
+  Component {
+    id: cappedPopup
+    FoamyPopup {
+      body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
+    }
+  }
+  Component {
+    id: maxedPopup
+    FoamyPopup {
+      maxHeight: 300
       body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
     }
   }
@@ -141,6 +154,8 @@ ShellRoot {
       list.push({ position: positions[i], kind: "tall", bar: "full" })
       list.push({ position: positions[i], kind: "standard", bar: "facade" })
       list.push({ position: positions[i], kind: "card", bar: "facade" })
+      list.push({ position: positions[i], kind: "capped", bar: "facade" })
+      list.push({ position: positions[i], kind: "maxed", bar: "facade" })
       if (hasFork) list.push({ position: positions[i], kind: "fork", bar: "facade" })
     }
     cases = list
@@ -171,7 +186,8 @@ ShellRoot {
       current.contentHeight = current.fittedContentHeight(3000)
       current.open = true
     } else {
-      current = (c.kind === "tall" ? tallPopup : c.kind === "standard" ? standardPopup : card).createObject(shell, props)
+      var components = { tall: tallPopup, standard: standardPopup, card: card, capped: cappedPopup, maxed: maxedPopup }
+      current = components[c.kind].createObject(shell, props)
       if (c.kind === "standard") check(current.bodyItem === null, currentLabel + " body is lazy (not built before open)")
       current.open = true
     }
@@ -204,6 +220,7 @@ ShellRoot {
       check(near(p.availableCardHeight, expected), currentLabel + " PopupCard availableCardHeight " + p.availableCardHeight + " expected " + expected)
       check(p.cardItem !== null && near(p.cardItem.radius, FoamyStyle.radius), currentLabel + " PopupCard foamy radius")
       check(p.cardItem !== null && p.cardItem.border.width === 1, currentLabel + " PopupCard 1px border")
+      check(p.padding === FoamyStyle.menuPadding && p.cardItem && near(p.cardItem.contentTopInset, FoamyStyle.menuPadding + 1), currentLabel + " PopupCard menu padding " + p.padding)
       p.open = false
       p.destroy()
       next()
@@ -218,7 +235,9 @@ ShellRoot {
       check(Qt.colorEqual(c.border.color, FoamyPalette.border), currentLabel + " border colour alpha(text, .15)")
       check(p.layerNamespace === "omarchy-keyboard-panel", currentLabel + " layer namespace " + p.layerNamespace)
     }
-    if (currentKind === "tall") check(near(c.height, p.availableCardHeight), currentLabel + " tall card fills available height " + c.height)
+    if (currentKind === "tall") check(near(c.height, p.availableCardHeight), currentLabel + " maxHeight 0: card fills the available height " + c.height)
+    if (currentKind === "capped") check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " default cap popupMaxHeight " + c.height)
+    if (currentKind === "maxed") check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
     if (currentKind === "standard") {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")
       check(p.contentWidth === FoamyStyle.popupWidth, currentLabel + " standard width " + p.contentWidth)

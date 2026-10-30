@@ -30,6 +30,7 @@ Item {
         settings: ({ showCount: true, refreshSeconds: 60 })
         editingSettings: preview.previewState.indexOf("settings") === 0
         settingsError: preview.previewState === "settings-error" ? "Couldn't save the setting." : ""
+        canRetry: preview.previewState === "settings-error"
       }
     }
   }

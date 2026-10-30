@@ -23,4 +23,6 @@ Rectangle {
   // foamy-lint: allow bare-duration — shader clock, not UI motion
   NumberAnimation { duration: 60000 }
   property color textColor: "red"
+  OpticalGlyph { width: 16; text: "\u{f0e7}" }
+  OpticalGlyph { text: root.glyph; Text { text: "" } }
 }

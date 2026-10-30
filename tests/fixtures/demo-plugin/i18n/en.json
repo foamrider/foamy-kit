@@ -1,6 +1,9 @@
 {
   "Devices": "Devices",
-  "%1 devices": { "one": "%1 device", "other": "%1 devices" },
+  "%1 devices": {
+    "one": "%1 device",
+    "other": "%1 devices"
+  },
   "No devices": "No devices",
   "Settings": "Settings",
   "Back": "Back",
@@ -17,5 +20,7 @@
   "List": "List",
   "Tiles": "Tiles",
   "Name filter": "Name filter",
-  "Battery %1%": "Battery %1%"
+  "Battery %1%": "Battery %1%",
+  "That value isn't allowed.": "That value isn't allowed.",
+  "Couldn't save the setting.": "Couldn't save the setting."
 }

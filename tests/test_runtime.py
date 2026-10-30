@@ -33,16 +33,12 @@ def run(host, lang):
     r = harness.Run(host, shell, plugin=plugin, language=lang, prefix=f"foamy-kit-runtime-{host}-{lang}-")
     r.env["FOAMY_LANG"] = lang
     r.env["FOAMY_HOLD_MS"] = "4000"
-    log_path = r.base / "qs.log"
-    process = subprocess.Popen(["qs", "-p", str(r.root), "--no-color"], env=r.env, stdout=log_path.open("w"),
-                               stderr=subprocess.STDOUT, start_new_session=True)
+    r.start()
     try:
         status = qs_ipc(r, "foamy.kit-demo", "status")
-        process.wait(timeout=60)
+        r.wait(60)
     finally:
-        if process.poll() is None:
-            process.kill()
-    r.log = log_path.read_text(errors="replace")
+        r.stop()
     ok_ipc = False
     try:
         ok_ipc = status is not None and json.loads(status).get("leader") is True

@@ -1,27 +1,33 @@
 import QtQuick
-import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "kit"
-import "kit/FoamyPrefs.js" as Prefs
 import "Preferences.js" as Schema
 
 // Reference foamy bar widget built only from foamy-kit parts: FoamyPopup
-// with a lazy body, single-cursor keyboard model, settings page, inline
-// settings saving, one shared poller and one IPC target per shell.
+// with a lazy body, single-cursor keyboard model, settings page
+// (FoamySettingsState), queued settings saving (FoamyPrefsQueue), one
+// shared poller and one IPC target per shell.
 Panel {
   id: root
   ipcTarget: "foamy.kit-demo"
   manageIpc: false
 
-  property bool editingSettings: false
-  property bool saving: false
-  property string settingsError: ""
-  property var lastSave: null
   readonly property alias popup: popup
-  readonly property bool showCount: Prefs.value(Schema.fields, settings, "showCount")
-  readonly property int refreshSeconds: Prefs.value(Schema.fields, settings, "refreshSeconds")
+  readonly property alias prefs: prefs
+  readonly property bool editingSettings: settingsState.editing
+  readonly property bool showCount: prefs.value("showCount")
+  readonly property int refreshSeconds: prefs.value("refreshSeconds")
+
+  FoamySettingsState { id: settingsState; panel: root }
+  FoamyPrefsQueue {
+    id: prefs
+    bar: root.bar
+    moduleName: root.moduleName
+    fields: Schema.fields
+    settings: root.settings
+  }
 
   // Once per shell: only the leader polls, faster while any popup is open.
   FoamyMember { id: member; scope: "poller"; demanding: root.opened }
@@ -40,27 +46,9 @@ Panel {
     function status(): string { return JSON.stringify({ open: root.opened, devices: DemoService.devices.length, leader: member.isLeader }) }
   }
 
-  function openSettings() { editingSettings = true; open() }
-  function closeSettings() { editingSettings = false }
-
-  function save(key, next) {
-    settingsError = ""
-    var result = Prefs.save(root.bar, root.moduleName, Schema.fields, root.settings, key, next)
-    lastSave = { key: key, value: next }
-    if (!result.ok) { settingsError = FoamyI18n.t(result.error); return }
-    if (result.command.length === 0) return
-    saving = true
-    saveProcess.command = result.command
-    saveProcess.running = true
-  }
-
-  Process {
-    id: saveProcess
-    onExited: function(code) {
-      root.saving = false
-      root.settingsError = code === 0 ? "" : FoamyI18n.t("Couldn't save the setting.")
-    }
-  }
+  function openSettings() { settingsState.show() }
+  function closeSettings() { settingsState.hide() }
+  function save(key, next) { return prefs.save(key, next) }
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -82,10 +70,12 @@ Panel {
     body: Component {
       DemoView {
         devices: DemoService.devices
-        settings: root.settings
+        settings: prefs.effectiveSettings
         editingSettings: root.editingSettings
-        saving: root.saving
-        settingsError: root.settingsError
+        saving: prefs.saving
+        settingsError: FoamyI18n.t(prefs.error)
+        canRetry: prefs.canRetry
+        onRetryRequested: prefs.retry()
         onCloseRequestedByView: root.editingSettings ? root.closeSettings() : root.close()
         onSettingsRequested: root.openSettings()
         onSettingsClosed: root.closeSettings()

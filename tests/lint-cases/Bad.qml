@@ -12,4 +12,10 @@ Rectangle {
   IpcHandler { target: "foamy.bad" }
   // foamy-lint: allow hex-colour
   property color noReason: "#123456"
+  OpticalGlyph { width: 16; text: ""; color: "white" }
+  OpticalGlyph {
+    width: 16
+    Text { text: "inner" }
+    text: ''
+  }
 }

@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import KIT_ROOT, PLUGINS, harness, report, synced_demo
+from common import KIT_ROOT, harness, report, synced_demo
 
-FORK = PLUGINS / "foamy-bolt/BoltPopup.qml"
+FORK = KIT_ROOT / "tests/fixtures/old-fork/BoltPopup.qml"
 
 
 def run(host, mode, out_dir):

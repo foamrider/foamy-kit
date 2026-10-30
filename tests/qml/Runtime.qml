@@ -223,6 +223,13 @@ ShellRoot {
       eq(leaders(), 1, "a new leader takes over")
       var registry = IpcResolver.registry(shell)
       if (registry) eq(registry.call("foamy.kit-demo", "status", []).ran, true, "IPC follows the new leader")
+      // The settings IPC on a closed popup lands on Settings (FoamySettingsState).
+      var panel = members[0]
+      check(!panel.opened, "popup closed before openSettings()")
+      panel.openSettings()
+      check(panel.opened && panel.editingSettings, "openSettings() on a closed popup shows Settings")
+      panel.close()
+      check(!panel.editingSettings, "closing the popup leaves Settings")
       console.log("FOAMY READY")
       finish.start()
     }

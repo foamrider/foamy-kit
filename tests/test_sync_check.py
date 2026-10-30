@@ -90,6 +90,11 @@ def main():
     code, out = sh(SYNC, str(a), "--components", "FoamyI18n")
     files = sorted(p.name for p in (a / "kit").iterdir())
     ok &= report("narrowing the components removes unneeded files", code == 0 and files == ["FoamyI18n.qml", "qmldir"], f"{files}")
+    code, out = sh(SYNC, str(a), "--add", "FoamyPeerIpc")
+    files = sorted(p.name for p in (a / "kit").iterdir())
+    lock = foamykit.read_lock(a)
+    ok &= report("--add extends the plugin's component set", code == 0 and "FoamyPeerIpc.qml" in files and "FoamyI18n.qml" in files
+                 and lock["components"] == ["FoamyI18n", "FoamyIpc", "FoamyPeerIpc"], f"{lock['components']}")
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,Nope")
     ok &= report("unknown components are rejected", code != 0 and "unknown component" in out)
 
@@ -109,10 +114,16 @@ def main():
     # 7. Design lint.
     code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", str(KIT_ROOT / "tests/lint-cases/Bad.qml"))
     rules = {line.split(": ")[1] for line in out.splitlines() if ": " in line}
-    expected = {"unqualified-color", "radius-x2", "hex-colour", "sans-serif", "bare-duration", "unguarded-loop", "raw-ipc", "opt-out-reason"}
+    expected = {"unqualified-color", "radius-x2", "hex-colour", "sans-serif", "bare-duration", "unguarded-loop", "raw-ipc", "opt-out-reason",
+                "empty-glyph"}
     ok &= report("lint catches every rule", code != 0 and expected <= rules, f"missing {sorted(expected - rules)}")
     code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", str(KIT_ROOT / "tests/lint-cases/Good.qml"))
     ok &= report("lint allows qualified colours, guarded loops and reasoned opt-outs", code == 0, out.strip())
+    warn = str(KIT_ROOT / "tests/lint-cases/Warn.qml")
+    code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", warn)
+    code2, out2 = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", "--strict", warn)
+    ok &= report("literal private-use glyphs warn (and fail with --strict)", code == 0 and out.count("warning: pua-literal") == 2
+                 and code2 != 0, out.strip())
     kit_sources = [str(p) for p in sorted((KIT_ROOT / "kit").glob("*")) if p.suffix in (".qml", ".js")]
     code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", *kit_sources)
     ok &= report("the kit itself passes the lint", code == 0, out.strip())
@@ -121,9 +132,14 @@ def main():
     sh(SYNC, str(demo))
     code, out = sh(CHECK, str(demo))
     ok &= report("check.sh passes on the demo plugin (kit + lint)", code == 0, out.strip())
-    if (PLUGINS / "foamy-bolt/manifest.json").is_file():
-        code, out = sh(CHECK, "--lint-only", str(PLUGINS / "foamy-bolt"))
-        ok &= report("check.sh --lint-only flags an unmigrated plugin (read only)", code != 0 and "unqualified-color" in out)
+    code, out = sh("node", "-e", 'const P = require(process.argv[1]).load("FoamyPrefs"); '
+                   'process.stdout.write(String(P.valid([{key: "x", type: "array"}], "x", [1])))', str(demo / "kit/node-loader.cjs"))
+    ok &= report("a plugin's stamped kit/node-loader.cjs loads FoamyPrefs in node", code == 0 and out.strip() == "true", out.strip())
+    unmigrated = base / "unmigrated"
+    shutil.copytree(FIXTURES / "demo-plugin", unmigrated)
+    shutil.copyfile(KIT_ROOT / "tests/fixtures/old-fork/BoltPopup.qml", unmigrated / "BoltPopup.qml")
+    code, out = sh(CHECK, "--lint-only", str(unmigrated))
+    ok &= report("check.sh --lint-only flags pre-kit code (the old popup fork)", code != 0 and "unqualified-color" in out)
 
     if ok:
         shutil.rmtree(base, ignore_errors=True)

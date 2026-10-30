@@ -1,0 +1,3 @@
+The pre-kit foamy-bolt BoltPopup.qml (a fork of the Omarchy 4.0 Ui/KeyboardPanel,
+MIT, see LICENSE-OMARCHY), taken from foamy-bolt `dev`. test_geometry.py loads it as
+the negative control: on the 4.5 full-screen bar window it misplaces the card.

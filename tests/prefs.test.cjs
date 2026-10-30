@@ -1,13 +1,11 @@
 // Unit tests for kit/FoamyPrefs.js (QML JS library, loaded here in node).
+// Loaded the way plugins load it: through kit/node-loader.cjs.
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 
-const source = fs.readFileSync(path.join(__dirname, "../kit/FoamyPrefs.js"), "utf8").replace(/^\.pragma library\s*$/m, "");
-const sandbox = { module: { exports: {} }, console: { log: console.log, warn() {} } };
-vm.runInNewContext(source, sandbox);
-const Prefs = sandbox.module.exports;
+const source = fs.readFileSync(path.join(__dirname, "../kit/FoamyPrefs.js"), "utf8");
+const Prefs = require("../kit/node-loader.cjs").load("FoamyPrefs", { console: { log: console.log, warn() {} } });
 
 const fields = [
   { key: "showPercentage", type: "boolean", defaultValue: true },
@@ -73,6 +71,59 @@ test("refused inline save falls back to the CLI", () => {
   assert.deepStrictEqual(Array.from(noShell.command), ["omarchy", "bar", "set", "foamy.x", "showPercentage", "false", "--json"]);
   const throws = Prefs.save({ shell: { updateEntryInline: () => { throw new Error("x"); } } }, "foamy.x", fields, {}, "layout", "tiles");
   assert.strictEqual(throws.command[5], '"tiles"');
+});
+
+const rich = [
+  { key: "folders", type: "array", maxItems: 2, defaultValue: [],
+    validate: (v) => v.every((f) => f && typeof f.path === "string") || "Each folder needs a path." },
+  { key: "route", type: "object", defaultValue: null, validate: (v) => !!(v.from && v.to) },
+  { key: "plan", type: "object", defaultValue: { days: [] } },
+  { key: "name", type: "string", defaultValue: "" },
+];
+
+test("array and object types", () => {
+  assert.ok(Prefs.valid(rich, "folders", [{ path: "/a" }]));
+  assert.ok(!Prefs.valid(rich, "folders", [{ path: "/a" }, { path: "/b" }, { path: "/c" }]), "maxItems");
+  assert.strictEqual(Prefs.problem(rich, "folders", [{ nope: 1 }]), "Each folder needs a path.", "validate() message");
+  assert.ok(!Prefs.valid(rich, "folders", { path: "/a" }), "an object is not an array");
+  assert.ok(Prefs.valid(rich, "route", { from: { id: 1 }, to: { id: 2 } }));
+  assert.ok(!Prefs.valid(rich, "route", { from: { id: 1 } }), "validate false");
+  assert.ok(!Prefs.valid(rich, "route", [1]), "an array is not an object");
+  assert.ok(!Prefs.valid(rich, "route", null));
+  assert.strictEqual(Prefs.value(rich, {}, "route"), null);
+  const plan = Prefs.value(rich, {}, "plan");
+  plan.days.push("mon");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.value(rich, {}, "plan"))), { days: [] }, "defaults are copied");
+});
+
+test("equal / overlay / settle", () => {
+  assert.ok(Prefs.equal({ a: 1, b: [1, { c: 2, d: 3 }] }, { b: [1, { d: 3, c: 2 }], a: 1 }), "key order");
+  assert.ok(!Prefs.equal([1, 2], [2, 1]));
+  const pending = { a: "one", b: [1] };
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.overlay({ a: "x", c: 3 }, pending))), { a: "one", c: 3, b: [1] });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.settle({ a: "one", b: [2] }, pending))), { b: [1] });
+});
+
+test("a second save merges over pending values, not the stale entry", () => {
+  const writes = [];
+  const bar = { shell: { updateEntryInline: (id, settings) => { writes.push(JSON.parse(JSON.stringify(settings))); return true; } } };
+  const stale = { id: "foamy.x", name: "", keep: 1 };
+  Prefs.save(bar, "foamy.x", rich, stale, "name", "first");
+  const second = Prefs.save(bar, "foamy.x", rich, stale, "route", { from: 1, to: 2 }, { name: "first" });
+  assert.ok(second.inline);
+  assert.deepStrictEqual(writes[1], { name: "first", keep: 1, route: { from: 1, to: 2 } });
+  const same = Prefs.save(bar, "foamy.x", rich, stale, "name", "first", { name: "first" });
+  assert.ok(!same.changed, "a value equal to the pending one is a no-op");
+});
+
+test("array values bypass qs ipc list parsing on the CLI path", () => {
+  const command = Array.from(Prefs.saveCommand("foamy.x", "folders", [{ path: "/a" }]));
+  assert.strictEqual(command[0], "sh");
+  assert.ok(command[2].includes('omarchy-shell shell setBarWidget "$1" "$2" "$3" "{}"'));
+  assert.deepStrictEqual(command.slice(3), ["foamy-prefs", "foamy.x", "folders", ' [{"path":"/a"}]']);
+  assert.strictEqual(Prefs.saveCommand("foamy.x", "route", { a: 1 })[0], "omarchy", "objects keep omarchy bar set");
+  const refused = Prefs.save({ shell: { updateEntryInline: () => false } }, "foamy.x", rich, {}, "folders", [{ path: "/a" }]);
+  assert.strictEqual(refused.command[0], "sh");
 });
 
 test("invalid values and missing module are refused", () => {

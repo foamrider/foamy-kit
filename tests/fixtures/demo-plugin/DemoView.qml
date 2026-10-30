@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Ui
 import "kit"
+import "components"
 
 // The demo popup body: header, a cursor-driven device list, and the
 // settings page, all from foamy-kit. Data comes in through properties so the
@@ -14,6 +15,7 @@ PanelKeyCatcher {
   property bool saving: false
   property string settingsError: ""
   property bool loading: false
+  property bool canRetry: false
 
   signal closeRequestedByView()
   signal settingsRequested()
@@ -21,6 +23,7 @@ PanelKeyCatcher {
   signal refreshRequested()
   signal saveRequested(string key, var value)
   signal switchPanelRequested(int direction)
+  signal retryRequested()
 
   implicitWidth: FoamyStyle.popupWidth
   implicitHeight: editingSettings ? settingsPage.implicitHeight : list.implicitHeight
@@ -32,7 +35,8 @@ PanelKeyCatcher {
   onActivateRequested: if (cursor.index === root.devices.length) root.settingsRequested()
   onCloseRequested: root.closeRequestedByView()
   onTabRequested: function(direction) { root.switchPanelRequested(direction) }
-  onTextKey: function(text) {
+  onTextKey: function(text, modifiers) {
+    if (!cursor.plain(modifiers)) return
     if (text === "s") root.settingsRequested()
     else if (text === "r") root.refreshRequested()
   }
@@ -103,6 +107,7 @@ PanelKeyCatcher {
               font.pixelSize: FoamyStyle.font.caption
             }
           }
+          DemoTag { battery: modelData.battery; anchors.verticalCenter: parent.verticalCenter }
         }
       }
     }
@@ -115,8 +120,9 @@ PanelKeyCatcher {
     height: parent.height
     saving: root.saving
     error: root.settingsError
-    retryable: root.settingsError !== ""
+    retryable: root.canRetry
     onBack: root.settingsClosed()
+    onRetry: root.retryRequested()
 
     FoamySettingsSection {
       width: parent.width

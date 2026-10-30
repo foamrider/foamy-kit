@@ -22,6 +22,48 @@ def size(png):
     return struct.unpack(">II", data[16:24]) if data[:8] == b"\x89PNG\r\n\x1a\n" else None
 
 
+def pixel_differs(png, x, y, other):
+    """Whether (x, y) differs between two RGBA PNG screenshots (zlib only)."""
+    import zlib
+
+    def pixel(path):
+        data = path.read_bytes()
+        width, height = struct.unpack(">II", data[16:24])
+        depth, colour = data[24], data[25]
+        offset, chunks = 8, b""
+        while offset < len(data):
+            length = struct.unpack(">I", data[offset:offset + 4])[0]
+            kind = data[offset + 4:offset + 8]
+            if kind == b"IDAT":
+                chunks += data[offset + 8:offset + 8 + length]
+            offset += 12 + length
+        raw = zlib.decompress(chunks)
+        channels = {6: 4, 2: 3}[colour]
+        stride = width * channels
+        rows, previous = [], bytearray(stride)
+        for row in range(y + 1):
+            start = row * (stride + 1)
+            kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+            for i in range(stride):
+                left = line[i - channels] if i >= channels else 0
+                up = previous[i]
+                corner = previous[i - channels] if i >= channels else 0
+                if kind == 1: line[i] = (line[i] + left) & 255
+                elif kind == 2: line[i] = (line[i] + up) & 255
+                elif kind == 3: line[i] = (line[i] + (left + up) // 2) & 255
+                elif kind == 4:
+                    p = left + up - corner
+                    pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+                    line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+            previous = line
+        return bytes(previous[x * channels:(x + 1) * channels])
+
+    try:
+        return pixel(png) != pixel(other)
+    except (OSError, KeyError, ValueError, zlib.error):
+        return False
+
+
 def main():
     ok = True
     out_root = KIT_ROOT / "tests/out/preview"
@@ -41,6 +83,27 @@ def main():
         ok &= report(f"preview render {host}: screen 1920x1080, card 420 wide", screen == (1920, 1080) and card and card[0] == 420, f"{screen} {card}")
         placed = dict((p.name, info) for p, info in shots)["devices.png"]
         ok &= report(f"preview render {host}: card hangs under the top bar (y = 34 + gap)", placed.endswith(",39"), placed)
+        log = (out / "render.log").read_text()
+        ok &= report(f"preview render {host}: plugin subdirectory types load without a qmldir",
+                     "Demo" in (plugin / "DemoView.qml").read_text() and "DemoTag is not a type" not in log
+                     and "DemoBadge is not a type" not in log and not (plugin / "components/qmldir").exists())
+
+        # A FoamyPopupCard menu: its card is copied onto the screen at its anchor.
+        card_out = out_root / host / "menu"
+        shots = render.render(plugin, host, card_out, preview=plugin / "preview/MenuPreview.qml")
+        info = dict((p.name, i) for p, i in shots or [])
+        at = info.get("menu.png", "")
+        x, y = (int(v) for v in at.rsplit(" at ", 1)[1].split(",")) if " at " in at else (-1, -1)
+        # PopupCard hangs from the anchor item (stock geometry), not the strip edge.
+        ok &= report(f"card preview {host}: menu card captured and placed below the bar button", shots is not None
+                     and size(card_out / "menu.png") is not None and 1300 < x < 1700 and 28 < y < 80, at)
+        ok &= report(f"card preview {host}: the screen shot shows the card", shots is not None
+                     and pixel_differs(card_out / "menu-screen.png", x + 20, y + 20, out / "devices-screen.png"))
+
+        # A service-only preview: no bar or anchor declared, toast in screen coordinates.
+        service_out = out_root / host / "service"
+        shots = render.render(plugin, host, service_out, preview=plugin / "preview/ServicePreview.qml")
+        ok &= report(f"service preview {host}: toast captured", shots is not None and size(service_out / "toast.png") == (420, 72))
     shutil.rmtree(plugin.parent, ignore_errors=True)
 
     # publish-screenshots.sh
