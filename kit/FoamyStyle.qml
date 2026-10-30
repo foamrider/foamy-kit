@@ -81,6 +81,9 @@ QtObject {
 
   // --- controls ------------------------------------------------------------------
   readonly property int controlHeight: Style.space(32)
+  // The unit column beside numeric settings fields ("%", "°C", "ms", "min"):
+  // fixed, so stacked fields line up whatever their units.
+  readonly property int unitWidth: Style.space(32)
   readonly property int controlPaddingX: Style.space(10)
   readonly property int actionSize: Style.space(28)
   readonly property int iconSize: Style.space(15)

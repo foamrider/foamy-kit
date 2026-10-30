@@ -35,6 +35,12 @@ Item {
   property int decimals: 0
   property string label: ""
   property string unit: ""
+  // The unit sits in a fixed column so stacked fields line up whatever their
+  // units. A unitless field among fields with units: set reserveUnit. Units
+  // wider than the column ("seconds") widen it: prefer short symbols, or give
+  // every field in the section the same larger unitWidth.
+  property real unitWidth: FoamyStyle.unitWidth
+  property bool reserveUnit: false
   property bool hasCursor: false
   property string invalidText: FoamyI18n.t("Enter a number from %1 to %2", [FoamyI18n.number(from, decimals), FoamyI18n.number(to, decimals)])
   property alias field: field
@@ -165,9 +171,13 @@ Item {
       }
 
       Text {
-        visible: root.unit !== ""
+        id: unitLabel
+        visible: root.unit !== "" || root.reserveUnit
         text: root.unit
         textFormat: Text.PlainText
+        horizontalAlignment: Text.AlignLeft
+        Layout.preferredWidth: Math.max(root.unitWidth, implicitWidth)
+        Layout.minimumWidth: root.unitWidth
         color: FoamyPalette.secondaryText
         font.family: FoamyStyle.fontFamily
         font.pixelSize: FoamyStyle.font.bodySmall
