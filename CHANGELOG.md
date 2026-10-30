@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.3.4 — 2026-10-30
+
+Fixes from the 0.3.3 resync (kit-issues: foamy-lock, foamy-media, foamy-vitals,
+foamy-notification-center, foamy-train).
+
+### Security
+- **FoamyIpcPreference could lose the lock route (regression in 0.3.2).** 0.3.2 made it poll only
+  while a rival was present at its last check, so a handler registered or moved ahead *after* that
+  check (another "lock" service) kept the route: `omarchy-shell lock …` (and the pre-suspend status
+  poll) reached the wrong lock. IpcRegistry keeps handlers in a plain array mutated in place and has
+  no change signal, so the preference polls again for as long as it is active on 4.5 (one short array
+  scan every `interval`, 5 s). Regression test: the rival arrives after the check settled. foamy-lock's
+  own runtime test (registry re-claim) passes against this build on 4.5 and 4.0.
+
+### Fixed
+- **FoamyPrefsQueue on 4.5 kept a synchronously reflected inline save pending** (foamy-media): 4.5's
+  `updateEntryInline` updates `settings` inside the call, before the value became pending, so it stayed
+  pending for 10 s, hid outside changes, and the next save wrote it back. The queue settles right after
+  registering it. Tested with a host that reflects synchronously, plus an outside change in between.
+- **SafeTextField TypeError ("Math" undefined) on settings state switches** (foamy-train):
+  `onMaximumLengthChanged` could run while a page was built or torn down. It now waits for completion
+  and uses no JS globals (also in the length clamp). Not reproduced in isolation; covered by a test
+  that switches settings pages (sync and async Loader, a Repeater of `maximumLength` fields) 12 times
+  with the log checked for TypeErrors.
+- **FoamyNumberField/FoamyTextSettingField couldn't retry a failed save with the same value**
+  (foamy-notification-center): the commit guard is cleared when a new edit starts, and `saveFailed()`
+  shows the saved value again and allows the same input to commit (wire it to the save's failure, e.g.
+  FoamyPrefsQueue `onFailed`).
+- **A refused paste was silent in the settings fields** (foamy-vitals): SafeTextField's `pasteError` is
+  shown in the field's error line and emitted as `pasteFailed(message)`.
+
+### Added
+- `preview/compare.py`: screenshot comparison (files or directories) on RGB *and* alpha, treating fully
+  transparent pixels as equal whatever their hidden RGB; `--tolerance`; exit 0/1/2. Use it instead of
+  ad-hoc PIL scripts (one compared in a way that reported every image identical).
+
 ## 0.3.3 — 2026-10-30
 
 ### Fixed

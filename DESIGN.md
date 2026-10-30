@@ -79,6 +79,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (`checked` bound, save in `onClicked`).
 - **Numbers and text in settings**: `FoamyNumberField` / `FoamyTextSettingField`
   (bound `value`, save in `onCommitted`). Never hand-roll a row that assigns `text`.
+  When a save fails, call the field's `saveFailed()` (from FoamyPrefsQueue
+  `onFailed`) so it shows the saved value and the same input can be retried.
   Units are short symbols ("%", "°C", "ms") in the fixed unit column, so a
   section's fields line up; a unitless field among them sets `reserveUnit`.
 - **Controlled values**: kit controls never assign over a caller's binding.
@@ -114,7 +116,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   Singleton`; open popups raise demand.
 - **IPC**: `FoamyIpc` only *(lint: no raw `IpcHandler`/`ShellIpc`)*, `enabled:
   member.isLeader`.
-  A target shared with another service: `FoamyIpcPreference`. Calling another
+  A target shared with another service: `FoamyIpcPreference` (keep its poll
+  on; it is the only guard against a later service taking the route). Calling another
   plugin: `FoamyPeerIpc` (never read its files or run its scripts).
 - **Settings**: save through `FoamyPrefsQueue` (inline `updateEntryInline`,
   else the CLI; serialised, newest value per key, never merging over a stale

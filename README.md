@@ -142,6 +142,9 @@ one. Never `rm -rf /tmp/foamy-kit-preview-*` — concurrent renders (other
 agents') live there. `python3 preview/harness.py --gc` removes only dirs of
 runs whose process is gone.
 
+Comparing screenshots: `preview/compare.py old.png new.png` (or two
+directories). It compares RGB and alpha; never compare one without the other.
+
 ### Before / after trio
 
 ```bash
