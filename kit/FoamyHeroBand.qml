@@ -65,10 +65,29 @@ Item {
   property Component background: null
   property bool scrim: imageSource.toString() !== "" || background !== null
   property real topRadius: FoamyStyle.bandRadius
-  property bool separator: true
+  // When the band ends the card (empty states, a band-only popup) it rounds
+  // its bottom corners like the top and drops the hairline, so it never paints
+  // over the card's rounded bottom. Detected from the enclosing popup card;
+  // set it yourself to override.
+  property bool roundBottom: endsCard
+  readonly property bool endsCard: {
+    var card = band._card
+    if (!card) return false
+    band.height; band.y; card.height
+    var bottom = band.mapToItem(card, 0, band.height).y
+    return Math.abs(bottom - (card.height - card.contentBottomInset)) <= 1
+  }
+  property Item _card: null
+  property bool separator: !roundBottom
   readonly property bool mirrored: LayoutMirroring.enabled
   readonly property Item backgroundItem: backgroundLoader.item
   readonly property alias titleRow: header
+
+  Component.onCompleted: {
+    // The popup card: the nearest ancestor that is a BorderSurface.
+    for (var item = parent; item; item = item.parent)
+      if ("borderSpec" in item && "contentBottomInset" in item) { _card = item; break }
+  }
 
   implicitWidth: FoamyStyle.popupWidth
   implicitHeight: FoamyStyle.bandPaddingTop + content.implicitHeight + FoamyStyle.bandPaddingBottom
@@ -91,6 +110,8 @@ Item {
     property color scrimBottom: FoamyPalette.bandScrimBottom
     readonly property string image: band.imageSource.toString()
     readonly property real radius: Math.max(0, Math.min(band.topRadius, width / 2, height))
+    readonly property real bottomRadius: band.roundBottom ? Math.max(0, Math.min(band.topRadius, width / 2, height / 2)) : 0
+    onBottomRadiusChanged: requestPaint()
 
     onFillChanged: requestPaint()
     onFillEndChanged: requestPaint()
@@ -114,8 +135,11 @@ Item {
       ctx.moveTo(r, 0)
       ctx.lineTo(width - r, 0)
       ctx.arcTo(width, 0, width, r, r)
-      ctx.lineTo(width, height)
-      ctx.lineTo(0, height)
+      var b = bottomRadius
+      ctx.lineTo(width, height - b)
+      ctx.arcTo(width, height, width - b, height, b)
+      ctx.lineTo(b, height)
+      ctx.arcTo(0, height, 0, height - b, b)
       ctx.lineTo(0, r)
       ctx.arcTo(0, 0, r, 0, r)
       ctx.closePath()
