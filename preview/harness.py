@@ -51,6 +51,8 @@ FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration"
 
 
 _LIVE = set()
+# PIDs of every qs / dbus-daemon this process started (leak checks in tests).
+STARTED = []
 try:
     _LIBC = ctypes.CDLL(None, use_errno=True)
 except OSError:
@@ -282,6 +284,7 @@ class Run:
         self._log_file = (self.base / "qs.log").open("w")
         self.process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=self._log_file,
                                         stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=_die_with_parent)
+        STARTED.extend(p.pid for p in (self.process, self.bus_process) if p is not None)
         return self
 
     def stop(self):

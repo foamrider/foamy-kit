@@ -94,7 +94,23 @@ ShellRoot {
 
   function card() {
     var popup = shell.preview.popup
-    return popup && popup.cardItem ? popup.cardItem : null
+    if (!popup) return null
+    if (popup.cardItem) return popup.cardItem
+    return findCard(popup, 0)
+  }
+
+  // Popups without a cardItem (pre-kit forks of KeyboardPanel, rendered for
+  // "before" shots): the card is the first BorderSurface inside.
+  function findCard(item, depth) {
+    if (!item || depth > 4) return null
+    var kids = item.children || []
+    for (var i = 0; i < kids.length; i++)
+      if (kids[i] && "borderSpec" in kids[i] && "contentTopInset" in kids[i]) return kids[i]
+    for (var j = 0; j < kids.length; j++) {
+      var found = findCard(kids[j], depth + 1)
+      if (found) return found
+    }
+    return null
   }
 
   // A PopupWindow-based card (FoamyPopupCard): place a copy on the screen.
@@ -141,7 +157,9 @@ ShellRoot {
           var at = cardCopy.visible ? Qt.point(cardCopy.x, cardCopy.y) : item.mapToItem(sim, 0, 0)
           if (!tight.saveToFile(cardPath)) console.log("FOAMY FAIL SAVE FAILED " + cardPath)
           else console.log("FOAMY SHOT " + cardPath + " " + Math.round(item.width) + "x" + Math.round(item.height)
-            + " at " + Math.round(at.x) + "," + Math.round(at.y))
+            + " at " + Math.round(at.x) + "," + Math.round(at.y)
+            + (shell.preview.popup && shell.preview.popup.availableCardHeight !== undefined
+               ? " avail " + Math.round(shell.preview.popup.availableCardHeight) : ""))
           cardCopy.visible = false
           shell.index++
           next.start()
