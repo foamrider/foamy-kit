@@ -7,8 +7,15 @@ import qs.Ui
 // Adapted from Omarchy Ui/Dropdown.qml (MIT, see LICENSE-OMARCHY) for the
 // foamy look: foamy radius, font and control height, RTL mirroring of the
 // option list (the popup is a separate overlay, so it does not inherit the
-// panel's mirroring), and an optional label delegate. Selecting an option
-// sets `value` (as upstream) and emits changed(value).
+// panel's mirroring), and an optional label delegate.
+//
+// `value` belongs to the caller: bind it to the setting. Selecting an option
+// emits changed(value) and never assigns `value` (upstream does, which
+// destroys the caller's binding, and since popup bodies are kept between
+// opens, later changes to the setting would stop showing). Until the
+// caller's binding catches up, the pick is shown (`shownValue`); it gives way
+// as soon as `value` changes, the list is reopened, or after pickHoldMs. A
+// caller that wants an uncontrolled dropdown handles changed() itself.
 //
 //   FoamyDropdown {
 //     label: FoamyI18n.t("Refresh every")
@@ -47,6 +54,12 @@ Item {
   property color accent: Commons.Color.accent
   property real cornerRadius: FoamyStyle.radius
   property Component labelDelegate: null
+  // The option on show: the last pick while the caller's value catches up.
+  readonly property string shownValue: pickHeld ? pickedValue : value
+  property int pickHoldMs: 10000
+  property string pickedValue: ""
+  property bool pickHeld: false
+  onValueChanged: pickHeld = false
   readonly property var popupBorderSpec: Border.localOrSurfaceSpec("popups", "border", popupBorder, Commons.Color.popups.border, Style.normalBorderWidth)
   property string fontFamily: FoamyStyle.fontFamily
   property int rowHeight: FoamyStyle.controlHeight
@@ -65,6 +78,17 @@ Item {
   // cursor.
   readonly property bool popupOpen: popup.opened
   function open() { popup.open() }
+  // Pick an option as the list does: show it and emit changed(), without
+  // touching `value`.
+  function select(v) {
+    v = String(v)
+    if (v !== value) {
+      pickedValue = v
+      pickHeld = true
+      pickHold.restart()
+    }
+    changed(v)
+  }
   function close() { popup.close() }
   function toggle() { popup.opened ? popup.close() : popup.open() }
 
@@ -79,9 +103,9 @@ Item {
   }
   function currentLabel() {
     for (var i = 0; i < options.length; i++) {
-      if (optionValue(options[i]) === value) return optionLabel(options[i])
+      if (optionValue(options[i]) === shownValue) return optionLabel(options[i])
     }
-    return value
+    return shownValue
   }
 
   // A label: plain text, or the caller's labelDelegate.
@@ -113,6 +137,12 @@ Item {
         item.color = Qt.binding(function() { return optionText.color })
       }
     }
+  }
+
+  Timer {
+    id: pickHold
+    interval: root.pickHoldMs
+    onTriggered: root.pickHeld = false
   }
 
   implicitWidth: Style.spacing.dropdownWidth
@@ -215,6 +245,7 @@ Item {
         }
 
         onOpened: {
+          root.pickHeld = false
           optionList.currentIndex = Math.max(0, optionList.indexOfValue(root.value))
           optionList.forceActiveFocus()
         }
@@ -253,8 +284,7 @@ Item {
           function selectCurrent() {
             if (currentIndex < 0 || currentIndex >= root.options.length) return
             var v = root.optionValue(root.options[currentIndex])
-            root.value = v
-            root.changed(v)
+            root.select(v)
             popup.close()
           }
 
