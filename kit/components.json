@@ -14,7 +14,8 @@
   "FoamyPopupCard": {"files": ["FoamyPopupCard.qml"], "deps": ["FoamyStyle", "FoamyI18n"]},
   "FoamyDropdown": {"files": ["FoamyDropdown.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyI18n"], "notices": ["LICENSE-OMARCHY"]},
   "SafeTextField": {"files": ["SafeTextField.qml", "clipboard.sh"], "deps": ["FoamyStyle"]},
-  "FoamySettings": {"files": ["FoamySettingsPage.qml", "FoamySettingsHeader.qml", "FoamySettingsSection.qml", "FoamySettingsError.qml", "FoamyToggle.qml", "FoamySettingsState.qml"], "deps": ["FoamyAction", "FoamyHeroBand", "FoamyI18n", "FoamyPalette", "FoamyStyle"]},
+  "FoamyNumberField": {"files": ["FoamyNumberField.qml"], "deps": ["SafeTextField", "FoamyI18n", "FoamyStyle", "FoamyPalette"]},
+  "FoamySettings": {"files": ["FoamySettingsPage.qml", "FoamySettingsHeader.qml", "FoamySettingsSection.qml", "FoamySettingsError.qml", "FoamyToggle.qml", "FoamySettingsState.qml"], "deps": ["FoamyAction", "FoamyHeroBand", "FoamyI18n", "FoamyNumberField", "FoamyPalette", "FoamyStyle"]},
   "FoamyCursor": {"files": ["FoamyCursor.qml", "FoamyCursorSurface.qml"], "deps": ["FoamyStyle"]},
   "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []}
 }
