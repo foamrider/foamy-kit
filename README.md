@@ -29,6 +29,7 @@ edited in a plugin: change it here, then sync.
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 102 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
+| FoamyNumberField | `FoamyNumberField.qml` | Binding-safe numeric settings field: draft, Enter/focus-out commit, Escape restore, step, validation |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton and open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |

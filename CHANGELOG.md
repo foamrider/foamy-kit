@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.2 — 2026-10-30
+
+From the Codex review of the plugin PRs (/tmp/foamy-fix/reviews/unanswered.md).
+
+### Fixed
+- **FoamyHeroBand kept every artwork decoded** (foamy-media#2): each distinct `imageSource` was
+  loaded into the band's Canvas and never unloaded, and popup bodies are retained, so covers piled
+  up for the shell's lifetime. The band now holds at most one picture: the previous one is unloaded
+  on change, and the current one while the band is hidden (popup closed) or the source clears; it
+  reloads when shown. `loadedImage` reports what is held. Tested by cycling 50 covers.
+- **FoamyIpcPreference polled forever**: it re-claimed every 5 s for the shell's lifetime; it now
+  polls only while another handler shares the target (a later handler queues behind it anyway).
+
+### Added
+- **FoamyNumberField** (also pulled in by FoamySettings): a numeric settings field that never
+  assigns over its `value` binding. Shows `value` (following external changes) when not editing,
+  keeps a draft while editing, Enter/focus-out commit once only a valid changed number
+  (`committed(v)`), Escape restores and is consumed (the page stays), Up/Down step by `stepSize`
+  within `from`..`to`, `decimals`, invalid-input message (`invalidText`, AlertMessage), language
+  digits and decimal mark accepted, RTL row, `hasCursor`. Replaces hand-rolled numeric rows that did
+  `text = …` (bolt, vitals, media, notification center: see KIT-0.3.2-HANDOFF).
+- Demo plugin settings use FoamyNumberField.
+
+### Checked, nothing to change
+- Kit-wide sweep for assignments over caller bindings, Canvas/Image resources never released and
+  timers running while hidden: FoamyDropdown (0.2.0 fix holds), FoamyToggle, SafeTextField (internal
+  edits only), settings skeleton, FoamyPopup (radius/colour bound on the host card), FoamyAction
+  (spinner only while visible), FoamyPrefsQueue (expiry timer only while values are pending),
+  FoamyIcon (data-URL images, pixmap-cache bounded).
+
 ## 0.3.1 — 2026-10-30
 
 Round-5 feedback on 0.3.0 (kit-issues newer than the 0.3.0 release).

@@ -56,7 +56,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   - **Title only**: list and manager panels where every row is equal (bolt,
     monitor, teams): the band holds just the title row.
   - **Own picture**: `imageSource` for artwork (cover-fitted and clipped by the
-    band) or `background: Component` for a scene (weather sky; it must keep to
+    band; it holds one picture at a time and drops it while the popup is
+    closed — clear the source when the artwork goes away) or `background: Component` for a scene (weather sky; it must keep to
     the rounded top using `topRadius`). Same geometry and text treatment; a
     readability scrim is drawn over pictures.
   - Settings pages show the compact band (back, "Settings", "Saving…");
@@ -76,6 +77,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
+- **Numbers in settings**: `FoamyNumberField` (bound `value`, save in
+  `onCommitted`). Never hand-roll a numeric row that assigns `text`.
 - **Controlled values**: kit controls never assign over a caller's binding.
   Bind `value`/`checked`/`open` to state and change the state in handlers.
   (Text fields are the exception every toolkit has: typing edits `text`;
