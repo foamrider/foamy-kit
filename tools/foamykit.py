@@ -184,7 +184,7 @@ def lock_core(data):
     return b"\n".join(l for l in data.split(b"\n") if not l.startswith(b"source "))
 
 
-def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print):
+def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print, add=None):
     plugin = Path(plugin).resolve()
     if not (plugin / "manifest.json").is_file():
         raise KitError(f"{plugin}: not a plugin (no manifest.json)")
@@ -192,6 +192,8 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
     lock = read_lock(plugin)
     if names is None:
         names = lock["components"] if lock and lock["components"] else sorted(components)
+    if add:
+        names = sorted(set(names) | set(add))
     selected = resolve(names, components)
     version = kit_version()
     files = planned_files(selected, components, version)
@@ -327,7 +329,11 @@ RULES = {
     "unguarded-loop": "infinite animations need `running: … && !FoamyMotion.reduceMotion`",
     "raw-ipc": "use FoamyIpc (4.5 socket fast path, 4.0 fallback)",
     "opt-out-reason": "a foamy-lint opt-out needs a reason: // foamy-lint: allow <rule> — <why>",
+    "empty-glyph": "a glyph's text is empty (an icon character was lost); write it as an escape like \"\\u{f0e7}\"",
+    "pua-literal": "private-use (icon font) character written literally; editors and tools strip them, use an escape like \"\\u{f0e7}\"",
 }
+# Reported, but don't fail check.sh (use --strict to fail on them too).
+WARNINGS = {"pua-literal"}
 EXEMPT = {
     "bare-duration": {"FoamyMotion.qml"},
     "sans-serif": {"FoamyStyle.qml"},
@@ -343,6 +349,9 @@ SANS_RE = re.compile(r"""["']sans-serif["']""")
 RADIUS_RE = re.compile(r"Style\.cornerRadius\s*\*\s*2(?![\d.])")
 IPC_RE = re.compile(r"(?<![\w.])(IpcHandler|ShellIpc)\s*\{")
 LOOP_RE = re.compile(r"\bloops\s*:\s*(Animation\.Infinite|-1)\b")
+GLYPH_OPEN_RE = re.compile(r"\b\w*Glyph\s*\{")
+EMPTY_TEXT_RE = re.compile(r"(?<![\w.])text\s*:\s*(\"\"|'')")
+PUA_RE = re.compile("[\ue000-\uf8ff\U000f0000-\U000ffffd\U00100000-\U0010fffd]")
 
 
 def split_line(line, state):
@@ -430,6 +439,12 @@ def lint_text(name, text):
             checks.append("raw-ipc")
         if LOOP_RE.search(blank) and not loop_guarded(rows, index):
             checks.append("unguarded-loop")
+        if PUA_RE.search(code):
+            checks.append("pua-literal")
+        for match in GLYPH_OPEN_RE.finditer(blank):
+            if glyph_text_empty(rows, index, match.end() - 1):
+                checks.append("empty-glyph")
+                break
         for rule in checks:
             if base in EXEMPT.get(rule, ()) or allowed(index, rule):
                 continue
@@ -475,6 +490,29 @@ def loop_guarded(rows, index):
     return False
 
 
+def glyph_text_empty(rows, line, column):
+    """Whether the *Glyph { … } block opening at rows[line][column] sets
+    `text` to an empty literal (directly, not in a nested object)."""
+    depth, buffer = 0, []
+    for j in range(line, len(rows)):
+        text = rows[j][1][column:] if j == line else rows[j][1]
+        for ch in text:
+            if ch == "{":
+                depth += 1
+                if depth > 1:
+                    buffer.append("\0")
+                continue
+            if ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return bool(EMPTY_TEXT_RE.search("".join(buffer)))
+                continue
+            if depth == 1:
+                buffer.append(ch)
+        buffer.append("\n")
+    return False
+
+
 def lint_files(plugin):
     plugin = Path(plugin)
     files = []
@@ -515,7 +553,8 @@ def cmd_sync(args):
     status = 0
     for plugin in args.plugins:
         try:
-            sync_plugin(plugin, names, force=args.force, dry_run=args.dry_run, validate=not args.no_validate)
+            add = [n.strip() for n in (args.add or "").split(",") if n.strip()]
+            sync_plugin(plugin, names, force=args.force, dry_run=args.dry_run, validate=not args.no_validate, add=add)
         except KitError as error:
             print(f"sync: {error}", file=sys.stderr)
             status = 1
@@ -543,13 +582,15 @@ def cmd_check(args):
         findings = [] if args.no_lint else lint_plugin(plugin)
         for problem in problems:
             print(f"{name}: kit: {problem}")
+        failing = [f for f in findings if args.strict or f[2] not in WARNINGS]
         for rel, line, rule, excerpt in findings:
-            print(f"{name}/{rel}:{line}: {rule}: {RULES[rule]}\n    {excerpt[:160]}")
-        if problems or findings:
+            level = "warning: " if rule in WARNINGS and not args.strict else ""
+            print(f"{name}/{rel}:{line}: {level}{rule}: {RULES[rule]}\n    {ascii(excerpt[:160])[1:-1]}")
+        if problems or failing:
             status = 1
         elif not args.quiet:
             label = f"foamy-kit {lock['version']}" if lock else "not synced"
-            print(f"{name}: OK ({label})")
+            print(f"{name}: OK ({label}{', with warnings' if findings else ''})")
     if len(versions) > 1:
         status = 1
         print("kit versions differ: " + "; ".join(f"{v}: {', '.join(sorted(p))}" for v, p in sorted(versions.items())))
@@ -562,8 +603,10 @@ def cmd_lint_text(args):
     status = 0
     for name in args.files:
         for line, rule, excerpt in lint_text(name, Path(name).read_text()):
-            print(f"{name}:{line}: {rule}: {excerpt}")
-            status = 1
+            warning = rule in WARNINGS and not args.strict
+            print(f"{name}:{line}: {'warning: ' if warning else ''}{rule}: {ascii(excerpt)[1:-1]}")
+            if not warning:
+                status = 1
     return status
 
 
@@ -573,6 +616,7 @@ def main(argv=None):
     sync = sub.add_parser("sync", help="copy stamped kit files into plugins")
     sync.add_argument("plugins", nargs="+")
     sync.add_argument("--components", help="comma-separated components (default: the lock's, or all)")
+    sync.add_argument("--add", help="comma-separated components to add to the plugin's current set")
     sync.add_argument("--force", action="store_true", help="overwrite locally edited kit files")
     sync.add_argument("--dry-run", action="store_true")
     sync.add_argument("--no-validate", action="store_true", help="skip omarchy-plugin-validate")
@@ -583,9 +627,11 @@ def main(argv=None):
     check.add_argument("--no-lint", action="store_true")
     check.add_argument("--allow-unsynced", action="store_true", help="don't fail plugins without a lock")
     check.add_argument("--quiet", action="store_true")
+    check.add_argument("--strict", action="store_true", help="fail on warnings (pua-literal) too")
     check.set_defaults(func=cmd_check)
     lint = sub.add_parser("lint", help="lint individual files")
     lint.add_argument("files", nargs="+")
+    lint.add_argument("--strict", action="store_true")
     lint.set_defaults(func=cmd_lint_text)
     args = parser.parse_args(argv)
     return args.func(args)
