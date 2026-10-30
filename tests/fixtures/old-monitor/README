@@ -1,0 +1,2 @@
+Reduced from foamy-monitor `dev` Panel.qml (structure only): the case the kit
+0.3.0 trio rewrite broke. Used by test_trio.py as part of the dev tree.

@@ -36,11 +36,7 @@ Item {
     open: true
     contentWidth: 400
     contentHeight: 160
-    Rectangle {
-      anchors.fill: parent
-      color: Color.popups.background
-      Text { anchors.centerIn: parent; text: "dev " + preview.previewState; color: Color.popups.text }
-    }
+    Dev.DevPanelBody { anchors.fill: parent; label: "dev " + preview.previewState }
   }
 }
 """
@@ -57,14 +53,15 @@ def make_repo(base, fail_on_45=False):
     git(repo, "config", "user.email", "test@example.invalid")
     git(repo, "config", "user.name", "foamy-kit test")
     shutil.copyfile(KIT_ROOT / "tests/fixtures/old-fork/BoltPopup.qml", repo / "OldPopup.qml")
+    shutil.copyfile(KIT_ROOT / "tests/fixtures/old-monitor/DevPanelBody.qml", repo / "DevPanelBody.qml")
     with (repo / "qmldir").open("a") as qmldir:
-        qmldir.write("OldPopup 1.0 OldPopup.qml\n")
+        qmldir.write("OldPopup 1.0 OldPopup.qml\nDevPanelBody 1.0 DevPanelBody.qml\n")
     text = DEV_PREVIEW.replace('Quickshell.env("FOAMY_DEV_FAIL_45") === "1"', "true" if fail_on_45 else "false")
     (repo / "preview/Preview.qml").write_text(text)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "dev")
     git(repo, "checkout", "-q", "-b", "fix")
-    git(repo, "rm", "-q", "OldPopup.qml")
+    git(repo, "rm", "-q", "OldPopup.qml", "DevPanelBody.qml")
     shutil.copyfile(FIXTURES / "demo-plugin/qmldir", repo / "qmldir")
     shutil.copyfile(FIXTURES / "demo-plugin/preview/Preview.qml", repo / "preview/Preview.qml")
     foamykit.sync_plugin(repo, None, out=lambda *_: None)
@@ -100,6 +97,9 @@ def main():
         from common import read_png
         width, height, _ = read_png(out / "devices-before.png")
         ok &= report("the dev fork's card is captured", (width, height) == (400, 160), f"{width}x{height}")
+        _, _, px = read_png(out / "devices-before.png")
+        ok &= report("a dev file with anchors blocks and an overlay PanelWindow renders (monitor case)",
+                     px(200, 80)[3] == 255 and px(200, 80)[:3] != (0, 0, 0), str(px(200, 80)))
 
         lines, label = render.trio(repo, base / "out-45", dev_ref="dev", before_hosts=("4.5",), states=["devices"])
         ok &= report("--before-host 4.5 alone renders dev on 4.5 as it is", label == "Before (dev, 4.5 host)"

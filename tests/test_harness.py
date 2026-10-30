@@ -6,6 +6,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -67,6 +68,28 @@ def main():
         base = ctx.base
         time.sleep(1)
     ok &= report("Run as a context manager stops and removes everything", gone(base) and not base.exists())
+    # 4. Temp-dir hygiene: own dir per run, PID-tagged, 0700; gc removes only dead runs' dirs.
+    run = harness.Run("4.0", HANG, prefix="foamy-kit-hygiene-")
+    mode = run.base.stat().st_mode & 0o777
+    ok &= report("each run owns a PID-tagged 0700 dir", f"-{os.getpid()}-" in run.base.name and mode == 0o700, f"{run.base.name} {oct(mode)}")
+    run.cleanup()
+    tmp = Path(tempfile.mkdtemp(prefix="foamy-kit-gc-test-"))
+    dead = subprocess.Popen(["true"]); dead.wait()
+    stale = tmp / f"foamy-kit-preview-4.5-{dead.pid}-abc123"
+    mine = tmp / f"foamy-kit-preview-4.5-{os.getpid()}-def456"
+    busy = tmp / f"foamy-kit-preview-4.0-{dead.pid}-busy99"
+    legacy = tmp / "foamy-kit-preview-4.5-ky_80jw7"
+    for path in (stale, mine, busy, legacy):
+        path.mkdir()
+    holder = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)", str(busy)])
+    try:
+        removed = harness.gc(tmp)
+    finally:
+        holder.kill()
+        holder.wait()
+    ok &= report("gc removes only dead runs' dirs (not live, in use, or unknown)",
+                 removed == [stale] and mine.exists() and busy.exists() and legacy.exists() and not stale.exists(), str(removed))
+    shutil.rmtree(tmp, ignore_errors=True)
     return 0 if ok else 1
 
 

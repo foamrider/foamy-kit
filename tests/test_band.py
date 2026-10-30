@@ -36,7 +36,14 @@ def run(host, theme, rtl, plugin, out_dir):
     info = json.loads(next(l.split("FOAMY BAND ", 1)[1] for l in r.log.splitlines() if "FOAMY BAND " in l))
     png = out_dir / f"band-{host}-{theme}-{'rtl' if rtl else 'ltr'}.png"
     shutil.copyfile(r.out / "band.png", png)
+    only = out_dir / f"band-only-{host}-{theme}-{'rtl' if rtl else 'ltr'}.png"
+    shutil.copyfile(r.out / "band-only.png", only)
     r.cleanup()
+    ow, oh, opx = read_png(only)
+    only_checks = [
+        ("band-only card: bottom corners stay rounded (transparent)", opx(1, oh - 2)[3] < 40 and opx(ow - 2, oh - 2)[3] < 40),
+        ("band-only card: band reaches the bottom border", opx(ow // 2, oh - 3)[3] == 255 and distance(opx(ow // 2, oh - 3), opx(ow // 2, oh // 2)) < 40),
+    ]
     width, height, px = read_png(png)
     band_mid = px(width // 2, info["height"] // 2)
     body = px(width // 2, info["height"] + 60)
@@ -51,7 +58,7 @@ def run(host, theme, rtl, plugin, out_dir):
         ("picture band is clipped to the card too", px(width // 2, info["pictureY"] + 20)[3] == 255),
     ]
     ok = report(f"band {tag}", True, detail)
-    for label, passed in checks:
+    for label, passed in checks + only_checks:
         ok &= report(f"band {tag}: {label}", passed)
     return ok
 

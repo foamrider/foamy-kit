@@ -63,6 +63,22 @@ ShellRoot {
     }
   }
 
+  // A band-only popup (empty states): the band ends the card.
+  FoamyPopup {
+    id: bandOnly
+    anchorItem: shell.host === "4.5" ? sim.anchor : stripAnchor
+    bar: bar
+    open: true
+    centerOnBar: true
+    body: Component {
+      FoamyHeroBand {
+        LayoutMirroring.enabled: shell.rtl
+        title: "Nothing yet"
+        meta: "No stations"
+      }
+    }
+  }
+
   Timer {
     interval: 900
     running: true
@@ -95,6 +111,10 @@ ShellRoot {
       else check(near(heroX, FoamyStyle.padding), "LTR: hero content starts at the padding " + heroX)
       check(near(card.height, popup.bodyImplicitHeight + 2), "card fits the body " + card.height)
       console.log("FOAMY BAND " + JSON.stringify({ height: Math.round(band.height), y: Math.round(p.y), pictureY: Math.round(popup.bodyItem.pictureBand.mapToItem(card, 0, 0).y) }))
+      check(!band.roundBottom && band.separator, "a band followed by content keeps a square bottom and the hairline")
+      var only = bandOnly.bodyItem
+      check(only && only.endsCard && only.roundBottom && !only.separator, "a band that ends the card rounds its bottom, no hairline")
+      bandOnly.cardItem.grabToImage(function(r2) { r2.saveToFile(Quickshell.env("FOAMY_OUT") + "/band-only.png") })
       card.grabToImage(function(result) {
         if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png")) console.log("FOAMY FAIL save")
         console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
