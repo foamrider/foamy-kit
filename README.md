@@ -136,6 +136,11 @@ MultiEffect, ShaderEffect and layer effects draw nothing under the software
 renderer the harness uses (as under Omarchy CPU rendering): gate them so the
 content still reads without them (DESIGN.md, "Effects").
 
+Temp dirs: each run owns one PID-tagged dir under `/tmp` and removes only that
+one. Never `rm -rf /tmp/foamy-kit-preview-*` — concurrent renders (other
+agents') live there. `python3 preview/harness.py --gc` removes only dirs of
+runs whose process is gone.
+
 ### Before / after trio
 
 ```bash
@@ -145,8 +150,9 @@ preview/render.py ../foamy-power --trio --url-prefix https://raw.githubuserconte
 Renders each view three times: `<view>-before.png` (the `origin/dev` tree,
 `--dev-ref`), `<view>-after-4.0.png` and `<view>-after-4.5.png` (the working
 tree), and writes `trio.md`, a PR-body table. Before comes from `git archive`
-(the plugin repo is not touched), with pre-kit popup forks swapped for the
-offscreen window like the host's KeyboardPanel and bare `Color.` qualified
+(the plugin repo is not touched), with layer-shell windows (pre-kit popup
+forks, overlay windows) swapped for the offscreen stand-in — only the windows
+and their own `anchors { }` blocks are rewritten — and bare `Color.` qualified
 (Qt 6.12 shadows it), so dev looks as it did. Describe the dev UI in
 `preview/Before.qml` in the current tree (or `--before-preview FILE`); else dev's
 own `preview/Preview.qml` is used. Before tries `--before-host 4.5,4.0` in order:

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.1 — 2026-10-30
+
+Round-5 feedback on 0.3.0 (kit-issues newer than the 0.3.0 release).
+
+### Fixed
+- **FoamyHeroBand over the card's rounded bottom** (foamy-train #4): a band that ends the card
+  (empty states, outside-schedule, band-only popups) painted its square bottom over the card's
+  rounded corners and border. The band finds its popup card and, when its bottom meets the card's,
+  rounds its bottom corners like the top and drops the hairline (`endsCard`, `roundBottom`; set
+  `roundBottom` to override). Plugins need no spacer.
+- **`render.py --trio` rewrote ordinary `anchors { }` blocks in dev trees** (foamy-monitor): a file
+  with any `PanelWindow` (monitor's Identify overlay in Panel.qml) got every block-form `anchors { }`
+  renamed, breaking normal items. The rewrite (`harness.transform_panel_windows`) is now
+  brace-scoped: it swaps `PanelWindow {` for the offscreen stand-in, drops `WlrLayershell.*`, and
+  renames `anchors { }` only when it is a direct property of such a window. Dev files outside `Ui/`
+  get the stand-in through their own `import qs.Ui as FoamyFakeUi`, so files that don't import
+  `qs.Ui` render too. Regression fixture: `tests/fixtures/old-monitor/` (reduced monitor dev Panel).
+- **Preview temp-dir hygiene**: every run owns `<prefix><pid>-<random>` (mkdtemp, 0700) and removes
+  only its own dir; trio/dev work dirs are PID-tagged too. `python3 preview/harness.py --gc
+  [--dry-run]` removes only dirs whose owner PID is gone and that no live process uses. Never
+  `rm -rf /tmp/foamy-kit-preview-*`: other agents' renders live there.
+
+### Not changed
+- **Fake MPRIS helper**: foamy-media's `preview/Before.qml` has no fake player yet (dev shows its
+  "not running" view), so there is nothing to generalise; revisit when one exists.
+- foamy-lock's registry item was resolved in 0.2.0 (FoamyIpcPreference, adopted in foamy-lock 80368b4).
+
 ## 0.3.0 — 2026-10-30
 
 The foamy header band is back, as part of the design language: the tinted,

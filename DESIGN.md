@@ -39,7 +39,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     (`FoamyPalette.bandFill` → `bandFillEnd`) with a soft glow at the trailing
     top corner (`bandGlow`), drawn by the kit in any renderer, dark and light.
     No hex, no MultiEffect, no motion. Bottom: a hairline (`bandEdge`) into the
-    body, which continues on the plain popup surface.
+    body, which continues on the plain popup surface. When the band ends the
+    card (empty states, band-only popups) it rounds its bottom corners and
+    drops the hairline by itself; never add spacers under it.
   - Compact: padding top/bottom 16 (`bandPaddingTop/Bottom`), 20 at the sides,
     14 between the title row and the hero. The title row is FoamyHeader's:
     icon 18, title (title, DemiBold), meta (bodySmall, secondary), trailing
