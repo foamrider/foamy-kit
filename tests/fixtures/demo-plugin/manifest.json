@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "foamy.kit-demo",
+  "name": "Foamy kit demo",
+  "version": "0.1.0",
+  "author": "foamrider",
+  "description": "Fixture plugin for foamy-kit tests and the preview demo",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Panel.qml" },
+  "barWidget": {
+    "displayName": "Foamy kit demo",
+    "defaultSection": "right",
+    "defaults": { "showCount": true, "refreshSeconds": 60, "layout": "list" }
+  },
+  "license": "MIT"
+}

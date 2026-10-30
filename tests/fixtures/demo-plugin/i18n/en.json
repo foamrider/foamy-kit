@@ -1,0 +1,21 @@
+{
+  "Devices": "Devices",
+  "%1 devices": { "one": "%1 device", "other": "%1 devices" },
+  "No devices": "No devices",
+  "Settings": "Settings",
+  "Back": "Back",
+  "Saving…": "Saving…",
+  "Retry": "Retry",
+  "Refresh": "Refresh",
+  "Bar": "Bar",
+  "Show the count in the bar": "Show the count in the bar",
+  "Refresh every": "Refresh every",
+  "30 seconds": "30 seconds",
+  "1 minute": "1 minute",
+  "5 minutes": "5 minutes",
+  "Layout": "Layout",
+  "List": "List",
+  "Tiles": "Tiles",
+  "Name filter": "Name filter",
+  "Battery %1%": "Battery %1%"
+}

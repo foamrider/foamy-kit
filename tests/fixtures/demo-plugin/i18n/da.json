@@ -1,0 +1,9 @@
+{
+  "Devices": "Enheder",
+  "%1 devices": { "one": "%1 enhed", "other": "%1 enheder" },
+  "No devices": "Ingen enheder",
+  "Settings": "Indstillinger",
+  "Back": "Tilbage",
+  "Refresh every": "Opdater hver",
+  "Battery %1%": "Batteri %1%"
+}

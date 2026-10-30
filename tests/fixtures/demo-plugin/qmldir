@@ -1,0 +1,3 @@
+singleton DemoService 1.0 DemoService.qml
+DemoView 1.0 DemoView.qml
+Panel 1.0 Panel.qml
