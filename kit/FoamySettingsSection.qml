@@ -29,6 +29,7 @@ Column {
     text: root.info
   }
   Text {
+    objectName: "foamySectionTitle"
     visible: root.title !== "" && root.info === ""
     width: parent.width
     text: root.title
@@ -42,6 +43,7 @@ Column {
     Accessible.role: Accessible.Heading
   }
   Text {
+    objectName: "foamySectionDescription"
     visible: root.description !== ""
     width: parent.width
     text: root.description
