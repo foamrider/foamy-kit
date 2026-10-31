@@ -25,6 +25,13 @@ import QtQuick.Layouts
 //   draft by stepSize within from..to.
 // - Accepts the language's digits and decimal mark (Danish "2,5", Arabic
 //   "٤٢"). RTL mirrors the row; set hasCursor from the panel's FoamyCursor.
+//
+// Compact form, for short values (a 2-digit percentage, a °C margin): the
+// label on the reading start, a narrow field sized to the longest value
+// (`to`/`from` with `decimals`; override with `compactDigits`), the unit
+// after it, all on one row; stacked compact fields line their fields and
+// units up. The error line stays under the row.
+//   FoamyNumberField { width: parent.width; compact: true; label: FoamyI18n.t("CPU"); unit: "%"; value: …; from: 1; to: 100; onCommitted: … }
 Item {
   id: root
 
@@ -42,6 +49,12 @@ Item {
   property real unitWidth: FoamyStyle.unitWidth
   property bool reserveUnit: false
   property bool hasCursor: false
+  property bool compact: false
+  // Characters the compact field is sized for (digits, sign, decimal mark).
+  property int compactDigits: Math.max(format(Math.abs(to)).length + (to < 0 ? 1 : 0),
+                                       format(Math.abs(from)).length + (from < 0 ? 1 : 0), 1)
+  readonly property real compactFieldWidth: Math.ceil(digitMetrics.advanceWidth * compactDigits)
+    + FoamyStyle.controlPaddingX * 2 + FoamyStyle.borderWidth * 2 + FoamyStyle.gapSmall
   property string invalidText: FoamyI18n.t("Enter a number from %1 to %2", [FoamyI18n.number(from, decimals), FoamyI18n.number(to, decimals)])
   property alias field: field
 
@@ -158,8 +171,14 @@ Item {
     width: parent.width
     spacing: FoamyStyle.gapSmall
 
+    TextMetrics {
+      id: digitMetrics
+      font: field.font
+      text: "0"
+    }
+
     Text {
-      visible: root.label !== ""
+      visible: root.label !== "" && !root.compact
       width: parent.width
       text: root.label
       textFormat: Text.PlainText
@@ -174,13 +193,29 @@ Item {
       width: parent.width
       spacing: FoamyStyle.gap
 
+      // Compact: the label shares the row, in the settings row style.
+      Text {
+        visible: root.compact && root.label !== ""
+        Layout.fillWidth: true
+        Layout.alignment: Qt.AlignVCenter
+        text: root.label
+        textFormat: Text.PlainText
+        horizontalAlignment: Text.AlignLeft
+        elide: Text.ElideRight
+        color: FoamyPalette.text
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.subtitle
+      }
+      Item { visible: root.compact && root.label === ""; Layout.fillWidth: true }
+
       SafeTextField {
         id: field
-        Layout.fillWidth: true
+        Layout.fillWidth: !root.compact
+        Layout.preferredWidth: root.compact ? root.compactFieldWidth : -1
         hasCursor: root.hasCursor
         translate: FoamyI18n.t
-        maximumLength: 24
-        horizontalAlignment: Text.AlignLeft
+        maximumLength: root.compact ? Math.max(root.compactDigits, 1) + 2 : 24
+        horizontalAlignment: root.compact ? Text.AlignRight : Text.AlignLeft
         Accessible.name: root.label
         onTextEdited: { root.dirty = true; root.errorText = ""; root.lastCommitted = ""; root.hasCommitted = false }
         onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(FoamyI18n.t(pasteError))
