@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1 — 2026-10-31
+
+### Added
+- `FoamyHeader.iconGlyph` / `iconFamily` (forwarded by FoamyHeroBand): a font glyph instead of a
+  Lucide `iconName` for brand marks Lucide doesn't have, e.g. the Teams logo
+  (`iconGlyph: "\u{f02bb}"`, nf-md-microsoft_teams, in the Omarchy mono font by default). Same
+  18 px box and tint as the Lucide icon; hidden by `centered` bands; not mirrored in RTL.
+  (foamy-teams, user #7)
+
 ## 0.4.0 — 2026-10-31
 
 Round 6 of the live UI review (user feedback at 125 % scaling). New components and two

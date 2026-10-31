@@ -61,6 +61,7 @@ ShellRoot {
         property alias calendarButton: calendarButton
         property alias hiddenHeroBand: hiddenHeroBand
         property alias hiddenHero: hiddenHero
+        property alias glyphBand: glyphBand
         LayoutMirroring.enabled: shell.rtl
         LayoutMirroring.childrenInherit: true
         spacing: FoamyStyle.gapLarge
@@ -88,6 +89,14 @@ ShellRoot {
           width: parent.width
           title: "Paused"
           Text { id: hiddenHero; visible: false; text: "Outside your schedule" }
+        }
+        FoamyHeroBand {
+          id: glyphBand
+          width: parent.width
+          iconName: "calendar"
+          iconGlyph: "\u{f02bb}"
+          title: "Teams"
+          showSettings: false
         }
         FoamyPanelFooter {
           id: footer
@@ -247,6 +256,11 @@ ShellRoot {
       var band = clock.band
       check(band.centered && !band.titleRow.showTitle, "centred band hides the title row's icon and text")
       check(near(centerX(clock.time, band), band.width / 2, 2), "hero centred " + centerX(clock.time, band) + " of " + band.width)
+      var g = findByName(clock.glyphBand, "foamyHeaderGlyph")
+      check(g && g.visible && g.children[0].text === "\u{f02bb}", "iconGlyph draws the font glyph in the title row")
+      check(g && g.children[0].font.family === FoamyStyle.monoFamily, "iconGlyph defaults to the mono font")
+      var gi = findByName(clock.glyphBand, "foamyHeaderIcon")
+      check(gi && gi.visible === false, "iconGlyph hides the Lucide icon")
       var t = findByName(band, "foamyHeroBandCenteredTitle")
       check(t && t.visible, "centred title shown")
       if (t) {

@@ -39,6 +39,11 @@ Item {
   id: root
 
   property string iconName: ""
+  // A font glyph instead of a Lucide icon (brand marks such as a Nerd Font
+  // logo); wins over iconName. Write it as an escape ("\u{f02bb}"), never a
+  // literal. Not mirrored in RTL.
+  property string iconGlyph: ""
+  property string iconFamily: FoamyStyle.monoFamily
   property string title: ""
   property string meta: ""
   property bool showSettings: true
@@ -237,12 +242,32 @@ Item {
     spacing: FoamyStyle.gapLarge
 
     FoamyIcon {
-      visible: root.showTitle && root.iconName !== ""
+      objectName: "foamyHeaderIcon"
+      visible: root.showTitle && root.iconName !== "" && root.iconGlyph === ""
       name: root.iconName
       color: root.foreground
       Layout.preferredWidth: FoamyStyle.headerIconSize
       Layout.preferredHeight: FoamyStyle.headerIconSize
       Layout.alignment: Qt.AlignVCenter
+    }
+
+    Item {
+      objectName: "foamyHeaderGlyph"
+      visible: root.showTitle && root.iconGlyph !== ""
+      Layout.preferredWidth: FoamyStyle.headerIconSize
+      Layout.preferredHeight: FoamyStyle.headerIconSize
+      Layout.alignment: Qt.AlignVCenter
+
+      Text {
+        anchors.centerIn: parent
+        text: root.iconGlyph
+        textFormat: Text.PlainText
+        color: root.foreground
+        font.family: root.iconFamily
+        font.pixelSize: FoamyStyle.headerIconSize
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+      }
     }
 
     Column {

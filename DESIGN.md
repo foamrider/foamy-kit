@@ -46,7 +46,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   - Compact: padding top/bottom 16 (`bandPaddingTop/Bottom`), 20 at the sides,
     14 between the title row and the hero. The title row is FoamyHeader's:
     icon 18, title (title, DemiBold), meta (bodySmall, secondary), trailing
-    actions, settings button (tooltip "Settings").
+    actions, settings button (tooltip "Settings"). A brand mark with no Lucide
+    icon (Teams) uses `iconGlyph` (a Nerd Font glyph written as an escape, in the
+    mono font by default) instead of `iconName`, same size and tint.
   - **Hero slot**: use it when the panel is about one state or value the user
     opens it for — a ring and status (power), the volume (audio), the next
     departure (train), sky and temperature (weather), artwork (media), the
