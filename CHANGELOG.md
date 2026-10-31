@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased (tooling only; kit components unchanged, no resync needed)
+## 0.3.5 — 2026-10-31
+
+### Fixed
+- **SafeTextField text inset doubled when sized with `width:`** (live UI check: clock "Calendar
+  app", train From/To; also FoamyTextSettingField, which places its field in a Column). The
+  attached TextArea resizes the Flickable's contentWidth to the text's own width, and a field with
+  an explicit width ended up scrolled to `contentX = -leftPadding`, so the text started one padding
+  too far in (22 px instead of 11). The horizontal scroll is now clamped to the text whenever the
+  geometry or scroll changes; long text still scrolls to the cursor.
+- **SafeTextField didn't mirror in RTL panels** unless the caller set an alignment: it now defaults to
+  an explicit `horizontalAlignment: TextEdit.AlignLeft`, which LayoutMirroring flips.
+- `editorItem` exposes the editor (tests, glyph geometry).
+- Tests (both hosts): the first/last glyph sits at the same x for a `width:`-sized field, a
+  RowLayout `fillWidth` field, FoamyTextSettingField and FoamyNumberField, in LTR (padding + border)
+  and RTL (against the right padding); long text still scrolls to keep the cursor visible.
+
+### Tooling (also in this release)
 - `check.sh` / `foamykit.py lint`: `pua-literal` (an icon-font character written literally) is an
   error by default; `--warn-pua` reports it as a warning instead. `--strict` is accepted and ignored.
 
