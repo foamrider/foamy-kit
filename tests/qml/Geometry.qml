@@ -81,13 +81,14 @@ ShellRoot {
   Component {
     id: tallPopup
     FoamyPopup {
-      maxHeight: 0          // only the screen limits the card
+      // default (kit 0.4.0): only the screen limits the card
       body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
     }
   }
   Component {
     id: cappedPopup
     FoamyPopup {
+      maxHeight: FoamyStyle.popupMaxHeight
       body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
     }
   }
@@ -235,8 +236,8 @@ ShellRoot {
       check(Qt.colorEqual(c.border.color, FoamyPalette.border), currentLabel + " border colour alpha(text, .15)")
       check(p.layerNamespace === "omarchy-keyboard-panel", currentLabel + " layer namespace " + p.layerNamespace)
     }
-    if (currentKind === "tall") check(near(c.height, p.availableCardHeight), currentLabel + " maxHeight 0: card fills the available height " + c.height)
-    if (currentKind === "capped") check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " default cap popupMaxHeight " + c.height)
+    if (currentKind === "tall") check(near(c.height, p.availableCardHeight), currentLabel + " default: card fills the available height " + c.height)
+    if (currentKind === "capped") check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " maxHeight popupMaxHeight caps " + c.height)
     if (currentKind === "maxed") check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
     if (currentKind === "standard") {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")

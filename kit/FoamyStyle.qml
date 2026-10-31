@@ -56,6 +56,8 @@ QtObject {
   // --- popup geometry ----------------------------------------------------------
   readonly property int popupWidth: Style.space(420)
   readonly property int popupWidthWide: Style.space(560)
+  // A height cap a panel may opt into (FoamyPopup.maxHeight). By default
+  // popups grow to the screen's available height instead (kit 0.4.0).
   readonly property int popupMaxHeight: Style.space(640)
   readonly property int menuWidth: Style.space(232)
   // Hero band (FoamyHeroBand): compact paddings around the title row and hero.

@@ -12,18 +12,23 @@ import qs.Ui
 // triggerMode "click"|"hover", containsMouse, fittedContentWidth/Height()), plus:
 //   body: Component, bodyItem, bodyImplicitHeight, ensureBody()   lazy content
 //   cornerRadius, surfaceColor, cardItem
+//   maxHeight                    extra height cap (default 0: the screen's
+//                                available height, measured by the host on
+//                                4.0 and 4.5 alike; a long menu scrolls)
 // Defaults: contentWidth FoamyStyle.menuWidth, padding FoamyStyle.menuPadding,
 // height fitted to the body.
 PopupCard {
   id: root
 
   property real cornerRadius: FoamyStyle.radius
+  property real maxHeight: 0
   property color surfaceColor: Commons.Color.popups.background
 
   property Component body: null
   property bool bodyRequested: false
   readonly property Item bodyItem: bodyLoader.item
   readonly property real bodyImplicitHeight: bodyItem ? bodyItem.implicitHeight : 0
+  readonly property real menuReserve: bodyLoader.foamyMenuReserve
   readonly property Item cardItem: surfaceHook.card
 
   function ensureBody() {
@@ -34,12 +39,15 @@ PopupCard {
   borderSpec: FoamyStyle.popupBorderSpec
   padding: FoamyStyle.menuPadding
   contentWidth: fittedContentWidth(FoamyStyle.menuWidth)
-  contentHeight: fittedContentHeight(bodyImplicitHeight)
+  // An open FoamyMenu may ask for room below its button (foamyMenuReserve):
+  // the card grows while it is open instead of the menu scrolling.
+  contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
 
   onOpenChanged: if (open && body) bodyRequested = true
 
   Loader {
     id: bodyLoader
+    property real foamyMenuReserve: 0
     anchors.fill: parent
     active: !!root.body && (root.open || root.bodyRequested)
     sourceComponent: root.body
