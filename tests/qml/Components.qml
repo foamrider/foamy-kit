@@ -331,7 +331,7 @@ ShellRoot {
       if (shell.rtl) check(near(cf.x, mf.x), "RTL: stacked compact fields line up at their unit side " + cf.x + " / " + mf.x)
       else check(near(cf.x + cpu.field.width, mf.x + margin.field.width), "stacked compact fields line up at their unit side "
                  + (cf.x + cpu.field.width) + " / " + (mf.x + margin.field.width))
-      check(cpu.height < FoamyStyle.controlHeight + 8, "label, field and unit on one row " + cpu.height)
+      check(near(cpu.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall), "label, field and unit on one row, as tall as a toggle row " + cpu.height)
       if (shell.rtl) check(cf.x < cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "RTL: field toward the left")
       else check(cf.x > cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "field toward the end")
       cpu.field.text = "80"
