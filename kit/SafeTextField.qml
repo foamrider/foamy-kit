@@ -48,6 +48,8 @@ Flickable {
     property alias font: editor.font
     property alias horizontalAlignment: editor.horizontalAlignment
     readonly property bool inputActiveFocus: editor.activeFocus
+    // The editor itself (tests, glyph geometry).
+    readonly property Item editorItem: editor
     property alias padding: editor.padding
     property alias leftPadding: editor.leftPadding
     property int pasteCursor: 0
@@ -159,6 +161,9 @@ Flickable {
     contentWidth: Math.max(width, editor.contentWidth + editor.leftPadding + editor.rightPadding)
     flickableDirection: Flickable.HorizontalFlick
     implicitHeight: FoamyStyle.controlHeight
+    // Explicit, so it follows LayoutMirroring: right-aligned in RTL panels
+    // (an implicit alignment only follows the text's own direction).
+    horizontalAlignment: TextEdit.AlignLeft
     font.family: FoamyStyle.fontFamily
     font.pixelSize: FoamyStyle.font.body
     color: foreground
@@ -295,7 +300,27 @@ Flickable {
         }
     }
 
-    Component.onCompleted: editorReady = true
+    // Keep the horizontal scroll inside the text. The attached TextArea
+    // resizes contentWidth to the text's own width (overriding the binding
+    // above), and a field given an explicit `width:` (a Column child) then
+    // ended up scrolled to contentX = -leftPadding: the text sat one padding
+    // too far in. Clamp whenever the geometry or the scroll changes.
+    function clampScroll() {
+        if (!editorReady)
+            return;
+        var max = contentWidth > width ? contentWidth - width : 0;
+        if (contentX < 0)
+            contentX = 0;
+        else if (contentX > max)
+            contentX = max;
+    }
+    onWidthChanged: clampScroll()
+    onContentWidthChanged: clampScroll()
+    onContentXChanged: clampScroll()
+    Component.onCompleted: {
+        editorReady = true;
+        clampScroll();
+    }
     // Runs when maximumLength changes after creation only, and uses no JS
     // globals: this can fire while a page is being built or torn down (a
     // settings state switch), when the global object may already be gone.
