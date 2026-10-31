@@ -93,7 +93,14 @@ Item {
 
   // --- hero slot -------------------------------------------------------------------
   default property alias hero: heroSlot.data
-  readonly property bool hasHero: !compact && heroSlot.children.length > 0
+  // True when a hero item is shown: hidden hero children don't count (the
+  // slot itself stays visible so their own `visible` is what is read).
+  readonly property bool hasHero: {
+    if (compact) return false
+    var items = heroSlot.children
+    for (var i = 0; i < items.length; i++) if (items[i].visible) return true
+    return false
+  }
 
   // --- surface ---------------------------------------------------------------------
   property url imageSource: ""
@@ -238,7 +245,7 @@ Item {
     id: content
     y: FoamyStyle.bandPaddingTop
     width: parent.width
-    spacing: band.centered ? FoamyStyle.gap : (band.hasHero ? FoamyStyle.bandGap : 0)
+    spacing: band.hasHero ? (band.centered ? FoamyStyle.gap : FoamyStyle.bandGap) : 0
 
     // Room for the title row (FoamyHeader, below: it sits over the band so the
     // centred variant can pin its buttons to the corner).
@@ -264,9 +271,11 @@ Item {
     // full-width hero content Layout.fillWidth: true (centred: AlignHCenter).
     ColumnLayout {
       id: heroSlot
-      visible: band.hasHero
+      // Always "visible" outside the compact form (zero height when empty),
+      // so hasHero can read its children's own visibility.
+      visible: !band.compact
       x: band.centered ? band.centeredInset : FoamyStyle.padding
-      width: parent.width - x * 2
+      width: Math.max(0, parent.width - x * 2)
       spacing: FoamyStyle.gap
     }
 
@@ -276,7 +285,7 @@ Item {
       objectName: "foamyHeroBandCenteredTitle"
       visible: band.centered && !band.compact && (band.title !== "" || band.meta !== "")
       x: band.centeredInset
-      width: parent.width - x * 2
+      width: Math.max(0, parent.width - x * 2)
       spacing: FoamyStyle.gapTiny
       Text {
         width: parent.width
