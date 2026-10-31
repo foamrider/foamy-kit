@@ -332,7 +332,7 @@ RULES = {
     "empty-glyph": "a glyph's text is empty (an icon character was lost); write it as an escape like \"\\u{f0e7}\"",
     "pua-literal": "private-use (icon font) character written literally; editors and tools strip them, use an escape like \"\\u{f0e7}\"",
 }
-# Reported, but don't fail check.sh (use --strict to fail on them too).
+# Rules that can be downgraded to warnings with --warn-pua (they fail by default).
 WARNINGS = {"pua-literal"}
 EXEMPT = {
     "bare-duration": {"FoamyMotion.qml"},
@@ -582,9 +582,9 @@ def cmd_check(args):
         findings = [] if args.no_lint else lint_plugin(plugin)
         for problem in problems:
             print(f"{name}: kit: {problem}")
-        failing = [f for f in findings if args.strict or f[2] not in WARNINGS]
+        failing = [f for f in findings if not args.warn_pua or f[2] not in WARNINGS]
         for rel, line, rule, excerpt in findings:
-            level = "warning: " if rule in WARNINGS and not args.strict else ""
+            level = "warning: " if rule in WARNINGS and args.warn_pua else ""
             print(f"{name}/{rel}:{line}: {level}{rule}: {RULES[rule]}\n    {ascii(excerpt[:160])[1:-1]}")
         if problems or failing:
             status = 1
@@ -603,7 +603,7 @@ def cmd_lint_text(args):
     status = 0
     for name in args.files:
         for line, rule, excerpt in lint_text(name, Path(name).read_text()):
-            warning = rule in WARNINGS and not args.strict
+            warning = rule in WARNINGS and args.warn_pua
             print(f"{name}:{line}: {'warning: ' if warning else ''}{rule}: {ascii(excerpt)[1:-1]}")
             if not warning:
                 status = 1
@@ -627,11 +627,14 @@ def main(argv=None):
     check.add_argument("--no-lint", action="store_true")
     check.add_argument("--allow-unsynced", action="store_true", help="don't fail plugins without a lock")
     check.add_argument("--quiet", action="store_true")
-    check.add_argument("--strict", action="store_true", help="fail on warnings (pua-literal) too")
+    check.add_argument("--warn-pua", action="store_true",
+                       help="report pua-literal (literal icon-font characters) as a warning instead of failing")
+    check.add_argument("--strict", action="store_true", help=argparse.SUPPRESS)  # the default since 0.3.4 tooling
     check.set_defaults(func=cmd_check)
     lint = sub.add_parser("lint", help="lint individual files")
     lint.add_argument("files", nargs="+")
-    lint.add_argument("--strict", action="store_true")
+    lint.add_argument("--warn-pua", action="store_true")
+    lint.add_argument("--strict", action="store_true", help=argparse.SUPPRESS)
     lint.set_defaults(func=cmd_lint_text)
     args = parser.parse_args(argv)
     return args.func(args)

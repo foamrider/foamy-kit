@@ -121,9 +121,18 @@ def main():
     ok &= report("lint allows qualified colours, guarded loops and reasoned opt-outs", code == 0, out.strip())
     warn = str(KIT_ROOT / "tests/lint-cases/Warn.qml")
     code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", warn)
-    code2, out2 = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", "--strict", warn)
-    ok &= report("literal private-use glyphs warn (and fail with --strict)", code == 0 and out.count("warning: pua-literal") == 2
-                 and code2 != 0, out.strip())
+    code2, out2 = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", "--warn-pua", warn)
+    ok &= report("literal private-use glyphs fail by default (and only warn with --warn-pua)",
+                 code != 0 and out.count(": pua-literal") == 2 and "warning:" not in out
+                 and code2 == 0 and out2.count("warning: pua-literal") == 2, out.strip())
+    pua_plugin = base / "pua"
+    shutil.copytree(FIXTURES / "demo-plugin", pua_plugin)
+    sh(SYNC, str(pua_plugin))
+    (pua_plugin / "Glyphs.qml").write_text('import QtQuick\nText { text: "\uf0e7" }\n')
+    code, out = sh(CHECK, str(pua_plugin))
+    code2, out2 = sh(CHECK, "--warn-pua", str(pua_plugin))
+    ok &= report("check.sh fails on pua-literal by default; --warn-pua opts out",
+                 code != 0 and "pua-literal" in out and code2 == 0 and "with warnings" in out2, out.strip().splitlines()[0] if out.strip() else "")
     kit_sources = [str(p) for p in sorted((KIT_ROOT / "kit").glob("*")) if p.suffix in (".qml", ".js")]
     code, out = sh("python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", *kit_sources)
     ok &= report("the kit itself passes the lint", code == 0, out.strip())
