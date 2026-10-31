@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Services.Mpris
 import qs.Commons
@@ -76,6 +77,28 @@ ShellRoot {
         onPasteFailed: function(message) { shell.pasteMessage = message }
       }
       FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
+      // Text inset must not depend on how a field is sized (Column `width:`
+      // vs RowLayout fillWidth), in LTR and RTL; kit fields included.
+      Repeater {
+        id: insetRepeater
+        model: 2
+        Column {
+          id: insetCase
+          required property int index
+          property alias byWidth: byWidth
+          property alias byLayout: byLayout
+          property alias textSetting: textSettingInset
+          property alias numberSetting: numberInset
+          width: 300
+          LayoutMirroring.enabled: index === 1
+          LayoutMirroring.childrenInherit: true
+          SafeTextField { id: byWidth; width: parent.width; text: "Calendar app" }
+          RowLayout { width: parent.width; SafeTextField { id: byLayout; Layout.fillWidth: true; text: "Calendar app" } }
+          FoamyTextSettingField { id: textSettingInset; width: parent.width; value: "Calendar app" }
+          FoamyNumberField { id: numberInset; width: parent.width; value: 30; reserveUnit: true }
+        }
+      }
+      SafeTextField { id: longField; width: 120; text: "a long value that cannot fit in the field at all" }
       // Switching between settings states (train: settings -> settings-schedule)
       // destroys and builds pages with text and number fields.
       Loader {
@@ -275,6 +298,7 @@ ShellRoot {
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
 
     // --- FoamyNumberField: mixed units stack flush (LTR and RTL) ---------------------------
+    checkInsets()
     checkUnitStack("LTR")
     unitStack.LayoutMirroring.childrenInherit = true
     unitStack.LayoutMirroring.enabled = true
@@ -344,6 +368,37 @@ ShellRoot {
   }
 
   FileViewProbe { id: callLog; path: shell.calls }
+
+  function glyphEdges(field) {
+    var ed = field.editorItem
+    var start = ed.mapToItem(field, ed.positionToRectangle(0).x, 0).x
+    var end = ed.mapToItem(field, ed.positionToRectangle(ed.length).x, 0).x
+    return [Math.round(start), Math.round(end)]
+  }
+  function checkInsets() {
+    var ltr = insetRepeater.itemAt(0), rtl = insetRepeater.itemAt(1)
+    var a = glyphEdges(ltr.byWidth), b = glyphEdges(ltr.byLayout)
+    eq(a, b, "LTR: text starts at the same x whether the field is sized by width or by a layout")
+    check(Math.abs(a[0] - (Style.spacing.controlPaddingX + 1)) <= 1, "LTR: text inset is padding + border " + a[0])
+    eq(glyphEdges(ltr.textSetting.field)[0], a[0], "LTR: FoamyTextSettingField text lines up")
+    var n = ltr.numberSetting.field
+    eq(n.editorItem.mapToItem(n, n.editorItem.positionToRectangle(0).x, 0).x | 0, a[0], "LTR: FoamyNumberField text lines up")
+    var c = glyphEdges(rtl.byWidth), d = glyphEdges(rtl.byLayout)
+    eq(c, d, "RTL: text ends at the same x whether sized by width or by a layout")
+    check(Math.abs(c[1] - (rtl.byWidth.width - Style.spacing.controlPaddingX - 1)) <= 2, "RTL: text sits against the right padding " + c)
+    eq(glyphEdges(rtl.textSetting.field)[1], c[1], "RTL: FoamyTextSettingField text lines up")
+    longField.editorItem.cursorPosition = longField.editorItem.length
+    insetScroll.start()
+  }
+  Timer {
+    id: insetScroll
+    interval: 150
+    onTriggered: {
+      var ed = longField.editorItem
+      var cursor = ed.mapToItem(longField, ed.cursorRectangle.x, 0).x
+      shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
+    }
+  }
 
   function checkUnitStack(label) {
     var fields = [percentField, celsiusField, plainField].map(function(f) {
