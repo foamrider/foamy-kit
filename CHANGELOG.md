@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased (tooling only; kit components unchanged, no resync needed)
+- `check.sh` / `foamykit.py lint`: `pua-literal` (an icon-font character written literally) is an
+  error by default; `--warn-pua` reports it as a warning instead. `--strict` is accepted and ignored.
+
 ## 0.3.4 — 2026-10-30
 
 Fixes from the 0.3.3 resync (kit-issues: foamy-lock, foamy-media, foamy-vitals,

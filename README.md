@@ -68,6 +68,7 @@ every stamped file, so a local edit fails the plugin's own test run.
 ./check.sh ../foamy-*              # versions + stamps + design lint
 ./check.sh --lint-only ../foamy-x  # just the lint
 ./check.sh --allow-unsynced …      # don't fail plugins that have no lock yet
+./check.sh --warn-pua …            # report literal icon-font glyphs as warnings, not errors
 ```
 
 Fails when plugins are on different kit versions, a stamped file was edited,

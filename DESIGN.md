@@ -144,9 +144,9 @@ Dates with `Qt.locale(FoamyI18n.formatLocale)`.
 
 `check.sh` fails on: `unqualified-color`, `bare-duration`, `sans-serif`,
 `radius-x2`, `hex-colour`, `unguarded-loop`, `raw-ipc`, `empty-glyph` (a
-`*Glyph { text: "" }`: an icon character was lost). It warns on `pua-literal`
-(an icon-font character written literally; editors and tools strip them, so
-write `"\u{f0e7}"`); `--strict` fails on warnings too. Kit files that own a
+`*Glyph { text: "" }`: an icon character was lost) and `pua-literal` (an
+icon-font character written literally; editors and tools strip them, so write
+`"\u{f0e7}"`). `--warn-pua` downgrades `pua-literal` to a warning. Kit files that own a
 rule are exempt by name. A justified exception (art surface, shader clock)
 carries a reasoned opt-out on the line or the line above:
 
