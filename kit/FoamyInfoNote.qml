@@ -44,10 +44,17 @@ ColumnLayout {
   function toggle() { if (expanded) close(); else open() }
   function open() {
     expanded = true
-    Qt.callLater(function() {
+    revealTimer.start()
+  }
+  // After the note is laid out: scroll it into view (a child Timer dies with
+  // the note, unlike Qt.callLater).
+  Timer {
+    id: revealTimer
+    interval: 0
+    onTriggered: {
       for (var item = root.parent; item; item = item.parent)
         if (typeof item.ensureVisible === "function") { item.ensureVisible(note); return }
-    })
+    }
   }
   function close() { expanded = false }
 

@@ -179,12 +179,11 @@ Item {
     _watched = list
     _queueRelayout()
   }
-  property bool _queued: false
-  function _queueRelayout() {
-    if (_queued) return
-    _queued = true
-    Qt.callLater(function() { root._queued = false; root._relayout() })
-  }
+  // A child Timer, not Qt.callLater: it dies with the header, so a header
+  // destroyed before the relayout runs (popup opened and closed in one
+  // frame, a bar removed) doesn't call into a dead object.
+  function _queueRelayout() { if (!relayoutTimer.running) relayoutTimer.start() }
+  Timer { id: relayoutTimer; interval: 0; onTriggered: root._relayout() }
 
   onTrailingChanged: _watch()
   onShowSettingsChanged: _queueRelayout()
