@@ -18,6 +18,12 @@ import QtQuick.Controls as Controls
 // Esc goes back. Tab walks the form controls (focusable: true); the page
 // scrolls to keep the focused control visible. RTL mirrors the whole page.
 // Focus `backTarget` when the page opens.
+//
+// Scrolling: a wheel notch moves ~3 rows and touchpad deltas map 1:1
+// (FoamyWheelScroll; Qt's own wheel handling loses most of a high-resolution
+// notch). ensureVisible(item) scrolls a section that just expanded (or any
+// item on the page) into view and follows it while it grows; FoamyInfoNote
+// calls it by itself.
 FocusScope {
   id: root
 
@@ -39,6 +45,13 @@ FocusScope {
   function focusBack() { header.backButton.forceActiveFocus() }
   function resetScroll() { scroll.contentY = 0 }
 
+  // The page's scroll view and its wheel/ensureVisible helper.
+  readonly property alias flickable: scroll
+  readonly property alias wheel: wheel
+
+  function ensureVisible(item, margin) { wheel.ensureVisible(item, margin) }
+
+  // Focus follow: the least scroll that shows the focused control.
   function keepVisible(item) {
     var ancestor = item
     while (ancestor && ancestor !== scroll.contentItem) ancestor = ancestor.parent
@@ -67,6 +80,8 @@ FocusScope {
     saving: root.saving
     onBack: root.back()
   }
+
+  FoamyWheelScroll { id: wheel; target: scroll }
 
   Flickable {
     id: scroll
