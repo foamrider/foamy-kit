@@ -23,14 +23,19 @@ edited in a plugin: change it here, then sync.
 | FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with 4.5's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process on 4.5, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
-| FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions, settings button |
-| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, compact settings form, own picture or scene |
+| FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
+| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene |
+| FoamyMenu | `FoamyMenu.qml`, `FoamyMenuItem.qml` | In-card menu dropping from a button (the ⋯ menu): icons, separators, submenus, single-cursor keys, RTL |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 102 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyButton | `FoamyButton.qml` | Form button (primary/secondary/destructive, icon, busy, focus ring) |
+| FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
+| FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
+| FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 108 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation |
-| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton and open/close state |
+| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`) and open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
 
@@ -121,7 +126,9 @@ Item {
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da` (4.5), `--position`,
-`--rounding`, `--timeout`, `--bus private|none`, `--keep`.
+`--rounding`, `--scale 1.25` (display scale: windows get that device pixel
+ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
+`--timeout`, `--bus private|none`, `--keep`.
 
 Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 
@@ -190,7 +197,11 @@ tests of i18n/motion/palette/prefs/cursor/leader election/IPC on both hosts
 (English, Danish, Arabic), the 0.2 features (icons, tokens, dropdown binding,
 prefs queue inline and CLI with fake `omarchy`, IPC preference and peer
 calls, settings state, private D-Bus), a `qs ipc` argument probe, harness
-leak tests, and the demo, menu-card and service previews.
+leak tests, the demo, menu-card and service previews, and (0.4.0, both hosts,
+LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
+centred band, footer, buttons, info note and screen-height popups
+(`test_components.py`), and wheel scrolling (`test_wheel.py`, which also
+prints how far Qt's own Flickable gets per notch).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 
 ## Versioning

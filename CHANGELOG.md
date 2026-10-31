@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.4.0 — 2026-10-31
+
+Round 6 of the live UI review (user feedback at 125 % scaling). New components and two
+behaviour changes every plugin gets on resync. Existing APIs are unchanged.
+
+### Changed (on resync, no code change needed)
+- **Popups grow to the screen, not to 640 px.** `FoamyPopup.maxHeight` defaults to 0: the card
+  fits its content up to the host's `availableCardHeight` (screen minus the bar, the gap and a
+  margin; measured from the 4.0 strip window or the 4.5 bar thickness), and scrolls only beyond.
+  `FoamyPopupCard` gained the same `maxHeight` (default 0). Set `maxHeight:
+  FoamyStyle.popupMaxHeight` to keep the old cap. (vitals, monitor: "taller so content fits")
+- **Header: at most three buttons top right.** FoamyHeader/FoamyHeroBand move the least important
+  trailing actions (declared in priority order) and Settings into a ⋯ menu when actions + Settings
+  (+ a menu) exceed `maxButtons` (3). Of today's plugins only foamy-notification-center's header
+  overflows (search, clear, its own ⋯, Settings); see the 0.4.0 handoff for its migration.
+- **Settings pages scroll normally with the wheel.** Root cause, measured offscreen with synthetic
+  WheelEvents on Qt 6.12: Flickable turns every wheel event into a short smoothing animation that
+  starts from the current position. A high-resolution wheel (the user's Logitech G502 X; most
+  current mice) sends one notch as several small events (8 × 15 instead of 1 × 120), each
+  restarting the animation, so a notch moved 9–28 px instead of 72. FoamySettingsPage now scrolls
+  with FoamyWheelScroll: one notch = `wheelScrollLines` × `rowHeight` (108 px) however it is split,
+  notches add up (animated by FoamyMotion.slider, instant under reduced motion), touchpad pixel
+  deltas 1:1.
+
+### Added
+- **FoamyMenu / FoamyMenuItem**: in-card menu dropping from a button (the ⋯ menu; usable for row
+  menus too). An overlay inside the popup card, trailing edge on the button's trailing edge,
+  mirrored in RTL, kept inside the card (above the button when there is no room below, scrolls when
+  long). Every entry has an icon; separators; `checked`; `destructive`; submenus open in place with
+  a Back row. Keys while open: Up/Down/j/k/Home/End, Enter/Space/Right (Left in RTL) activate or
+  open a submenu, Left/h/Backspace back, Esc back or close, Tab closes; a press outside closes;
+  focus returns. Closes when the header is hidden.
+- **FoamyHeader/FoamyHeroBand overflow API**: `menuItems`, `maxButtons`, `menuHasCursor`,
+  `menuHovered(bool)`, `menuOpen`, `openMenu(keyboard)`, `closeMenu()`, `toggleMenu()`,
+  `overflowing`, `settingsInMenu`, `shownTrailing`, `menuButton`, `menu`; FoamyHeader `showTitle`,
+  `buttonsWidth`. Moved actions keep working through their own `clicked`; their menu entry uses
+  their `iconName` and tooltip text. `trailing` is now a `list<Item>` laid out by the header
+  (declaring actions as children or `trailing: [...]` both still work).
+- **FoamyHeroBand `centered: true`**: no title icon; hero first and centred; title (title size)
+  and meta centred under it; the buttons pinned to the trailing top corner; centred content keeps
+  clear of them on both sides. For clock and weather.
+- **FoamyPanelFooter**: hairline, the source (`source`) or leading items (an action like clock's
+  "Calendar"), the status ("Updated 3 minutes ago", `statusError`, `statusClickable`, short
+  `statusTooltip`) and a refresh FoamyAction (`refreshing` spins and makes it inert,
+  `refreshHasCursor`, `refreshHovered`, `refreshClicked`).
+- **FoamyInfoNote** and **FoamySettingsSection `info`**: an (i) beside a heading opens an inline
+  note under it (bodySmall, secondary, wrapped, subtle rounded surface, the column's width)
+  instead of a tooltip; it scrolls itself into view in a settings page. (github's Git LFS help
+  spanned the whole screen as a tooltip.)
+- **FoamyButton**: a form button that reads as a button: `secondary` (field fill + border),
+  `primary` (accent fill, `FoamyPalette.onAccent` text), `destructive` (urgent tint + border);
+  optional icon, `busy` (spinning, inert), `hasCursor`/`hovered` for the panel cursor,
+  `focusable` with a 2 px focus ring. (audio Verify/Apply/Remove)
+- **FoamyWheelScroll** `{ target: flickable }` for plugin lists and pages, with `ensureVisible(item
+  [, margin])` (follows a growing section for `followMs`), `scrollBy`, `scrollTo`, `wheel(event)`.
+  FoamySettingsPage exposes `ensureVisible(item)`, `flickable`, `wheel`.
+- FoamyPalette `menuFill`, `noteFill`, `onAccent`. FoamyIcon: `clock`, `alarm-clock`, `bell-ring`,
+  `timer`, `circle-help`, `ellipsis-vertical` (Lucide 1.65.0); 108 names.
+- DESIGN.md: header button rule (≤ 3, priority order, Settings last in the ⋯ menu, icons on every
+  entry), menus, centred band, footer, buttons, help notes, "tooltips only for short labels",
+  sliders ("the cursor highlights thumb and track, never a filled row"), scrolling, popup heights.
+
+### Tooling
+- `preview/render.py --scale 1.25` and `harness.Run(scale=…)`: render at a display scale
+  (`QT_SCALE_FACTOR`; windows get the device pixel ratio, PNGs are in device pixels, the simulated
+  screen stays 1920×1080 logical). Inherited Qt scale variables no longer leak into runs.
+- Tests (4.0.6 and 4.5-rc2, LTR/RTL, scale 1.0 and 1.25): `test_menu.py` (overflow rule, menu
+  placement in the card and against the ⋯ button in both directions, keys, submenu, press outside,
+  focus restore, a re-shown action is drawn), `test_components.py` (centred band, footer, buttons,
+  info note, popup heights), `test_wheel.py` (Qt baseline printed as NOTE, split notches, adding
+  notches, pixel deltas, horizontal and inner wheel users, bounds, settings page, ensureVisible, info
+  note). Geometry: the default popup now fills the available height; an explicit cap still caps.
+
 ## 0.3.5 — 2026-10-31
 
 ### Fixed
