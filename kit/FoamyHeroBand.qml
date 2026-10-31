@@ -95,9 +95,12 @@ Item {
   default property alias hero: heroSlot.data
   // True when a hero item is shown: hidden hero children don't count (the
   // slot itself stays visible so their own `visible` is what is read).
+  // While the band itself is hidden (popup closed, settings open) nothing
+  // reads as shown, so it answers whether there are hero items at all.
   readonly property bool hasHero: {
     if (compact) return false
     var items = heroSlot.children
+    if (!heroSlot.visible) return items.length > 0
     for (var i = 0; i < items.length; i++) if (items[i].visible) return true
     return false
   }
