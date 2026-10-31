@@ -69,3 +69,28 @@ def read_png(path):
         values = rows[y][x * channels:(x + 1) * channels]
         return tuple(values) + ((255,) if channels == 3 else ())
     return width, height, pixel
+
+
+def run_shell(qml_name, host, plugin, tag, env=None, scale=1.0, timeout=60, keep_pngs_to=None, suffix="", notes=False):
+    """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
+    shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
+    <name>-<suffix>.png. Returns True when it passed."""
+    r = harness.Run(host, (KIT_ROOT / "tests/qml" / qml_name).read_text(), plugin=plugin, scale=scale,
+                    prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-")
+    r.env.update(env or {})
+    r.run(timeout=timeout)
+    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    ok = report(f"{Path(qml_name).stem.lower()} {tag}", r.ok, detail)
+    if notes:
+        for line in r.log.splitlines():
+            if "FOAMY NOTE" in line:
+                print("    " + line.split("FOAMY NOTE ", 1)[1])
+    if not ok:
+        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+    if keep_pngs_to:
+        keep_pngs_to = Path(keep_pngs_to)
+        keep_pngs_to.mkdir(parents=True, exist_ok=True)
+        for png in r.out.glob("*.png"):
+            shutil.copyfile(png, keep_pngs_to / f"{png.stem}{'-' + suffix if suffix else ''}.png")
+    r.cleanup()
+    return ok

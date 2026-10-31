@@ -34,7 +34,7 @@ import harness  # noqa: E402
 
 
 def render(plugin, host, out, preview=None, states=None, theme="dark", language=None, position="top", rounding=6, keep=False,
-           timeout=120, bus="private", lenient=False):
+           timeout=120, bus="private", lenient=False, scale=1.0):
     plugin = Path(plugin).resolve()
     preview = Path(preview).resolve() if preview else plugin / "preview/Preview.qml"
     if not preview.is_file():
@@ -45,7 +45,7 @@ def render(plugin, host, out, preview=None, states=None, theme="dark", language=
         raise SystemExit("the preview file must live inside the plugin directory")
     shell = (Path(__file__).resolve().parent / "PreviewShell.qml.in").read_text().replace("@PREVIEW@", relative.as_posix())
     run = harness.Run(host, shell, plugin=plugin, theme=theme, language=language, prefix=f"foamy-kit-preview-{host}-",
-                      bus=bus)
+                      bus=bus, scale=scale)
     run.env.update({"FOAMY_POSITION": position, "FOAMY_ROUNDING": str(rounding), "FOAMY_STATES": ",".join(states or [])})
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -198,6 +198,8 @@ def main():
     parser.add_argument("--language", default=None, help="language code (4.5 only)")
     parser.add_argument("--position", default="top", choices=["top", "bottom", "left", "right"])
     parser.add_argument("--rounding", type=int, default=6, help="Hyprland decoration:rounding to simulate")
+    parser.add_argument("--scale", type=float, default=1.0,
+                        help="display scale to simulate (screen device pixel ratio, e.g. 1.25); PNGs are in device pixels")
     parser.add_argument("--keep", action="store_true", help="keep the temporary shell root")
     parser.add_argument("--timeout", type=int, default=120, help="seconds before the render is killed")
     parser.add_argument("--bus", default="private", choices=["private", "none"],
@@ -226,7 +228,7 @@ def main():
     for host in hosts:
         target = out / host if len(hosts) > 1 else out
         shots = render(plugin, host, target, args.preview, [s for s in args.states.split(",") if s], args.theme,
-                       args.language, args.position, args.rounding, args.keep, args.timeout, args.bus)
+                       args.language, args.position, args.rounding, args.keep, args.timeout, args.bus, scale=args.scale)
         if shots is None:
             status = 1
             continue

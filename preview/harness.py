@@ -215,8 +215,11 @@ def build_ui(host, dest):
 
 class Run:
     def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-",
-                 bus="private", fakebin=None):
+                 bus="private", fakebin=None, scale=1.0):
         self.host_name = host
+        # Display scale (the screen's device pixel ratio): 1.25 renders what a
+        # 125 % output shows, at 1.25x the pixels.
+        self.scale = float(scale or 1.0)
         self.bus = bus
         self.process = None
         self.bus_process = None
@@ -270,12 +273,17 @@ class Run:
         language_file = self.base / "language"
         language_file.write_text((language or "en") + "\n")
         screens = self.base / "screens.json"
-        screens.write_text(json.dumps({"screens": [{"name": "FOAMY-1", "x": 0, "y": 0, "width": SCREEN[0], "height": SCREEN[1],
+        # The offscreen platform ignores a screen "dpr"; QT_SCALE_FACTOR gives
+        # windows the scale (and grabs device pixels). The screen is sized so
+        # its logical size stays SCREEN.
+        screens.write_text(json.dumps({"screens": [{"name": "FOAMY-1", "x": 0, "y": 0,
+                                                    "width": round(SCREEN[0] * self.scale), "height": round(SCREEN[1] * self.scale),
                                                     "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
         env = {key: value for key, value in os.environ.items()
                if key not in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY", "QT_QPA_PLATFORM",
                               "QT_QPA_PLATFORMTHEME", "QT_STYLE_OVERRIDE", "QML_IMPORT_PATH", "QML2_IMPORT_PATH",
-                              "LC_ALL", "LANGUAGE", "OMARCHY_PATH", "XDG_CURRENT_DESKTOP")
+                              "LC_ALL", "LANGUAGE", "OMARCHY_PATH", "XDG_CURRENT_DESKTOP", "QT_SCALE_FACTOR",
+                              "QT_SCREEN_SCALE_FACTORS", "QT_AUTO_SCREEN_SCALE_FACTOR", "QT_ENABLE_HIGHDPI_SCALING")
                and (not key.startswith("XDG_") or key in ("XDG_DATA_DIRS", "XDG_CONFIG_DIRS"))}
         env.update({
             "HOME": str(home),
@@ -292,6 +300,8 @@ class Run:
             "OMARCHY_LANGUAGE_FILE": str(language_file),
             "FOAMY_OUT": str(self.out),
             "FOAMY_HOST": self.host_name,
+            "FOAMY_SCALE": str(self.scale),
+            **({"QT_SCALE_FACTOR": str(self.scale)} if self.scale != 1.0 else {}),
             # A dead address until start() brings up the private bus.
             "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
         })
