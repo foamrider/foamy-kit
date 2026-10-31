@@ -109,7 +109,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Help**: a short label may have a tooltip; anything longer is a
   `FoamyInfoNote` — an (i) beside the heading that opens an inline note under
   it (bodySmall, secondary, wrapped, subtle rounded surface, the column's
-  width). In settings: `FoamySettingsSection { info: … }`.
+  width). In settings: `FoamySettingsSection { info: … }`; with the note closed
+  the title line is as tall as a plain section title (the (i) overhangs it),
+  so the title → description gap is the same in every section.
 - **Icons**: `FoamyIcon` (Lucide superset, 108 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
@@ -117,6 +119,34 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
+- **Short values use the row form** (settings): any control whose value is
+  short (a number, an enum choice, an interval, a count, a percentage) is one
+  row: label (subtitle, normal weight) and an optional `description`
+  (bodySmall, secondary) on the reading start, a small control on the end.
+  `FoamyToggle`, `FoamyNumberField { compact: true }` and
+  `FoamyDropdown { compact: true }` share the row height
+  (`rowHeight + gapSmall`, taller only when the text wraps) and the trailing
+  edge (the switch, the dropdown, the number field's end-aligned unit), so a
+  page mixing them reads as one list. The compact dropdown is as wide as its
+  widest option plus the chevron, at most half the row (it elides beyond; the
+  open list may be wider). Full width with the label above is **only** for
+  free text (`FoamyTextSettingField`), paths, URLs, commands and choices whose
+  option labels don't fit in half the row (window app IDs, "Accept {folder}
+  from {device}"), and for controls inside a composite row (a folder row's
+  depth dropdown, a weekday's time fields). Never hand-roll a label + control
+  RowLayout for this. Where it applies — a sweep checklist:
+  - every `FoamyDropdown` in a settings page whose options are a short enum or
+    interval ("Refresh every", "Fetch remotes every", "Mouse wheel", "Accent",
+    "Layout", "Time format", "Week starts on", "Group … by", power profiles,
+    "Outside the schedule", "Show in the bar") → `compact: true`;
+  - every `FoamyNumberField` in a settings page (days, counts, seconds, %,
+    px, °C) → `compact: true`; put the unit in `unit` ("days", "s", "%"),
+    not in the label ("Keep notifications (days)" → label "Keep
+    notifications", `unit: FoamyI18n.t("days")`);
+  - every plugin-local RowLayout of a label `Text` and a `showLabel: false`
+    dropdown or a narrow field → the kit row form;
+  - leave full width: `FoamyTextSettingField` / `SafeTextField` for free text,
+    paths, URLs, commands, search boxes; dropdowns with long option labels.
 - **Settings rows are plain rows, never boxed cards**: a toggle row is the label
   (subtitle, normal weight) and an optional description (bodySmall, secondary)
   on the reading start, the switch on the end, at least `rowHeight + gapSmall`
@@ -130,8 +160,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   section's fields line up; a unitless field among them sets `reserveUnit`.
   Short values (a 2–3 digit percentage, a °C margin) use the **compact** form
   (`compact: true`): label on the reading start, a narrow field sized to the
-  longest value, the unit after it, one row; never a full-width input for two
-  digits.
+  longest value, the unit after it, end-aligned in a narrow column
+  (`unitWidthCompact`), one row; never a full-width input for two digits.
 - **Controlled values**: kit controls never assign over a caller's binding.
   Bind `value`/`checked`/`open` to state and change the state in handlers.
   (Text fields are the exception every toolkit has: typing edits `text`;

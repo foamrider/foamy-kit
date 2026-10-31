@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.2 — 2026-10-31
+
+Settings pages read as one list (live check: media, GitHub, notification-center mixed full-width
+dropdowns/fields with compact rows).
+
+### Added
+- **`FoamyDropdown { compact: true }`**, the row form of FoamyNumberField compact: label (subtitle,
+  normal weight) and optional `description` on the reading start, the dropdown on the end, sized
+  to its widest option plus the chevron (`compactNaturalWidth`; `compactWidth` overrides, e.g. for
+  a `labelDelegate`), at most `compactMaxFraction` (0.5) of the row, eliding beyond. The open list
+  may be wider than a capped trigger (up to the row) and grows toward the label; RTL mirrors.
+  Row height `rowHeight + gapSmall` (taller when the text wraps), as FoamyToggle rows. New:
+  `triggerItem`; the trigger reports `Accessible.ComboBox` with the label/description. The
+  full-width form is unchanged.
+- `FoamyNumberField.description` (compact form): under the label, as in toggle rows.
+- `FoamyStyle.unitWidthCompact` (18).
+- DESIGN.md "Short values use the row form": numbers, enum choices and intervals in settings are
+  rows; full width with the label above only for free text, paths, URLs, commands, long option
+  labels and composite rows; with a checklist for the plugin sweep.
+
+### Changed
+- **Compact FoamyNumberField rows are as tall as toggle rows** (`rowHeight + gapSmall`, was
+  `controlHeight`) and their unit column is narrow and end-aligned (`unitWidthCompact`), so the
+  unit ends on the row's trailing edge like a switch or a compact dropdown. Stacked fields still
+  line up (units up to 18 px; wider units widen the column, as before). Full-width fields are
+  unchanged.
+
+### Fixed
+- **FoamySettingsSection with `info`** (GitHub "Git LFS (i)"): the title line was as tall as the
+  (i) button, so its description sat ~5 px further down (and the section ~5 px lower) than under a
+  plain title. The heading line is now as tall as the title text and the (i) overhangs it; the
+  open note keeps clear of the button. Section title/description Texts have objectNames
+  (`foamySectionTitle`, `foamySectionDescription`).
+
+### Tests
+- `test_rows.py` (Rows.qml; 4.0.6 and 4.5-rc2, LTR/RTL, scale 1.0/1.25): shared row height and
+  trailing edge for toggle, compact number and compact dropdown rows; dropdown natural width, the
+  half-row cap and elision; the open list's width and edge; keyboard pick keeps `value`; full-width
+  dropdown unchanged; equal title → description gap with and without (i).
+
 ## 0.4.1 — 2026-10-31
 
 ### Added
