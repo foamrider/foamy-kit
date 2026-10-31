@@ -34,8 +34,8 @@ edited in a plugin: change it here, then sync.
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 108 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
-| FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation |
-| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`) and open/close state |
+| FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
+| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
 

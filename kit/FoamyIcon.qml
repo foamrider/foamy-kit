@@ -7,7 +7,9 @@ import QtQuick
 // Provenance: the 0.1.0 entries are the plugins' approved paths. Entries added
 // or refreshed in 0.2.0 are Lucide 1.65.0 (lucide-static), except `github`,
 // from Lucide 0.577.0: Lucide 1.x dropped brand icons. `message` and `chat`
-// are aliases of `message-square`. Refresh with tools/update-icons.py.
+// are aliases of `message-square`. 0.4.0 added clock, alarm-clock, bell-ring,
+// timer, circle-help and ellipsis-vertical (Lucide 1.65.0). Refresh with
+// tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
 //

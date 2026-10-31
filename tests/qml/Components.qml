@@ -44,6 +44,8 @@ ShellRoot {
   property int calendarClicks: 0
   property int applies: 0
   property bool verifying: false
+  property int toggleClicks: 0
+  property var cpuCommits: []
 
   // --- clock: centred band, footer with a leading action -----------------------
   FoamyPopup {
@@ -57,6 +59,8 @@ ShellRoot {
         property alias time: time
         property alias footer: footer
         property alias calendarButton: calendarButton
+        property alias hiddenHeroBand: hiddenHeroBand
+        property alias hiddenHero: hiddenHero
         LayoutMirroring.enabled: shell.rtl
         LayoutMirroring.childrenInherit: true
         spacing: FoamyStyle.gapLarge
@@ -78,6 +82,13 @@ ShellRoot {
         }
         Item { width: parent.width; height: 120
           Text { x: FoamyStyle.padding; text: "oktober 2026"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.subtitle } }
+        FoamyHeroBand {
+          id: hiddenHeroBand
+          visible: false
+          width: parent.width
+          title: "Paused"
+          Text { id: hiddenHero; visible: false; text: "Outside your schedule" }
+        }
         FoamyPanelFooter {
           id: footer
           x: FoamyStyle.padding
@@ -122,7 +133,7 @@ ShellRoot {
             spacing: FoamyStyle.gapLarge
             Text { text: "7"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.numeral; font.weight: Font.Light }
             Text { text: "°C"; color: FoamyPalette.secondaryText; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.display; Layout.alignment: Qt.AlignTop }
-            FoamyIcon { name: "cloud"; width: 28; height: 28; Layout.alignment: Qt.AlignVCenter }
+            FoamyIcon { name: "cloud"; Layout.preferredWidth: 28; Layout.preferredHeight: 28; Layout.alignment: Qt.AlignVCenter }
             Text { text: "Cloudy"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.heading; Layout.alignment: Qt.AlignVCenter }
           }
         }
@@ -134,44 +145,6 @@ ShellRoot {
           source: "MET Norway"
           status: "Updated 13 min ago"
           refreshing: true
-        }
-      }
-    }
-  }
-
-  // --- settings form: buttons and an info note --------------------------------------
-  FoamyPopup {
-    id: formPopup
-    anchorItem: shell.anchorButton
-    bar: bar
-    open: true
-    body: Component {
-      FoamySettingsPage {
-        id: page
-        property alias primary: primary
-        property alias secondary: secondary
-        property alias destructive: destructive
-        property alias lfs: lfs
-        implicitHeight: 560
-        LayoutMirroring.enabled: shell.rtl
-        FoamySettingsSection {
-          id: lfs
-          width: parent.width
-          title: "Git LFS"
-          info: "Automatic checks run Git without a repository's own settings, filters and hooks, so nothing in a repository can run code just by being in these folders. For Git LFS that means files you edited may show as changed until Git refreshes. A trusted repository runs its own Git settings, including LFS, during automatic checks and fetches, so its counts are exact."
-          FoamyToggle { width: parent.width; label: "Kvale/arca"; description: "/home/tomas/GitHub/Kvale/arca" }
-        }
-        FoamySettingsSection {
-          width: parent.width
-          title: "Wireless headset"
-          RowLayout {
-            width: parent.width
-            spacing: FoamyStyle.gap
-            FoamyButton { id: secondary; text: "Verify"; iconName: "check"; focusable: true; busy: shell.verifying }
-            FoamyButton { id: primary; text: "Apply"; kind: "primary"; focusable: true; onClicked: shell.applies++ }
-            Item { Layout.fillWidth: true }
-            FoamyButton { id: destructive; text: "Remove"; iconName: "trash"; kind: "destructive"; focusable: true }
-          }
         }
       }
     }
@@ -199,6 +172,58 @@ ShellRoot {
     bar: bar
     open: true
     body: Component { Rectangle { implicitHeight: 1500; color: "transparent" } }
+  }
+
+  // --- settings form: buttons and an info note --------------------------------------
+  FoamyPopup {
+    id: formPopup
+    anchorItem: shell.anchorButton
+    bar: bar
+    open: true
+    body: Component {
+      FoamySettingsPage {
+        id: page
+        property alias primary: primary
+        property alias secondary: secondary
+        property alias destructive: destructive
+        property alias lfs: lfs
+        property alias toggleA: toggleA
+        property alias toggleB: toggleB
+        property alias cpu: cpu
+        property alias ram: ram
+        property alias margin: margin
+        implicitHeight: 900
+        LayoutMirroring.enabled: shell.rtl
+        FoamySettingsSection {
+          id: lfs
+          width: parent.width
+          title: "Git LFS"
+          info: "Automatic checks run Git without a repository's own settings, filters and hooks, so nothing in a repository can run code just by being in these folders. For Git LFS that means files you edited may show as changed until Git refreshes. A trusted repository runs its own Git settings, including LFS, during automatic checks and fetches, so its counts are exact."
+          FoamyToggle { id: toggleA; width: parent.width; label: "Kvale/arca"; description: "/home/tomas/GitHub/Kvale/arca"; divider: true; onClicked: shell.toggleClicks++ }
+          FoamyToggle { id: toggleB; width: parent.width; label: "Compact view"; checked: true }
+        }
+        FoamySettingsSection {
+          width: parent.width
+          title: "Usage warnings"
+          description: "Warns at or above these percentages."
+          FoamyNumberField { id: cpu; width: parent.width; compact: true; label: "CPU"; unit: "%"; value: 95; from: 1; to: 100; onCommitted: function(v) { shell.cpuCommits = shell.cpuCommits.concat([v]) } }
+          FoamyNumberField { id: ram; width: parent.width; compact: true; label: "RAM"; unit: "%"; value: 90; from: 1; to: 100 }
+          FoamyNumberField { id: margin; width: parent.width; compact: true; label: "CPU temperature margin"; unit: "°C"; value: 15; from: 0; to: 40 }
+        }
+        FoamySettingsSection {
+          width: parent.width
+          title: "Wireless headset"
+          RowLayout {
+            width: parent.width
+            spacing: FoamyStyle.gap
+            FoamyButton { id: secondary; text: "Verify"; iconName: "check"; focusable: true; busy: shell.verifying }
+            FoamyButton { id: primary; text: "Apply"; kind: "primary"; focusable: true; onClicked: shell.applies++ }
+            Item { Layout.fillWidth: true }
+            FoamyButton { id: destructive; text: "Remove"; iconName: "trash"; kind: "destructive"; focusable: true }
+          }
+        }
+      }
+    }
   }
 
   Timer {
@@ -274,7 +299,38 @@ ShellRoot {
       info.infoButton.forceActiveFocus()
       ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
       check(info.expanded && info.note.visible, "Space on the (i) opens the note")
-      check(info.note.mapToItem(page.lfs, 0, 0).y > info.infoButton.mapToItem(page.lfs, 0, 0).y, "note under the title")
+
+      // Toggle rows: plain, not boxed.
+      var ta = page.toggleA
+      var fill = findByName(ta, "foamyToggleFill")
+      check(fill && fill.border.width === 0 && fill.color.a === 0, "toggle row has no box at rest")
+      check(ta.height >= FoamyStyle.rowHeight && near(page.toggleB.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall, 1), "toggle row heights " + ta.height + " / " + page.toggleB.height)
+      check(findByName(ta, "foamyToggleDivider").visible && !findByName(page.toggleB, "foamyToggleDivider").visible, "divider only where asked")
+      var sw = ta.switchItem.mapToItem(ta, 0, 0)
+      if (shell.rtl) check(sw.x < 2, "RTL: switch on the left " + sw.x)
+      else check(near(sw.x + ta.switchItem.width, ta.width), "switch on the end " + sw.x)
+      check(ta.children[1].children[0].font.weight !== Font.Bold && ta.children[1].children[0].font.weight < Font.DemiBold, "label in normal weight")
+      // Compact number fields: one row, narrow field, units lined up.
+      var cpu = page.cpu, margin = page.margin
+      var cf = cpu.field.mapToItem(page, 0, 0), mf = margin.field.mapToItem(page, 0, 0)
+      check(cpu.field.width < cpu.width / 3 && cpu.field.width >= cpu.compactFieldWidth - 1, "compact field is narrow " + cpu.field.width + " of " + cpu.width)
+      if (shell.rtl) check(near(cf.x, mf.x), "RTL: stacked compact fields line up at their unit side " + cf.x + " / " + mf.x)
+      else check(near(cf.x + cpu.field.width, mf.x + margin.field.width), "stacked compact fields line up at their unit side "
+                 + (cf.x + cpu.field.width) + " / " + (mf.x + margin.field.width))
+      check(cpu.height < FoamyStyle.controlHeight + 8, "label, field and unit on one row " + cpu.height)
+      if (shell.rtl) check(cf.x < cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "RTL: field toward the left")
+      else check(cf.x > cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "field toward the end")
+      cpu.field.text = "80"
+      cpu.dirty = true
+      cpu.commitEdit(false)
+      check(JSON.stringify(shell.cpuCommits) === "[80]", "compact field commits " + JSON.stringify(shell.cpuCommits))
+      // hasHero counts shown hero items only.
+      var hb = clock.hiddenHeroBand
+      hb.visible = true
+      check(!hb.hasHero, "a hidden hero item is no hero")
+      clock.hiddenHero.visible = true
+      check(hb.hasHero, "shown again, it is")
+      hb.visible = false
 
       // Popup height follows the screen.
       var avail = tallPopup.availableCardHeight
@@ -305,9 +361,10 @@ ShellRoot {
     property var queue: [["clock", clockPopup], ["weather", weatherPopup], ["form", formPopup]]
     onTriggered: {
       if (queue.length === 0) {
-        console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-        console.log("FOAMY DONE")
-        Qt.quit()
+        // Pointer checks need the form card on top: close the others first.
+        clockPopup.open = false; weatherPopup.open = false; tallPopup.open = false
+        cappedPopup.open = false; tallCard.open = false
+        pointerStep.start()
         return
       }
       var item = queue.shift()
@@ -315,6 +372,25 @@ ShellRoot {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/" + item[0] + ".png")
         capture.start()
       })
+    }
+  }
+
+  Timer {
+    id: pointerStep
+    interval: 600
+    onTriggered: {
+      var info = formPopup.bodyItem.lfs.infoNote
+      check(info.note.mapToItem(formPopup.bodyItem.lfs, 0, 0).y > info.infoButton.mapToItem(formPopup.bodyItem.lfs, 0, 0).y + info.infoButton.height - 1,
+            "note under the title (once laid out)")
+      var ta = formPopup.bodyItem.toggleA
+      var fill = findByName(ta, "foamyToggleFill")
+      ev.mouseClick(ta, ta.width / 2, ta.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+      check(shell.toggleClicks === 1 && !ta.checked, "click emits clicked, never flips checked " + shell.toggleClicks)
+      ev.mouseMove(ta, ta.width / 2, ta.height / 2 + 1, -1, Qt.NoButton, Qt.NoModifier)
+      check(ta.hot, "hover lights the row")
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
     }
   }
 

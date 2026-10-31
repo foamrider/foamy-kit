@@ -24,7 +24,26 @@ behaviour changes every plugin gets on resync. Existing APIs are unchanged.
   notches add up (animated by FoamyMotion.slider, instant under reduced motion), touchpad pixel
   deltas 1:1.
 
+- **FoamyToggle rows are plain rows, not boxed cards** (user: notification-center settings). The
+  row is the kit's own now (the stock `ToggleSwitch` on the end): label in subtitle size and
+  normal weight, optional description in bodySmall/secondary, height `rowHeight + gapSmall` (taller
+  when the text wraps), a soft fill under the cursor/pointer, an accent ring on Tab focus, optional
+  `divider` hairline. Same API (label, description, checked, hasCursor, clicked(), hovered(bool),
+  rounded, foreground, accent, fontFamily, titleSize, descriptionSize); `switchItem`, `hot` added.
+- **FoamyHeroBand `hasHero` counts only shown hero items** (round6-train): a hero whose items
+  are all hidden is no hero (no gap under the title row). The hero slot stays "visible" outside
+  the compact form, at zero height when empty.
+
+### Fixed
+- FoamyHeader queued its relayout with `Qt.callLater`; a header destroyed before it ran (popup
+  opened and closed in one frame, a bar removed: foamy-monitor's runtime test) threw a TypeError.
+  It uses a child Timer now; so does FoamyInfoNote's scroll-into-view.
+
 ### Added
+- **FoamyNumberField `compact`** for short values (vitals' % thresholds and °C margins): the
+  label on the reading start, a narrow field sized to the longest value (`compactDigits`, from
+  `from`/`to`/`decimals`; `compactFieldWidth`), the unit after it, one row; right-aligned digits;
+  stacked compact fields line up at the unit; the error line stays under the row.
 - **FoamyMenu / FoamyMenuItem**: in-card menu dropping from a button (the ⋯ menu; usable for row
   menus too). An overlay inside the popup card, trailing edge on the button's trailing edge,
   mirrored in RTL, kept inside the card (above the button when there is no room below, scrolls when
@@ -69,9 +88,10 @@ behaviour changes every plugin gets on resync. Existing APIs are unchanged.
 - Tests (4.0.6 and 4.5-rc2, LTR/RTL, scale 1.0 and 1.25): `test_menu.py` (overflow rule, menu
   placement in the card and against the ⋯ button in both directions, keys, submenu, press outside,
   focus restore, a re-shown action is drawn), `test_components.py` (centred band, footer, buttons,
-  info note, popup heights), `test_wheel.py` (Qt baseline printed as NOTE, split notches, adding
+  info note, plain toggle rows, compact number fields, `hasHero`, popup heights), `test_wheel.py` (Qt baseline printed as NOTE, split notches, adding
   notches, pixel deltas, horizontal and inner wheel users, bounds, settings page, ensureVisible, info
   note). Geometry: the default popup now fills the available height; an explicit cap still caps.
+  `run_shell` fails a run that logs a `polish()` loop (a layout that never settles).
 
 ## 0.3.5 — 2026-10-31
 

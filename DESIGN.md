@@ -108,19 +108,28 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   `FoamyInfoNote` — an (i) beside the heading that opens an inline note under
   it (bodySmall, secondary, wrapped, subtle rounded surface, the column's
   width). In settings: `FoamySettingsSection { info: … }`.
-- **Icons**: `FoamyIcon` (Lucide superset, 102 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 108 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
+- **Settings rows are plain rows, never boxed cards**: a toggle row is the label
+  (subtitle, normal weight) and an optional description (bodySmall, secondary)
+  on the reading start, the switch on the end, at least `rowHeight + gapSmall`
+  tall; hover/cursor shows a soft fill, Tab focus an accent ring. At most a
+  hairline between rows (`divider: true`), no border around each row.
 - **Numbers and text in settings**: `FoamyNumberField` / `FoamyTextSettingField`
   (bound `value`, save in `onCommitted`). Never hand-roll a row that assigns `text`.
   When a save fails, call the field's `saveFailed()` (from FoamyPrefsQueue
   `onFailed`) so it shows the saved value and the same input can be retried.
   Units are short symbols ("%", "°C", "ms") in the fixed unit column, so a
   section's fields line up; a unitless field among them sets `reserveUnit`.
+  Short values (a 2–3 digit percentage, a °C margin) use the **compact** form
+  (`compact: true`): label on the reading start, a narrow field sized to the
+  longest value, the unit after it, one row; never a full-width input for two
+  digits.
 - **Controlled values**: kit controls never assign over a caller's binding.
   Bind `value`/`checked`/`open` to state and change the state in handlers.
   (Text fields are the exception every toolkit has: typing edits `text`;
