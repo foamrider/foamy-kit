@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3 — 2026-11-02
+
+### Added
+- FoamyIcon `chevrons-down` (Lucide 1.65.0), for GitHub's "Pull all"; 109 names.
+
 ## 0.4.2 — 2026-10-31
 
 Settings pages read as one list (live check: media, GitHub, notification-center mixed full-width
