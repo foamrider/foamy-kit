@@ -67,6 +67,13 @@ ShellRoot {
       eq(FoamyI18n.tn("%1 devices", 1), "1 device", "tn one (English)")
       eq(FoamyI18n.tn("%1 devices", 3), "3 devices", "tn other (English)")
       eq(FoamyI18n.number(13.14, 1), "13.1", "number English")
+      var nowMs = 1800000000000
+      eq(FoamyI18n.updatedAgo(0, nowMs), "", "updatedAgo without a time")
+      eq(FoamyI18n.updatedAgo(nowMs - 30000, nowMs), "Updated just now", "updatedAgo just now")
+      eq(FoamyI18n.updatedAgo(nowMs - 60000, nowMs), "Updated 1 minute ago", "updatedAgo one minute")
+      eq(FoamyI18n.updatedAgo(nowMs - 59 * 60000, nowMs), "Updated 59 minutes ago", "updatedAgo minutes")
+      eq(FoamyI18n.updatedAgo(nowMs - 1283 * 60000, nowMs), "Updated 21 hours ago", "updatedAgo hours")
+      eq(FoamyI18n.updatedAgo(nowMs - 49 * 3600000, nowMs), "Updated 2 days ago", "updatedAgo days")
     }
     if (!v45) {
       eq(FoamyI18n.formatLocale, Qt.locale().name, "4.0 keeps the system calendar locale")

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4 — 2026-11-02
+
+### Added
+- **`FoamyI18n.updatedAgo(updatedMs, nowMs)`**: a footer's freshness, "Updated just now", then
+  minutes, hours and days (live check: the clock footer read "Updated 1283 minutes ago"). Plugins
+  carry the plural entries "Updated %1 minutes ago", "Updated %1 hours ago" and "Updated %1 days
+  ago" plus "Updated just now". DESIGN.md "Footer" names it, and "Updating…" while a refresh
+  replaces stale data.
+
 ## 0.4.3 — 2026-11-02
 
 ### Added

@@ -12,6 +12,7 @@ import Quickshell.Io
 //   FoamyI18n.t("Updated %1 minutes ago", minutes)     %1 / {name} holes
 //   FoamyI18n.tn("%1 devices", count)                  plural entry {"one":…,"other":…}
 //   FoamyI18n.number(13.14, 1)                         "13,1" in Danish, ungrouped
+//   FoamyI18n.updatedAgo(updatedMs, nowMs)             "Updated 3 hours ago"
 //   Qt.locale(FoamyI18n.formatLocale)                  dates follow the picked language
 //
 // Numeric hole values go through number() (ungrouped, so ports and years stay
@@ -79,6 +80,21 @@ QtObject {
   function tn(key, count, values) {
     var text = backend && typeof backend.tn === "function" ? backend.tn(key, count, englishText(key, count)) : englishText(key, count)
     return substitute(text, values === undefined ? [count] : values)
+  }
+
+  // A footer's freshness: just now, then minutes, hours and days. The plugin's
+  // catalogs carry "Updated just now" and the plural entries "Updated %1
+  // minutes ago", "Updated %1 hours ago" and "Updated %1 days ago".
+  // "" without a time.
+  function updatedAgo(updatedMs, nowMs) {
+    var updated = Number(updatedMs)
+    if (!isFinite(updated) || updated <= 0) return ""
+    var minutes = Math.max(0, Math.floor((Number(nowMs === undefined ? Date.now() : nowMs) - updated) / 60000))
+    if (minutes === 0) return t("Updated just now")
+    if (minutes < 60) return tn("Updated %1 minutes ago", minutes)
+    var hours = Math.floor(minutes / 60)
+    if (hours < 24) return tn("Updated %1 hours ago", hours)
+    return tn("Updated %1 days ago", Math.floor(hours / 24))
   }
 
   function number(value, decimals) {
