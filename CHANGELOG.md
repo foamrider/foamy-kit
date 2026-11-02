@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.5 — 2026-11-02
+
+### Changed
+- FoamyIcon `arrow-down-to-line` (Lucide 1.65.0) replaces `chevrons-down` (0.4.3), which only
+  GitHub's "Pull all" used; 109 names.
+
 ## 0.4.4 — 2026-11-02
 
 ### Added
