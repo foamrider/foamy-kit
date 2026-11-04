@@ -1,6 +1,7 @@
 {
   "FoamyStyle": {"files": ["FoamyStyle.qml"], "singletons": ["FoamyStyle"], "deps": ["FoamyPalette"]},
   "FoamyPalette": {"files": ["FoamyPalette.qml"], "singletons": ["FoamyPalette"], "deps": []},
+  "FoamyWallClock": {"files": ["FoamyWallClock.qml"], "deps": []},
   "FoamyMotion": {"files": ["FoamyMotion.qml"], "singletons": ["FoamyMotion"], "deps": []},
   "FoamyI18n": {"files": ["FoamyI18n.qml"], "singletons": ["FoamyI18n"], "deps": []},
   "FoamyShared": {"files": ["FoamyShared.qml", "FoamyMember.qml"], "singletons": ["FoamyShared"], "deps": []},

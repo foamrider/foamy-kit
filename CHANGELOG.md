@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.6 — 2026-11-04
+
+### Added
+- `FoamyWallClock`: epoch-aligned second/minute ticks avoid negative timer delays during daylight-saving fallback. Disabled clocks stop and refresh immediately when enabled again.
+
 ## 0.4.5 — 2026-11-02
 
 ### Changed
