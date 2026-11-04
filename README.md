@@ -16,6 +16,7 @@ edited in a plugin: change it here, then sync.
 |---|---|---|
 | FoamyStyle | `FoamyStyle.qml` (singleton) | Radius, border, font family and type scale, widths, spacing, control sizes |
 | FoamyPalette | `FoamyPalette.qml` (singleton) | Surface tones and theme status colours from colors.toml |
+| FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
 | FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration` (4.5), `reduceMotion`, named tokens |
 | FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; 4.5 Translations, English on 4.0 |
 | FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
