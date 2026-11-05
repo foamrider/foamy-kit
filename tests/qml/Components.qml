@@ -287,6 +287,8 @@ ShellRoot {
         check(near(r.x + footer.refreshButton.width, footer.width) && near(c.x, 0), "footer: calendar at the start, refresh at the end")
         check(near(sp.x + st.width, r.x - FoamyStyle.gapSmall, 1.5), "footer: status ends at the refresh button")
       }
+      var line = r.y
+      check(near(line - 1, footer.height - line - footer.refreshButton.height), "footer: row centred between hairline and bottom " + (line - 1) + " / " + (footer.height - line - footer.refreshButton.height))
       check(st.text === "Updated 3 minutes ago" && st.font.pixelSize === FoamyStyle.font.bodySmall, "footer status text")
       footer.refreshButton.clicked()
       check(shell.refreshes === 1, "refresh emits refreshClicked")

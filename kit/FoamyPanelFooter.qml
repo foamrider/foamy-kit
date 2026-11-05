@@ -23,7 +23,9 @@ import qs.Ui
 // `statusClickable` makes it a link (statusClicked). The refresh button
 // spins while `refreshing` and is inert then; `showRefresh: false` hides it.
 // No horizontal padding of its own: place it in the padded body, or set
-// `horizontalPadding` when the body runs edge to edge.
+// `horizontalPadding` when the body runs edge to edge. The row sits
+// `spacing` under the hairline and `spacing` above the footer's bottom, so it
+// is centred between them; put nothing under it (the popup ends there).
 Column {
   id: root
 
@@ -47,7 +49,7 @@ Column {
   signal statusClicked()
 
   spacing: FoamyStyle.gapLarge
-  bottomPadding: FoamyStyle.gapSmall
+  bottomPadding: spacing
 
   Rectangle {
     visible: root.divider

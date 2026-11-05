@@ -105,7 +105,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   how fresh it is: hairline, the source or a leading action ("Calendar") on the
   reading start, "Updated …" (bodySmall, secondary) and the refresh action on
   the end, spinning while loading. Freshness and refresh live there, not in the
-  header. foamy-clock's footer is the reference. The age is
+  header. The row is centred between the hairline and the popup's bottom edge
+  (the same gap above and below; the footer is last, with no padding under it).
+  foamy-clock's footer is the reference. The age is
   `FoamyI18n.updatedAgo(ms, now)` (just now, minutes, hours, days); while a
   refresh replaces data older than its interval, the status reads "Updating…".
 - **Help**: a short label may have a tooltip; anything longer is a

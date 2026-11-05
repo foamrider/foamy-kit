@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.7 — 2026-11-05
+
+### Changed
+- `FoamyPanelFooter`: the bottom padding is `spacing` (was `gapSmall`), so the row sits as far
+  above the popup's bottom edge as below the hairline (live check: clock's footer had 12 px over
+  the row and 4 px under it).
+
 ## 0.4.6 — 2026-11-04
 
 ### Added
