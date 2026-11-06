@@ -2,6 +2,9 @@
 # Run every foamy-kit test. Needs qs (Quickshell), node, python3, git, and
 # the hosts: 4.0.6 at /usr/share/omarchy/shell and 4.5-rc2 at
 # /tmp/omarchy-ref/v45/shell (override with FOAMY_HOST_40 / FOAMY_HOST_45).
+# test_native.py also needs rustup with the toolchain in
+# kit/rust/rust-toolchain.toml, file(1), and qemu-aarch64 binfmt for the
+# aarch64 runs (each skipped with a SKIP line when missing).
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 status=0
@@ -10,7 +13,9 @@ run() {
   "$@" || status=1
 }
 run node prefs.test.cjs
+run node native.test.cjs
 run python3 -I test_sync_check.py
+run python3 -I test_native.py
 run python3 -I test_geometry.py
 run python3 -I test_runtime.py
 run python3 -I test_features.py

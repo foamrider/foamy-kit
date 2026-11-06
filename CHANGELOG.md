@@ -1,5 +1,178 @@
 # Changelog
 
+## 0.5.0 — 2026-11-06
+
+Native helpers: plugins replace their Python and Bash helpers with one Rust
+binary each, committed as static musl executables for x86_64 and aarch64, so
+an install stays a plain checkout and needs no Rust. README.md "Native
+helpers" is the recipe.
+
+### Added
+- **`FoamyNative`** (opt-in: `sync.sh <plugin> --add FoamyNative`):
+  `FoamyNative.js` (`command(pluginDir, name, args)` builds
+  `bash -c 'exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"'`, so a missing binary or an
+  unsupported CPU is a normal exit 127/126 instead of a Process without an exit;
+  `unavailable(exitCode)`, `localPath(url)`, `UNAVAILABLE_TEXT`), the shared
+  crate `kit/rust/foamy-helper`, the release profile `kit/rust/release.toml`
+  and `rust-toolchain.toml` (1.99.1, both musl targets) at the plugin root.
+- **`foamy-helper`** 0.1.0 (rustix, serde, serde_json): bounded reads and a
+  line reader with a maximum line length (`io`); JSON-lines helpers, a serve
+  loop and `json::run`, which prints one JSON reply for every outcome and turns
+  a panic into a JSON reply and exit 101 instead of an abort (`json`); atomic
+  writes with owner, type and mode checks, private directories, bounded file
+  reads without symlinks or special files (`fs`); `flock` locks and
+  `$XDG_RUNTIME_DIR/<plugin>` (`lock`); bounded child processes with a
+  deadline, an output cap, a process-group kill, environment control, rlimits,
+  sessions and `PR_SET_PDEATHSIG` (`child`); `PR_SET_PDEATHSIG`, `setsid`,
+  rlimits and umask for the helper itself (`process`). 35 unit tests.
+- **`foamy-helper::favicon`** (cargo feature `favicon`): a port of
+  foamy-notifications' and foamy-notification-center's `bin/browser-favicon.py`
+  with the same stdin/stdout contract (`favicon::run`, reply lines in Python's
+  `json.dumps` format), browser roots, `Default/` plus at most fifteen
+  `Profile *` databases, 2 s deadline, no web request, PNG and hostname bounds,
+  the 0600 cache of at most 256 icons reused for 24 hours. A live database is
+  read under SQLite's own `SHARED` lock with a 100 ms busy timeout (a hot
+  journal fails like a read-only SQLite connection); a database the browser
+  holds exclusively is copied into memory with every Python check (32 MiB,
+  no transaction sidecars, unchanged during the copy, rollback header) and
+  checked structurally before it is queried. Nothing is ever written next to
+  the browser's files.
+- **`foamy-helper::sandbox`** (cargo feature `sandbox`): `BpfFilter`
+  (seccomp-BPF generated with `seccompiler`; `decoder()` is foamy-lock's
+  `decoder_filter`, proven equal for every syscall number on both arches,
+  including the x32 kill on x86_64; `memfd()` for `bwrap --seccomp`,
+  `Bounded::seccomp`), `ExecOnly` (a Landlock ruleset handling only
+  "execute", applied in `pre_exec`; `probe` is foamy-github's setpriv probe:
+  the program from `PATH` and its ELF interpreter, works and bites or `None`
+  for the unrestricted fallback; `Bounded::exec_only`), `Bwrap` (bubblewrap
+  argv for artwork.py's decoder and github_status's pinned namespace,
+  `readonly_host`, fd options inherited by the child, `works`), and
+  `elf_interpreter`/`which` as in github_status. 30 more unit tests.
+- `process::exit_on_panic(code)`: a panic exits with `code` instead of
+  aborting (the message still goes to stderr, nothing to stdout);
+  `json::run` and `json::serve` install it, and helpers with their own loop
+  call it first in `main`.
+- `Bounded::inherit_fd` (Python's `pass_fds`).
+- `check.sh` and `tests/kit-check.sh` warn about a cargo target dir inside a
+  plugin.
+- **`tools/build-native.sh <plugin> [--verify | --test] [--crate DIR] [--bin NAME]`**:
+  both arches with `--locked --release`, the pinned toolchain, `rust-lld`
+  self-contained, `--build-id=none` and path remapping, cargo output in
+  `~/.cache/foamy-native/foamy-<x>` (`FOAMY_NATIVE_CACHE`), never in the plugin;
+  atomic installs into `bin/<arch>/`; `<crate>/native.pin` with toolchain, kit
+  version, source hash and per-arch sha256. `--verify` rebuilds in a fresh
+  target dir and compares bytes; `--test` runs fmt, clippy `-D warnings` and tests.
+  Defaults: crate `native/`, binary `foamy-<x>-helper` (manifest id `foamy.<x>`);
+  another layout is remembered in its `native.pin`.
+- `check.sh` and the generated `tests/kit-check.sh` verify native binaries
+  against `native.pin` (regular file, executable, checksum, static ELF of the
+  right arch) and report them stale when the crate, `kit/rust`, the root
+  `Cargo.toml`/`Cargo.lock` or `rust-toolchain.toml` changed; a synced
+  FoamyNative without a pin fails.
+- Sync: components may have files in subdirectories of `kit/` (glob patterns)
+  and at the plugin root (`rootFiles`); `optIn` components stay out of a first
+  sync; emptied directories are removed when a component is dropped.
+- Tests: `native.test.cjs`, `test_native.py` with the fixture plugin
+  `tests/fixtures/native-plugin` (built for both arches, byte-identical on a
+  clean rebuild and from another checkout path, run on aarch64 through qemu),
+  `tests/qml/Native.qml` (FoamyNative.command in Quickshell's Process).
+
+### Changed
+- `fs::write_atomic` refuses a directory only when it is foreign-owned or
+  world-writable without the sticky bit; a group-writable directory of the
+  user's own (umask 002) is accepted. `ensure_private_dir` stays 0700-strict.
+- The fixture helper (the template for plugin helpers) installs the panic
+  hook first and reads argv with `args_os()` inside `json::run`, so a
+  non-UTF-8 argument is an `INVALID_ARGUMENT` reply instead of an abort; it
+  builds with both features on both arches.
+- README "Native helpers": `CARGO_TARGET_DIR` before any cargo command,
+  `/target/` in `.gitignore`, `cargo fmt -p <crate>` only, the recipe for an
+  existing crate, vendored third-party modules, re-pin after any edit in the
+  crate dir, panics and arguments.
+
+### Fixed
+- `build-native.sh` refuses symlinks among the build inputs (crate dir,
+  `kit/rust`, root Cargo files): the source hash skips them, so a link
+  target could change without the pin noticing.
+- **Security:** `build-native.sh` wrote `bin/<arch>/<binary>` and `native.pin`
+  through their parent paths, so a symlinked `bin/` or `bin/<arch>` in a
+  contributor's checkout redirected the built ELF outside the plugin. Every
+  directory is now opened component by component without following symlinks,
+  and files are created and renamed relative to that directory.
+- **Security:** `build-native.sh` refuses a `.cargo/config(.toml)` in the plugin
+  root or the crate dir (or between): Cargo would load it, it isn't in
+  `native.pin`, and a `rustc-wrapper` there could alter both the build and
+  `--verify` while the pin still looked fresh.
+- `build-native.sh` refuses `path` dependencies outside the crate dir and
+  `kit/rust` (in any dependency, patch or workspace table): their sources are
+  not in `native.pin`'s hash, so an edit there would go unnoticed.
+- `build-native.sh` hashed the sources after building, so an edit while cargo
+  ran (or between the two arches) was pinned to binaries built from the old
+  source. It now hashes before and after, and installs nothing (and `--verify`
+  fails) when they differ.
+- **Security:** `sync.sh` trusted every path in a plugin's `foamy-kit.lock`, so
+  a crafted lock (`../x`, an absolute path, `kit/../../x`) could make a sync,
+  `--force` or not, delete or overwrite a file outside the plugin. Lock paths
+  must now be normalised relative paths under `kit/`, `tests/kit-check.sh` or a
+  component's root file, or sync and check refuse the plugin; sync also refuses
+  any path whose parent directory resolves outside the plugin (a symlinked
+  `tests/`). The generated `tests/kit-check.sh` rejects the same lock paths.
+- `Bounded::run` kept feeding standard input only while stdout or stderr was
+  open: a child that closed or redirected its output before reading its input
+  got it silently truncated. It now writes all of it (until the child stops
+  reading: `EPIPE`), within the deadline.
+- Stamps: `.toml` files use `#`; Rust and TOML files carry the stamp on line 1
+  always (a `#![…]` attribute is not a shebang), so version changes never
+  shift line numbers that panic locations embed.
+
+### Decisions
+- The plugin root is the Cargo workspace root (a plugin-owned four-line
+  `Cargo.toml`, `Cargo.lock` next to it): cargo hashes a path dependency
+  outside the workspace by its absolute path, so with the workspace at
+  `native/` a worktree and the live checkout built different x86_64 binaries.
+- The release profile is passed with `--config kit/rust/release.toml` (it ranks
+  above the manifests) instead of a stamped `.cargo/config.toml`, and plugin
+  manifests may not declare `[profile]`, so committed binaries depend only on
+  the sources, the vendored kit and the toolchain.
+- **`foamy-helper::hash`**: `sha256`/`sha256_hex` in plain Rust (the favicon
+  module's, now public), so helpers need neither `sha2` nor ring for cache names.
+- **`foamy-helper::net`**: `DeadlineStream`, socket I/O bounded by one
+  absolute deadline. A socket timeout bounds each blocking call, so a peer
+  trickling bytes (or rustls making several reads per record) could stretch a
+  request far past its budget; the stream re-arms the timeout to the time left
+  before every read and write and fails with `DeadlineExceeded` after it.
+- **`foamy-helper::tls`** (cargo feature `tls`): the one crypto provider and
+  trust store for HTTPS in every helper: `provider()` (Graviola through
+  `rustls-graviola`), `system_roots()`/`system_roots_der()` (the system CA
+  store, loaded once), `client_config()` (WebPKI, TLS 1.2 and 1.3),
+  `cpu_supported()`/`ensure_supported()` and `UNSUPPORTED`, so a CPU without
+  the instructions Graviola needs reports an error instead of aborting.
+- `rust-toolchain.toml` goes to the plugin root, not the crate dir: rustup
+  looks upwards from the working directory, so one file covers any crate dir.
+- **HTTPS crypto: Graviola for every helper, not ring or aws-lc-rs.** Both of
+  those compile C, so cross-building them needs a C compiler and musl
+  sysroot per target, and the committed bytes would depend on the build
+  machine's clang version (the same problem as `rusqlite` below). Graviola is
+  Rust and assembly only and builds byte-identically with rustc alone. The
+  cost: it needs AES, carry-less multiply, and on x86_64 AVX2, BMI2 and ADX
+  (Intel Broadwell / AMD Zen or newer), on aarch64 the ARMv8 crypto
+  extensions (Apple Silicon, Raspberry Pi 5, not a Pi 4). On other CPUs HTTPS
+  features report `UNSUPPORTED`; everything else in the helper still works.
+- **SQLite for `favicon`: a built-in read-only reader, not `rusqlite`.**
+  `rusqlite` with `bundled` does cross-build for aarch64-musl with clang and
+  rust-lld, byte-identically on one machine (tried: about 1.5 MB per arch for
+  "hello world"), but only with a musl sysroot that isn't packaged here (musl's
+  headers downloaded and installed by hand) and C flags the build tool would
+  have to inject, and the committed bytes would then depend on the host's
+  clang version: the next clang upgrade, or another developer's machine, would
+  fail `--verify` with no source change, and the pin records only the Rust
+  toolchain. The reader (`favicon/sqlite.rs`, about 1,200 lines with its tests) covers
+  what the Python query reads: rollback and WAL databases (committed frames,
+  checksums and salts as SQLite's recovery), table b-trees, records with
+  overflow pages, `CREATE TABLE` column lists, SQLite's lock protocol, and a
+  structural check of every b-tree for the snapshot (the part of `PRAGMA
+  quick_check` that matters here). UTF-8 databases only (Chromium's).
+
 ## 0.4.7 — 2026-11-05
 
 ### Changed

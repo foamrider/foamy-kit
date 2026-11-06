@@ -1,0 +1,9 @@
+# The Rust toolchain every foamy native helper is built with. foamy-kit's
+# FoamyNative component copies this file to a plugin's root, so cargo picks
+# it up anywhere in the plugin (rustup reads it from the working directory
+# upwards). tools/build-native.sh records the channel in native.pin.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]
+targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]
+profile = "minimal"
