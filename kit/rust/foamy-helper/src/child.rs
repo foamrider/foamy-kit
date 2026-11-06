@@ -317,10 +317,13 @@ fn keep(buffer: &mut Vec<u8>, data: &[u8], cap: usize) -> bool {
 
 impl Streams {
     /// Moves bytes between the child and our buffers until both output
-    /// streams end, the deadline passes or an output exceeds `cap`.
+    /// streams end and standard input is fully written (or the child
+    /// stopped reading it: `EPIPE`), the deadline passes or an output
+    /// exceeds `cap`. A child that closes or redirects its output before
+    /// reading its input still gets all of it.
     fn pump(&mut self, deadline: Instant, cap: usize) -> io::Result<Pump> {
         let mut chunk = vec![0u8; 16 * 1024];
-        while self.stdout.is_some() || self.stderr.is_some() {
+        while self.stdout.is_some() || self.stderr.is_some() || self.stdin.is_some() {
             let now = Instant::now();
             if now >= deadline {
                 return Ok(Pump::TimedOut);
@@ -484,6 +487,29 @@ mod tests {
             sh("cat").run().unwrap().stdout.is_empty(),
             "stdin defaults to /dev/null"
         );
+    }
+
+    #[test]
+    fn keeps_feeding_stdin_after_the_child_closes_its_output() {
+        // Regression (Codex review on PR #2): the input used to be cut off
+        // once stdout and stderr had both closed.
+        let dir = crate::fs::tests::TempDir::new("stdin");
+        let target = dir.0.join("count");
+        let output = sh("exec >&- 2>&-; wc -c > \"$0\"")
+            .arg(&target)
+            .stdin(vec![b'x'; 300_000])
+            .run()
+            .unwrap();
+        assert!(output.success(), "{output:?}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap().trim(), "300000");
+        // Closed output and a child that never reads: the deadline still holds.
+        let start = Instant::now();
+        let stuck = sh("exec >&- 2>&-; sleep 30")
+            .stdin(vec![0u8; 300_000])
+            .timeout(Duration::from_millis(200))
+            .run()
+            .unwrap();
+        assert!(stuck.timed_out && start.elapsed() < Duration::from_secs(5));
     }
 
     #[test]
