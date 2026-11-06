@@ -452,6 +452,10 @@ def rust_tests(base):
             ("not-member", lambda p: (p / "Cargo.toml").write_text('[workspace]\nmembers = []\nexclude = ["kit"]\n'), "in members"),
             ("crate-lock", lambda p: shutil.copyfile(p / "Cargo.lock", p / "native/Cargo.lock"), "native/Cargo.lock is unused"),
             ("no-lock", lambda p: (p / "Cargo.lock").unlink(), "Cargo.lock is missing"),
+            ("cargo-config", lambda p: ((p / ".cargo").mkdir(), (p / ".cargo/config.toml").write_text('[build]\nrustc-wrapper = "/bin/true"\n')),
+             "Cargo configuration inside the plugin"),
+            ("crate-cargo-config", lambda p: ((p / "native/.cargo").mkdir(), (p / "native/.cargo/config").write_text('[build]\n')),
+             "native/.cargo/config"),
             ("outside-path-dep", lambda p: open(p / "native/Cargo.toml", "a").write('\n[dev-dependencies]\ncommon = { path = "../common" }\n'),
              "path dependencies outside the hashed sources")):
         broken = fresh(base, name)

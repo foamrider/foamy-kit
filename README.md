@@ -152,7 +152,9 @@ serde_json = "1"     # only what the helper needs; justify each one in the PR
 No `[profile]` (in either manifest) and no `[workspace]` in the crate:
 `build-native.sh` refuses them. The release profile is `kit/rust/release.toml`
 (opt-level "s", lto "fat", codegen-units 1, panic "abort", strip "symbols"),
-which cargo ranks above the manifests. There is no `.cargo/config.toml`;
+which cargo ranks above the manifests. There is no `.cargo/config.toml` (the
+build tool refuses one in the plugin or crate dir, and scrubs wrapper and flag
+variables from its environment);
 linker and flags come from the build tool. `rust-toolchain.toml` sits at the
 plugin root because rustup reads it from the working directory upwards, so
 `cargo` anywhere in the plugin uses 1.99.1.
@@ -201,7 +203,7 @@ Cargo hygiene:
 **An existing crate** (a helper that already had its own `Cargo.toml`, like
 foamy-menu's `search/`): `git mv <crate>/Cargo.lock Cargo.lock` (keep the
 lock, don't regenerate it), delete the crate's `[profile]` (the build tool
-refuses one) and any `.cargo/config.toml`, add the root workspace and the
+refuses one) and any `.cargo/config.toml` (refused too), add the root workspace and the
 `foamy-helper` path dependency, then build with `--crate`/`--bin` once.
 
 **Vendored third-party modules** (code copied from another project into

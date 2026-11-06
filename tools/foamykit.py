@@ -651,6 +651,25 @@ def native_preflight(plugin, crate):
             raise KitError(f"{rel} declares [profile]; remove it, the kit's {RELEASE_PROFILE} is the release profile")
     if "workspace" in read_toml(plugin / crate / "Cargo.toml"):
         raise KitError(f"{crate}/Cargo.toml declares [workspace]; the workspace is the plugin's root Cargo.toml")
+    # Cargo reads .cargo/config(.toml) from the working directory (the crate
+    # dir) and every parent. One inside the plugin is contributor content that
+    # native.pin doesn't hash, and it can set a rustc wrapper or flags that
+    # change both the build and --verify (the environment is already scrubbed).
+    configs = []
+    here = (plugin / crate).resolve()
+    top = plugin.resolve()
+    while True:
+        for name in ("config", "config.toml"):
+            candidate = here / ".cargo" / name
+            if candidate.exists() or candidate.is_symlink():
+                configs.append(candidate.relative_to(top).as_posix())
+        if here == top or top not in here.parents:
+            break
+        here = here.parent
+    if configs:
+        raise KitError("Cargo configuration inside the plugin isn't allowed (it isn't part of native.pin and can "
+                       "change the build); the kit's release profile and build flags are the only settings: "
+                       + ", ".join(configs))
     outside = path_dependencies_outside(plugin, crate)
     if outside:
         raise KitError("path dependencies outside the hashed sources (the crate dir and kit/rust), so native.pin "

@@ -91,6 +91,10 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- **Security:** `build-native.sh` refuses a `.cargo/config(.toml)` in the plugin
+  root or the crate dir (or between): Cargo would load it, it isn't in
+  `native.pin`, and a `rustc-wrapper` there could alter both the build and
+  `--verify` while the pin still looked fresh.
 - `build-native.sh` refuses `path` dependencies outside the crate dir and
   `kit/rust` (in any dependency, patch or workspace table): their sources are
   not in `native.pin`'s hash, so an edit there would go unnoticed.
