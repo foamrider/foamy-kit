@@ -474,6 +474,7 @@ sees one version everywhere.
 
 ## License
 
-MIT (`LICENSE`). `FoamyIcon` paths are Lucide (ISC, `LICENSE-LUCIDE`);
+MIT (`LICENSE`). `FoamyIcon` paths are Lucide (ISC, `LICENSE-LUCIDE`),
+except the Zendesk brand mark from Simple Icons (CC0, source in `FoamyIcon.qml`);
 `FoamyDropdown` is adapted from Omarchy (MIT, `LICENSE-OMARCHY`); both notices
 are copied into a plugin's `kit/` with the component.

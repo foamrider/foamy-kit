@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — 2026-11-06
+
+### Added
+- `FoamyIcon`: the Zendesk brand mark (Simple Icons, CC0, drawn filled), plus
+  `undo-2`, `undo-dot` and `check-check` (Lucide 1.65.0); both undo icons
+  mirror in RTL. 113 names.
+
 ## 0.5.0 — 2026-11-06
 
 Native helpers: plugins replace their Python and Bash helpers with one Rust
