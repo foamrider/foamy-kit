@@ -1,0 +1,13 @@
+# The release profile of every foamy native helper. tools/build-native.sh
+# passes this file to cargo (`--config kit/rust/release.toml`), which ranks
+# it above the crate's Cargo.toml; plugin crates declare no [profile] of their
+# own (the build tool refuses one), so committed binaries depend only on the
+# crate sources, the vendored kit and the pinned toolchain.
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+incremental = false

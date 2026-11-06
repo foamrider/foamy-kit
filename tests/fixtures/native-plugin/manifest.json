@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "foamy.native-demo",
+  "name": "Foamy native demo",
+  "version": "0.1.0",
+  "author": "foamrider",
+  "description": "Fixture plugin for foamy-kit's FoamyNative component: a Rust helper built for x86_64 and aarch64",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Panel.qml" },
+  "barWidget": { "displayName": "Foamy native demo", "defaultSection": "right" },
+  "license": "MIT"
+}

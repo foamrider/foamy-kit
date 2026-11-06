@@ -23,5 +23,6 @@
   "FoamySettings": {"files": ["FoamySettingsPage.qml", "FoamySettingsHeader.qml", "FoamySettingsSection.qml", "FoamySettingsError.qml", "FoamyToggle.qml", "FoamySettingsState.qml"], "deps": ["FoamyAction", "FoamyHeroBand", "FoamyI18n", "FoamyInfoNote", "FoamyMotion", "FoamyNumberField", "FoamyPalette", "FoamyStyle", "FoamyWheelScroll"]},
   "FoamyWheelScroll": {"files": ["FoamyWheelScroll.qml"], "deps": ["FoamyStyle", "FoamyMotion"]},
   "FoamyCursor": {"files": ["FoamyCursor.qml", "FoamyCursorSurface.qml"], "deps": ["FoamyStyle"]},
-  "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []}
+  "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []},
+  "FoamyNative": {"files": ["FoamyNative.js", "node-loader.cjs", "rust/release.toml", "rust/foamy-helper/Cargo.toml", "rust/foamy-helper/src/**/*.rs"], "rootFiles": {"rust-toolchain.toml": "rust/rust-toolchain.toml"}, "deps": [], "optIn": true}
 }
