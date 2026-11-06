@@ -91,6 +91,13 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- **Security:** `sync.sh` trusted every path in a plugin's `foamy-kit.lock`, so
+  a crafted lock (`../x`, an absolute path, `kit/../../x`) could make a sync,
+  `--force` or not, delete or overwrite a file outside the plugin. Lock paths
+  must now be normalised relative paths under `kit/`, `tests/kit-check.sh` or a
+  component's root file, or sync and check refuse the plugin; sync also refuses
+  any path whose parent directory resolves outside the plugin (a symlinked
+  `tests/`). The generated `tests/kit-check.sh` rejects the same lock paths.
 - `Bounded::run` kept feeding standard input only while stdout or stderr was
   open: a child that closed or redirected its output before reading its input
   got it silently truncated. It now writes all of it (until the child stops

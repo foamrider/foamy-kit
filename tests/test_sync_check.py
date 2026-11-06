@@ -98,6 +98,37 @@ def main():
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,Nope")
     ok &= report("unknown components are rejected", code != 0 and "unknown component" in out)
 
+    # 5b. The lock is plugin content: paths outside what foamy-kit owns are refused
+    # before sync reads, overwrites or deletes anything (traversal via a crafted lock).
+    victim = base / "victim.txt"
+    victim.write_text("keep me\n")
+    lock_path = a / foamykit.LOCK_NAME
+    clean_lock = lock_path.read_text()
+    digest = foamykit.sha256(victim.read_bytes())
+    for bad in ("../victim.txt", str(victim), "kit/../../victim.txt", "manifest.json"):
+        lock_path.write_text(clean_lock + f"{digest}  {bad}\n")
+        code, out = sh(SYNC, str(a))
+        code_f, out_f = sh(SYNC, str(a), "--force")
+        code_c, out_c = sh("bash", str(a / "tests/kit-check.sh"))
+        ok &= report(f"a lock path {bad!r} is refused (sync, --force, kit-check)",
+                     code != 0 and code_f != 0 and "not a path foamy-kit owns" in out + out_f and code_c != 0
+                     and victim.read_text() == "keep me\n" and (a / "manifest.json").exists(),
+                     (out + out_f + out_c).strip()[-300:])
+    lock_path.write_text(clean_lock)
+    template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
+    roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
+    ok &= report("kit-check.sh.in allows every component root file", all(f"$rel != {dest}" in template for dest in roots), f"{roots}")
+    tests_dir = a / "tests"
+    moved = base / "tests-elsewhere"
+    shutil.move(tests_dir, moved)
+    tests_dir.symlink_to(moved)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report("sync refuses a symlinked parent directory (tests/ -> elsewhere)", code != 0 and "outside the plugin" in out, out.strip()[-200:])
+    tests_dir.unlink()
+    shutil.move(moved, tests_dir)
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync works again on the restored plugin", code == 0, out.strip())
+
     # 6. Version drift across plugins fails check.sh.
     if b is not None:
         old_kit = base / "old-kit"

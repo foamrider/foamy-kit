@@ -169,11 +169,28 @@ def qmldir_for(selected, components):
     return ("\n".join(sorted(lines, key=lambda l: l.split()[-1])) + "\n").encode()
 
 
+def lock_path_ok(rel, components=None):
+    """True for a path foamy-kit can own: a normalised relative path under kit/,
+    tests/kit-check.sh, or a component's rootFiles destination. The lock is
+    plugin content, so anything else (`../x`, `/etc/x`, `kit/../x`) is refused
+    before sync reads, overwrites or deletes it."""
+    parts = rel.split("/")
+    if rel.startswith("/") or "\\" in rel or any(part in ("", ".", "..") for part in parts):
+        return False
+    if parts[0] == "kit" and len(parts) > 1:
+        return True
+    if rel == CHECK_NAME:
+        return True
+    components = load_components() if components is None else components
+    return any(rel in spec.get("rootFiles", {}) for spec in components.values())
+
+
 def read_lock(plugin):
     lock = plugin / LOCK_NAME
     if not lock.is_file():
         return None
     info = {"version": None, "components": [], "files": {}}
+    components = load_components()
     for line in lock.read_text().splitlines():
         parts = line.split()
         if len(parts) == 2 and parts[0] == "version":
@@ -181,8 +198,20 @@ def read_lock(plugin):
         elif len(parts) == 2 and parts[0] == "components":
             info["components"] = [c for c in parts[1].split(",") if c]
         elif len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]):
+            if not lock_path_ok(parts[1], components):
+                raise KitError(f"{LOCK_NAME} lists {parts[1]!r}, which is not a path foamy-kit owns "
+                               "(only kit/…, tests/kit-check.sh and component root files); fix or delete the lock")
             info["files"][parts[1]] = parts[0]
     return info
+
+
+def inside(plugin, rel):
+    """True when plugin/rel, with its parent directories' symlinks resolved, stays in plugin."""
+    try:
+        (plugin / rel).parent.resolve().relative_to(plugin.resolve())
+    except ValueError:
+        return False
+    return True
 
 
 # ----------------------------------------------------------------------- sync
@@ -253,6 +282,11 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
     check_path = plugin / CHECK_NAME
     if check_path.exists() or check_path.is_symlink():
         existing.append(CHECK_NAME)
+    # Every path sync may write or delete must stay inside the plugin, even
+    # through a symlinked parent directory (tests/ -> elsewhere).
+    for rel in sorted(owned | set(files)):
+        if not inside(plugin, rel):
+            problems.append(f"{rel} resolves outside the plugin (a parent directory is a symlink)")
     # Components' rootFiles (rust-toolchain.toml), owned now or planned.
     for rel in sorted(rel for rel in owned | set(files) if not rel.startswith("kit/") and rel != CHECK_NAME):
         path = plugin / rel
@@ -337,7 +371,10 @@ def verify_plugin(plugin, native=True):
     """List of integrity problems (empty when intact); `native` also checks
     the native helper binaries against their native.pin."""
     plugin = Path(plugin)
-    lock = read_lock(plugin)
+    try:
+        lock = read_lock(plugin)
+    except KitError as error:
+        return [str(error)]
     if lock is None:
         return [f"no {LOCK_NAME} (run sync.sh)"]
     problems = []

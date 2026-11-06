@@ -18,6 +18,10 @@ declare -A listed=()
 
 while read -r hash rel; do
   [[ $hash =~ ^[0-9a-f]{64}$ ]] || continue
+  if [[ $rel == /* || /$rel/ == */../* || /$rel/ == */./* || $rel == *//* || $rel == *\\* ]] ||
+     [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != rust-toolchain.toml ]]; then
+    fail "foamy-kit.lock lists $rel, which is not a path foamy-kit owns"; continue
+  fi
   listed[$rel]=1
   file="$root/$rel"
   if [[ -L $file || ! -f $file ]]; then fail "$rel is missing or not a regular file"; continue; fi
