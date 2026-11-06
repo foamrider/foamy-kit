@@ -1032,6 +1032,14 @@ def cmd_sync(args):
     return status
 
 
+def cargo_target_dirs(plugin):
+    """Cargo target dirs inside a plugin (`<plugin>/target`,
+    `<plugin>/<crate>/target`), found by cargo's CACHEDIR.TAG."""
+    plugin = Path(plugin)
+    found = [plugin / "target"] + [d / "target" for d in sorted(plugin.iterdir()) if d.is_dir() and not d.name.startswith(".")]
+    return [d.relative_to(plugin).as_posix() for d in found if (d / "CACHEDIR.TAG").is_file()]
+
+
 def cmd_check(args):
     status = 0
     versions = {}
@@ -1053,6 +1061,10 @@ def cmd_check(args):
         findings = [] if args.no_lint else lint_plugin(plugin)
         for problem in problems:
             print(f"{name}: kit: {problem}")
+        if not args.lint_only:
+            for target in cargo_target_dirs(plugin):
+                print(f"{name}: warning: {target}/ is a cargo target dir inside the plugin; remove it and "
+                      f"export CARGO_TARGET_DIR=~/.cache/foamy-native/{name} before any cargo command")
         failing = [f for f in findings if not args.warn_pua or f[2] not in WARNINGS]
         for rel, line, rule, excerpt in findings:
             level = "warning: " if rule in WARNINGS and args.warn_pua else ""

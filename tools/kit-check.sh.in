@@ -112,6 +112,13 @@ for pin in "${pins[@]}"; do
   native_bins+=("$binary")
 done
 
+# A cargo target dir inside the plugin (cargo run without CARGO_TARGET_DIR)
+# is only a warning: the shell watches plugin folders, so remove it.
+while IFS= read -r -d '' tag; do
+  dir=${tag%/CACHEDIR.TAG}
+  echo "kit-check: warning: ${dir#"$root"/}/ is a cargo target dir inside the plugin; remove it and export CARGO_TARGET_DIR=~/.cache/foamy-native/<plugin> before any cargo command" >&2
+done < <(find "$root" -mindepth 2 -maxdepth 3 -path '*/target/CACHEDIR.TAG' -type f ! -path "$root/.*" -print0 2>/dev/null)
+
 if (( failures > 0 )); then
   echo "kit-check: $failures problem(s); run foamy-kit sync.sh to restore the kit files" >&2
   exit 1

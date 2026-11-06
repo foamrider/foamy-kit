@@ -181,6 +181,10 @@ def helper_tests(plugin, arch, base):
     ok &= report(f"a panic still prints JSON and exits 101, without abort {tag}",
                  code == 101 and replies == [{"ok": False, "code": "INTERNAL", "error": "internal error"}]
                  and "panicked on purpose" in out, out.strip())
+    raw = subprocess.run([bytes(binary), b"args", b"caf\xe9"], capture_output=True, timeout=60)
+    ok &= report(f"a non-UTF-8 argument is an INVALID_ARGUMENT reply, not a panic {tag}",
+                 raw.returncode == 2 and json.loads(raw.stdout)["code"] == "INVALID_ARGUMENT" and b"panicked" not in raw.stderr,
+                 (raw.stdout + raw.stderr).decode(errors="replace").strip())
     return ok
 
 
@@ -255,6 +259,12 @@ def tamper_tests(plugin, base):
     (plugin / "native/target/junk").write_text("x")
     code, out = kit_check(plugin)
     ok &= report("native/target/ is not part of the source hash", code == 0, out.strip())
+    (plugin / "native/target/CACHEDIR.TAG").write_text("Signature: 8a477f597d28d172789f06886806bc55\n")
+    code, out = kit_check(plugin)
+    code2, out2 = sh(CHECK, "--no-lint", plugin)
+    ok &= report("a cargo target dir inside the plugin is a warning in kit-check and check.sh, not a failure",
+                 code == 0 and "native/target/ is a cargo target dir" in out and code2 == 0
+                 and "native/target/ is a cargo target dir" in out2, (out + out2).strip())
     shutil.rmtree(plugin / "native/target")
     old_kit = base / "next-kit"
     shutil.copytree(KIT_ROOT, old_kit, ignore=shutil.ignore_patterns(".git", "tests", "preview"))

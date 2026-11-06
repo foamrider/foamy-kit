@@ -102,6 +102,10 @@ pub fn parse<T: DeserializeOwned>(line: &[u8]) -> Result<T, Failure> {
 /// malformed line reaches `handle` as an `INVALID_REQUEST` failure and the
 /// loop goes on with the next line. Blank lines are skipped. Read errors
 /// other than those, and write errors, end the loop with the error.
+///
+/// A panic in `handle` exits the process with 101 (see
+/// [`crate::process::exit_on_panic`], installed here) and writes nothing
+/// more, so the peer sees the stream end rather than a torn reply.
 pub fn serve<R, W, T, S, F>(
     input: R,
     mut output: W,
@@ -115,6 +119,10 @@ where
     S: Serialize,
     F: FnMut(Result<T, Failure>) -> Option<S>,
 {
+    // Not under the crate's own unit tests: a failing assertion elsewhere
+    // in the test binary must stay a failed test, not an exit.
+    #[cfg(not(test))]
+    crate::process::exit_on_panic(101);
     let mut lines = LineReader::new(input, max_line);
     loop {
         let request = match lines.read_line() {
@@ -176,12 +184,9 @@ where
 {
     let render = Arc::new(render);
     let on_panic = Arc::clone(&render);
-    let previous = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        previous(info);
+    crate::process::exit_on_panic_after(101, move || {
         let _ = print_line(&on_panic(&Failure::coded("INTERNAL", "internal error")));
-        std::process::exit(101);
-    }));
+    });
     let (reply, exit) = reply_for(main(), &*render);
     match print_line(&reply) {
         Ok(()) => ExitCode::from(exit),

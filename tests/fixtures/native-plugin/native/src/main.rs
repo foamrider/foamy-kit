@@ -16,10 +16,14 @@
 //! - `run <timeout-ms> <max-output> <program> <arg>…` → runs `<program>`
 //!   with `PATH` only, bounded; `{"ok":…,"code":…,"stdout":…,"timed_out":…,"overflowed":…}`
 //! - `fail` → `DEMO_FAILURE`, exit 3; `panic` → an `INTERNAL` reply, exit 101
+//! - non-UTF-8 arguments → `INVALID_ARGUMENT`, exit 2
 //! - anything else → `INVALID_ARGUMENT`, exit 2
 //!
 //! Failures print `{"ok":false,"code":…,"error":…}` (exit 1 unless noted).
+//! `main` installs the panic-exit hook first and reads argv (`args_os`)
+//! only inside `json::run`, so nothing can panic before the hook.
 
+use std::ffi::OsStr;
 use std::io::{self, BufReader};
 use std::path::Path;
 use std::process::ExitCode;
@@ -27,7 +31,7 @@ use std::thread;
 use std::time::Duration;
 
 use foamy_helper::child::Bounded;
-use foamy_helper::{Failure, fs, io as bounded, json, lock};
+use foamy_helper::{Failure, fs, io as bounded, json, lock, process};
 use serde_json::{Value, json};
 
 const MAX_INPUT: u64 = 64 * 1024;
@@ -59,6 +63,16 @@ fn serve() -> Result<Value, Failure> {
         },
     )?;
     Ok(Value::Null)
+}
+
+fn args() -> Result<Vec<String>, Failure> {
+    std::env::args_os()
+        .map(|arg| {
+            arg.into_string().map_err(|_| {
+                Failure::coded("INVALID_ARGUMENT", "arguments must be UTF-8").with_exit_code(2)
+            })
+        })
+        .collect()
 }
 
 fn main_json(args: &[String]) -> Result<Value, Failure> {
@@ -127,17 +141,24 @@ fn main_json(args: &[String]) -> Result<Value, Failure> {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) == Some("serve") {
-        return match serve() {
+    // First, before anything can panic: a panic exits 101 instead of
+    // aborting (json::run and json::serve also install it).
+    process::exit_on_panic(101);
+    // Never std::env::args() out here: it panics on a non-UTF-8 argument.
+    match std::env::args_os()
+        .nth(1)
+        .as_deref()
+        .and_then(OsStr::to_str)
+    {
+        Some("serve") => match serve() {
             Ok(_) => ExitCode::SUCCESS,
             Err(failure) => {
                 let _ = json::print_line(&json::error_reply(&failure));
                 ExitCode::FAILURE
             }
-        };
+        },
+        _ => json::run(|| main_json(&args()?), json::error_reply),
     }
-    json::run(|| main_json(&args), json::error_reply)
 }
 
 #[cfg(test)]

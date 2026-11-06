@@ -1,12 +1,46 @@
-//! This process: dying with the parent, a new session, resource limits and
-//! the umask. Child processes get the same through [`crate::child::Bounded`].
+//! This process: exiting on a panic, dying with the parent, a new session,
+//! resource limits and the umask. Child processes get the same through
+//! [`crate::child::Bounded`].
 
 use std::io;
+use std::panic::{self, PanicHookInfo};
+use std::sync::OnceLock;
 
 pub use rustix::process::Resource;
 use rustix::process::{
     Rlimit, Signal, getppid, getrlimit, set_parent_process_death_signal, setrlimit, setsid,
 };
+
+type Hook = Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static>;
+
+/// The hook that was installed before the kit's first one (normally std's
+/// default, which reports the panic on standard error).
+static REPORT: OnceLock<Hook> = OnceLock::new();
+
+/// Installs the kit's panic hook: report the panic as before (std's message
+/// on standard error, nothing on standard output), run `after`, then exit
+/// with `code`. Replaces an earlier kit hook instead of chaining it, so
+/// [`crate::json::run`] after [`exit_on_panic`] still prints its reply.
+pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 'static) {
+    let report = REPORT.get_or_init(panic::take_hook);
+    panic::set_hook(Box::new(move |info| {
+        report(info);
+        after();
+        std::process::exit(code);
+    }));
+}
+
+/// Makes a panic exit the process with `code` (the kit uses 101) instead of
+/// aborting: the kit's release profile has `panic = "abort"`, which ends in
+/// `SIGABRT` and a core dump. The panic message still goes to standard
+/// error; standard output gets nothing, so a JSON-lines peer never sees a
+/// torn reply. [`crate::json::run`] and [`crate::json::serve`] install it
+/// themselves; **every helper that runs its own loop or protocol calls it
+/// first thing in `main`**, before parsing arguments (read them with
+/// `std::env::args_os()` afterwards: `std::env::args()` panics on non-UTF-8).
+pub fn exit_on_panic(code: i32) {
+    exit_on_panic_after(code, || {});
+}
 
 /// `PR_SET_PDEATHSIG(SIGKILL)`: the kernel kills this process when its
 /// parent (the thread that started it) exits, so a helper never outlives
