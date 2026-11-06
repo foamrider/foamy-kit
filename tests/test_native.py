@@ -185,6 +185,73 @@ def helper_tests(plugin, arch, base):
     ok &= report(f"a non-UTF-8 argument is an INVALID_ARGUMENT reply, not a panic {tag}",
                  raw.returncode == 2 and json.loads(raw.stdout)["code"] == "INVALID_ARGUMENT" and b"panicked" not in raw.stderr,
                  (raw.stdout + raw.stderr).decode(errors="replace").strip())
+    ok &= favicon_tests(binary, tag, base / f"favicon-{arch}")
+    ok &= sandbox_tests(binary, arch, tag)
+    return ok
+
+
+def png(size, length):
+    data = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR" + size.to_bytes(4, "big") * 2 + bytes([8, 6, 0, 0, 0, 0, 0, 0, 0])
+    return data + b"B" * max(0, length - len(data))
+
+
+def favicon_tests(binary, tag, root):
+    """foamy_helper::favicon::run, browser-favicon.py's contract (feature `favicon`)."""
+    import sqlite3
+    ok = True
+    profile = root / "config/vivaldi/Profile 1"
+    profile.mkdir(parents=True)
+    icon = png(32, 5000)
+    with sqlite3.connect(profile / "Favicons") as db:
+        db.executescript("CREATE TABLE icon_mapping (page_url TEXT, icon_id INTEGER); "
+                         "CREATE TABLE favicon_bitmaps (icon_id INTEGER, image_data BLOB, width INTEGER, height INTEGER, last_updated INTEGER);")
+        db.execute("INSERT INTO icon_mapping VALUES ('https://teams.microsoft.com/chat', 1)")
+        db.execute("INSERT INTO favicon_bitmaps VALUES (1, ?, 32, 32, 100)", (icon,))
+    db.close()
+    env = dict(os.environ, XDG_CONFIG_HOME=str(root / "config"), XDG_CACHE_HOME=str(root / "cache"))
+
+    def ask(request):
+        result = subprocess.run([str(binary), "favicon"], input=json.dumps(request), capture_output=True, text=True,
+                                env=env, timeout=60)
+        return result.returncode, result.stdout, result.stderr
+
+    code, out, err = ask({"browser": "vivaldi", "hostname": "teams.microsoft.com"})
+    reply = json.loads(out) if code == 0 else {}
+    path = Path(reply.get("source", "").removeprefix("file://"))
+    ok &= report(f"favicon: found in a local cache, copied 0600, the Python reply format {tag}",
+                 code == 0 and reply.get("status") == "found" and path.read_bytes() == icon
+                 and (path.stat().st_mode & 0o777) == 0o600 and out.startswith('{"source": "file://'), out + err)
+    code, out, _ = ask({"browser": "vivaldi", "hostname": "teams.microsoft.com"})
+    ok &= report(f"favicon: reused from the cache {tag}", code == 0 and json.loads(out)["status"] == "cached", out)
+    code, out, _ = ask({"browser": "firefox", "hostname": "example.com"})
+    code2, out2, err2 = ask({"browser": "vivaldi", "hostname": "example.com:443"})
+    ok &= report(f"favicon: unsupported browser; an invalid host is an error, exit 1 {tag}",
+                 code == 0 and out == '{"source": "", "status": "unsupported-browser"}\n' and code2 == 1
+                 and out2 == '{"source": "", "status": "error"}\n' and "Favicon lookup failed" in err2, out + out2 + err2)
+    return ok
+
+
+def sandbox_tests(binary, arch, tag):
+    """foamy_helper::sandbox (feature `sandbox`). qemu-user has neither
+    seccomp nor Landlock, so on aarch64 the helper must report UNSUPPORTED
+    instead of running unrestricted."""
+    ok = True
+    _, replies, out = run_helper(binary, "seccomp", "/bin/sh", "-c", "/usr/bin/true && echo spawned; exit 0")
+    _, replies2, out2 = run_helper(binary, "exec-only", os.path.realpath("/bin/sh"), "-c", "exec /usr/bin/true")
+    if arch == "x86_64":
+        ok &= report(f"seccomp: the decoder filter denies new processes {tag}",
+                     replies and "not permitted" in replies[0].get("stderr", ""), out.strip())
+        ok &= report(f"Landlock: only the program itself may execute {tag}",
+                     replies2 and replies2[0].get("code") == 126, out2.strip())
+    else:
+        ok &= report(f"seccomp and Landlock fail closed where unsupported {tag}",
+                     replies and replies[0].get("code") in ("UNSUPPORTED", "ERROR") and replies2
+                     and replies2[0].get("code") in ("UNSUPPORTED", "ERROR"), (out + out2).strip())
+    _, replies, out = run_helper(binary, "bwrap-argv")
+    ok &= report(f"bwrap argv: github_status's namespace {tag}",
+                 replies and replies[0]["argv"] == ["/usr/bin/bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--unshare-pid",
+                                                    "--proc", "/proc", "--unshare-ipc", "--unshare-uts", "--die-with-parent",
+                                                    "--", "git", "status"], out.strip())
     return ok
 
 
@@ -286,11 +353,16 @@ def rust_tests(base):
     env = {"FOAMY_NATIVE_CACHE": str(cache)}
     crate_env = dict(env, CARGO_TARGET_DIR=str(cache / "foamy-kit"), RUSTUP_TOOLCHAIN=CHANNEL)
     crate = KIT_ROOT / "kit/rust/foamy-helper"
-    for step in (["cargo", "fmt", "--check"], ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
-                 ["cargo", "test", "--locked"]):
+    for step in (["cargo", "fmt", "--check"],
+                 ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
+                 ["cargo", "clippy", "--locked", "--all-targets", "--features", "favicon", "--", "-D", "warnings"],
+                 ["cargo", "clippy", "--locked", "--all-targets", "--features", "sandbox", "--", "-D", "warnings"],
+                 ["cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"],
+                 ["cargo", "test", "--locked", "--all-features"]):
         code, out = sh(*step, env=crate_env, cwd=crate)
         tail = [line for line in out.splitlines() if "test result" in line or "error" in line.lower()][:4]
-        ok &= report(f"foamy-helper: {' '.join(step[:2])}", code == 0, "; ".join(tail) if tail else "")
+        features = next((s for s in step if s in ("favicon", "sandbox", "--all-features")), "default features")
+        ok &= report(f"foamy-helper: {' '.join(step[:2])} ({features})", code == 0, "; ".join(tail) if tail else "")
     ok &= report("the kit's cargo commands write nothing into kit/", not (crate / "target").exists())
 
     plugin = fresh(base, "foamy-native-demo")

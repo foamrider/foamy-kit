@@ -21,16 +21,26 @@
 //! - [`lock`]: `flock` locks, including under `$XDG_RUNTIME_DIR/<plugin>`.
 //! - [`child`]: bounded child processes (deadline, output cap, kill on
 //!   timeout, environment control, death with the parent).
-//! - [`process`]: this process: `PR_SET_PDEATHSIG`, `setsid`, rlimits, umask.
+//! - [`process`]: this process: exit on panic, `PR_SET_PDEATHSIG`,
+//!   `setsid`, rlimits, umask.
 //!
-//! Modules with heavier dependencies (sandboxing, favicon lookup) are added
-//! behind cargo features, so a plugin compiles only what it enables.
+//! Modules with heavier dependencies are behind cargo features, so a plugin
+//! compiles only what it enables:
+//!
+//! - `favicon`: [`favicon`], website icons from local Chromium caches
+//!   (no web requests; a built-in read-only SQLite reader).
+//! - `sandbox`: [`sandbox`], seccomp-BPF filters, a Landlock exec
+//!   restriction for child processes and bubblewrap command lines.
 
 pub mod child;
+#[cfg(feature = "favicon")]
+pub mod favicon;
 pub mod fs;
 pub mod io;
 pub mod json;
 pub mod lock;
 pub mod process;
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
 
 pub use json::Failure;

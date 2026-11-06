@@ -20,7 +20,7 @@
 
 use std::ffi::OsStr;
 use std::io::{self, ErrorKind, Read, Write};
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
@@ -61,6 +61,18 @@ impl Output {
     }
 }
 
+/// A step run in the child between `fork` and `exec`, after the kit's own
+/// setup. It must be async-signal-safe: system calls only, no allocation.
+pub(crate) type Hook = Box<dyn Fn() -> io::Result<()> + Send + Sync>;
+
+struct Hooks(Vec<Hook>);
+
+impl std::fmt::Debug for Hooks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} pre-exec hook(s)", self.0.len())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Group {
     /// `setpgid(0, 0)`: its own process group, killed as a whole.
@@ -83,6 +95,8 @@ pub struct Bounded {
     die_with_parent: bool,
     group: Group,
     limits: Vec<(Resource, u64)>,
+    inherit: Vec<RawFd>,
+    hooks: Hooks,
 }
 
 impl Bounded {
@@ -96,6 +110,8 @@ impl Bounded {
             die_with_parent: true,
             group: Group::Own,
             limits: Vec::new(),
+            inherit: Vec::new(),
+            hooks: Hooks(Vec::new()),
         }
     }
 
@@ -188,6 +204,26 @@ impl Bounded {
         self
     }
 
+    /// Lets the child inherit `fd` under the same number (clears its
+    /// close-on-exec flag in the child only), like Python's `pass_fds`. The
+    /// fd must stay open until [`run`](Self::run).
+    pub fn inherit_fd(self, fd: impl AsFd) -> Bounded {
+        self.inherit_raw_fd(fd.as_fd().as_raw_fd())
+    }
+
+    pub(crate) fn inherit_raw_fd(mut self, fd: RawFd) -> Bounded {
+        self.inherit.push(fd);
+        self
+    }
+
+    /// Adds a step to run in the child just before `exec`, after the
+    /// session, death signal, rlimits and inherited fds.
+    #[cfg_attr(not(feature = "sandbox"), allow(dead_code))]
+    pub(crate) fn pre_exec_hook(mut self, hook: Hook) -> Bounded {
+        self.hooks.0.push(hook);
+        self
+    }
+
     /// Runs the child to completion within the bounds. `Err` only when it
     /// could not be started or waited for; a timeout or an overflow is an
     /// [`Output`] with `timed_out` or `overflowed` set.
@@ -200,6 +236,8 @@ impl Bounded {
             die_with_parent,
             group,
             limits,
+            inherit,
+            hooks,
         } = self;
         command
             .stdin(if stdin.is_some() {
@@ -216,11 +254,23 @@ impl Bounded {
         let parent = die_with_parent.then(getpid);
         // SAFETY: the closure runs in the forked child before exec. It only
         // makes system calls through rustix (setsid, prctl, getppid,
-        // getrlimit, setrlimit) and builds io::Errors from raw OS codes, so
-        // it neither allocates nor takes locks; `limits` is moved in and
-        // only read.
+        // getrlimit, setrlimit, fcntl) and builds io::Errors from raw OS
+        // codes, so it neither allocates nor takes locks; `limits` and
+        // `inherit` are moved in and only read. The hooks are the crate's
+        // own (sandbox), which hold to the same rule.
         unsafe {
-            command.pre_exec(move || crate::process::child_setup(session, parent, &limits));
+            command.pre_exec(move || {
+                crate::process::child_setup(session, parent, &limits)?;
+                for &fd in &inherit {
+                    // SAFETY: only fcntl on the number; a closed fd is EBADF.
+                    let fd = BorrowedFd::borrow_raw(fd);
+                    rustix::io::fcntl_setfd(fd, rustix::io::FdFlags::empty())?;
+                }
+                for hook in &hooks.0 {
+                    hook()?;
+                }
+                Ok(())
+            });
         }
         let started = Instant::now();
         let mut child = command.spawn()?;
@@ -545,6 +595,21 @@ mod tests {
         let output = sh("ulimit -n").rlimit(Resource::Nofile, 32).run().unwrap();
         assert_eq!(output.stdout_lossy().trim(), "32");
         assert!(Bounded::new("/nonexistent/foamy").run().is_err());
+    }
+
+    #[test]
+    fn inherited_fds_reach_the_child_under_their_number() {
+        let (read, mut write) = io::pipe().unwrap();
+        write.write_all(b"through fd").unwrap();
+        drop(write);
+        let script = format!("cat <&{}", read.as_raw_fd());
+        let output = sh(&script).inherit_fd(&read).run().unwrap();
+        assert_eq!(output.stdout, b"through fd");
+        let closed = sh(&script).run().unwrap();
+        assert!(
+            !closed.success(),
+            "without inherit_fd the fd stays close-on-exec"
+        );
     }
 
     #[test]

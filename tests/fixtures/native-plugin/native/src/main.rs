@@ -16,6 +16,13 @@
 //! - `run <timeout-ms> <max-output> <program> <arg>…` → runs `<program>`
 //!   with `PATH` only, bounded; `{"ok":…,"code":…,"stdout":…,"timed_out":…,"overflowed":…}`
 //! - `fail` → `DEMO_FAILURE`, exit 3; `panic` → an `INTERNAL` reply, exit 101
+//! - `favicon` → `foamy_helper::favicon::run()`: browser-favicon.py's
+//!   contract (a request object on stdin, `{"source": …, "status": …}`)
+//! - `seccomp <program> <arg>…` → runs `<program>` under the image decoder's
+//!   seccomp filter; `exec-only <program> <arg>…` → runs it with Landlock
+//!   allowing only `<program>` (and its interpreter) to execute; both reply
+//!   `{"ok":…,"code":…,"stderr":…}`, `UNSUPPORTED` without the kernel feature
+//! - `bwrap-argv` → `{"ok":true,"argv":[…]}`, github_status's namespace
 //! - non-UTF-8 arguments → `INVALID_ARGUMENT`, exit 2
 //! - anything else → `INVALID_ARGUMENT`, exit 2
 //!
@@ -25,12 +32,13 @@
 
 use std::ffi::OsStr;
 use std::io::{self, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use foamy_helper::child::Bounded;
+use foamy_helper::child::{Bounded, Output};
+use foamy_helper::sandbox::{BpfFilter, Bwrap, ExecOnly};
 use foamy_helper::{Failure, fs, io as bounded, json, lock, process};
 use serde_json::{Value, json};
 
@@ -73,6 +81,24 @@ fn args() -> Result<Vec<String>, Failure> {
             })
         })
         .collect()
+}
+
+/// The kernel (or qemu-user, for the aarch64 binary in tests) lacks the
+/// feature: `Unsupported` from the kit, `ENOSYS` from the child's setup.
+fn unsupported(error: io::Error) -> Failure {
+    if error.kind() == io::ErrorKind::Unsupported || error.raw_os_error() == Some(38) {
+        Failure::coded("UNSUPPORTED", error.to_string())
+    } else {
+        error.into()
+    }
+}
+
+fn sandboxed(output: Output) -> Value {
+    json!({
+        "ok": output.success(),
+        "code": output.status.code(),
+        "stderr": String::from_utf8_lossy(&output.stderr),
+    })
 }
 
 fn main_json(args: &[String]) -> Result<Value, Failure> {
@@ -130,6 +156,35 @@ fn main_json(args: &[String]) -> Result<Value, Failure> {
                 "overflowed": output.overflowed,
             }))
         }
+        Some("seccomp") if rest.len() >= 2 => {
+            let filter = BpfFilter::decoder().map_err(unsupported)?;
+            let output = Bounded::new(&rest[1])
+                .args(&rest[2..])
+                .env("LC_ALL", "C")
+                .seccomp(&filter)
+                .run()
+                .map_err(unsupported)?;
+            Ok(sandboxed(output))
+        }
+        Some("exec-only") if rest.len() >= 2 => {
+            let program = PathBuf::from(&rest[1]);
+            let only = ExecOnly::for_program(&program).map_err(unsupported)?;
+            let output = Bounded::new(&program)
+                .args(&rest[2..])
+                .env("LC_ALL", "C")
+                .exec_only(&only)
+                .run()
+                .map_err(unsupported)?;
+            Ok(sandboxed(output))
+        }
+        Some("bwrap-argv") => {
+            let argv = Bwrap::new("/usr/bin/bwrap")
+                .readonly_host()
+                .end_of_options()
+                .argv(["git", "status"]);
+            let argv: Vec<_> = argv.iter().map(|arg| arg.to_string_lossy()).collect();
+            Ok(json!({"ok": true, "argv": argv}))
+        }
         Some("fail") => Err(Failure::coded("DEMO_FAILURE", "failed on purpose").with_exit_code(3)),
         Some("panic") => panic!("panicked on purpose"),
         _ => Err(Failure::coded(
@@ -157,6 +212,7 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("favicon") => foamy_helper::favicon::run(),
         _ => json::run(|| main_json(&args()?), json::error_reply),
     }
 }
