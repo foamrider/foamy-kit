@@ -223,6 +223,13 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Letter shortcuts**: `onTextKey: function(text, modifiers)` and skip unless
   `cursor.plain(modifiers)` (`modifiers` is undefined on 4.0, which has
   `textKey(text)`). Tests emit with `cursor.emitTextKey(catcher, text)`.
+- **Native helpers**: a helper process is the plugin's bundled binary,
+  launched with `FoamyNative.command(pluginDir, name, args)` (never a
+  hand-built path, never `python3`). When `FoamyNative.unavailable(exitCode)`
+  (126/127: no binary for this CPU) the view says "This plugin's helper isn't
+  available for this CPU." in the plugin's language, keeps whatever works
+  without it, and does not retry in a loop. Helpers answer in JSON, also on
+  failure. Layout, build and checks: README.md, "Native helpers".
 - **Effects**: MultiEffect, ShaderEffect and layer effects draw nothing under
   the software renderer (Omarchy CPU rendering, the preview harness). Gate them
   with `layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software` and keep the

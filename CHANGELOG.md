@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.5.0 — 2026-11-06
+
+Native helpers: plugins replace their Python and Bash helpers with one Rust
+binary each, committed as static musl executables for x86_64 and aarch64, so
+an install stays a plain checkout and needs no Rust. README.md "Native
+helpers" is the recipe.
+
+### Added
+- **`FoamyNative`** (opt-in: `sync.sh <plugin> --add FoamyNative`):
+  `FoamyNative.js` (`command(pluginDir, name, args)` builds
+  `bash -c 'exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"'`, so a missing binary or an
+  unsupported CPU is a normal exit 127/126 instead of a Process without an exit;
+  `unavailable(exitCode)`, `localPath(url)`, `UNAVAILABLE_TEXT`), the shared
+  crate `kit/rust/foamy-helper`, the release profile `kit/rust/release.toml`
+  and `rust-toolchain.toml` (1.99.1, both musl targets) at the plugin root.
+- **`foamy-helper`** 0.1.0 (rustix, serde, serde_json): bounded reads and a
+  line reader with a maximum line length (`io`); JSON-lines helpers, a serve
+  loop and `json::run`, which prints one JSON reply for every outcome and turns
+  a panic into a JSON reply and exit 101 instead of an abort (`json`); atomic
+  writes with owner, type and mode checks, private directories, bounded file
+  reads without symlinks or special files (`fs`); `flock` locks and
+  `$XDG_RUNTIME_DIR/<plugin>` (`lock`); bounded child processes with a
+  deadline, an output cap, a process-group kill, environment control, rlimits,
+  sessions and `PR_SET_PDEATHSIG` (`child`); `PR_SET_PDEATHSIG`, `setsid`,
+  rlimits and umask for the helper itself (`process`). 35 unit tests.
+- **`tools/build-native.sh <plugin> [--verify | --test] [--crate DIR] [--bin NAME]`**:
+  both arches with `--locked --release`, the pinned toolchain, `rust-lld`
+  self-contained, `--build-id=none` and path remapping, cargo output in
+  `~/.cache/foamy-native/foamy-<x>` (`FOAMY_NATIVE_CACHE`), never in the plugin;
+  atomic installs into `bin/<arch>/`; `<crate>/native.pin` with toolchain, kit
+  version, source hash and per-arch sha256. `--verify` rebuilds in a fresh
+  target dir and compares bytes; `--test` runs fmt, clippy `-D warnings` and tests.
+  Defaults: crate `native/`, binary `foamy-<x>-helper` (manifest id `foamy.<x>`);
+  another layout is remembered in its `native.pin`.
+- `check.sh` and the generated `tests/kit-check.sh` verify native binaries
+  against `native.pin` (regular file, executable, checksum, static ELF of the
+  right arch) and report them stale when the crate, `kit/rust`, the root
+  `Cargo.toml`/`Cargo.lock` or `rust-toolchain.toml` changed; a synced
+  FoamyNative without a pin fails.
+- Sync: components may have files in subdirectories of `kit/` (glob patterns)
+  and at the plugin root (`rootFiles`); `optIn` components stay out of a first
+  sync; emptied directories are removed when a component is dropped.
+- Tests: `native.test.cjs`, `test_native.py` with the fixture plugin
+  `tests/fixtures/native-plugin` (built for both arches, byte-identical on a
+  clean rebuild and from another checkout path, run on aarch64 through qemu),
+  `tests/qml/Native.qml` (FoamyNative.command in Quickshell's Process).
+
+### Changed
+- Stamps: `.toml` files use `#`; Rust and TOML files carry the stamp on line 1
+  always (a `#![…]` attribute is not a shebang), so version changes never
+  shift line numbers that panic locations embed.
+
+### Decisions
+- The plugin root is the Cargo workspace root (a plugin-owned four-line
+  `Cargo.toml`, `Cargo.lock` next to it): cargo hashes a path dependency
+  outside the workspace by its absolute path, so with the workspace at
+  `native/` a worktree and the live checkout built different x86_64 binaries.
+- The release profile is passed with `--config kit/rust/release.toml` (it ranks
+  above the manifests) instead of a stamped `.cargo/config.toml`, and plugin
+  manifests may not declare `[profile]`, so committed binaries depend only on
+  the sources, the vendored kit and the toolchain.
+- `rust-toolchain.toml` goes to the plugin root, not the crate dir: rustup
+  looks upwards from the working directory, so one file covers any crate dir.
+
 ## 0.4.7 — 2026-11-05
 
 ### Changed

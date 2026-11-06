@@ -2,8 +2,9 @@
 
 The canonical source of the components every foamy Omarchy shell plugin shares
 (`foamy-audio`, `foamy-bolt`, … `foamy-weather`), plus the tools that keep
-them identical: `sync.sh`, `check.sh`, a design lint, and an offscreen preview
-harness for screenshots. The look and the rules live in [DESIGN.md](DESIGN.md).
+them identical: `sync.sh`, `check.sh`, a design lint, an offscreen preview
+harness for screenshots, and `tools/build-native.sh` for plugins' bundled
+Rust helpers ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
 
 Plugins can't share files at runtime (each is a self-contained directory and
 `omarchy-plugin-validate` rejects symlinks), so the kit is **copied** into
@@ -39,6 +40,7 @@ edited in a plugin: change it here, then sync.
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
+| FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
 
@@ -57,6 +59,15 @@ singletons, license notices), `tests/kit-check.sh`, and `foamy-kit.lock`
 `pragma`, `.pragma` or a shebang) is
 
     // foamy-kit 0.1.0 <sha256 of the body> — do not edit; change foamy-kit and run sync
+
+`.sh`, `.toml` and `qmldir` use `#`. Rust and TOML files always carry the stamp
+on line 1 (a Rust `#![…]` attribute is not a shebang), and it is always one
+line, so a kit version change never shifts a line number (Rust panic locations
+embed them). A component's files may live in subdirectories of `kit/` (glob
+patterns such as `rust/foamy-helper/src/**/*.rs` in `kit/components.json`) and
+may place files at the plugin root (`rootFiles`, e.g. `rust-toolchain.toml`);
+those are stamped, locked and checked like the rest. `optIn` components
+(FoamyNative) are left out of a first sync without `--components`.
 
 Sync is idempotent, refuses to overwrite a stamped file that was edited in the
 plugin (`--force` discards the edit), refuses unknown files or symlinks in
@@ -80,6 +91,177 @@ every stamped file, so a local edit fails the plugin's own test run.
 Fails when plugins are on different kit versions, a stamped file was edited,
 or the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
+
+## Native helpers
+
+A plugin that needs more than QML (atomic state files, locks, child processes
+with bounds, protocol parsing) ships **one Rust multi-call binary**,
+`foamy-<plugin>-helper <subcommand> …`, committed as static musl executables
+for x86_64 and aarch64. Users install the plugin as a plain checkout and need
+no Rust; other CPUs get a clear "unavailable" state. The `FoamyNative`
+component brings everything the build needs; `tools/build-native.sh` builds
+reproducibly and `check.sh` / `tests/kit-check.sh` verify the result.
+
+### Layout in a plugin
+
+```
+Cargo.toml                  plugin-owned: the Cargo workspace (exact content below)
+Cargo.lock                  committed; every build uses --locked
+rust-toolchain.toml         kit (FoamyNative): toolchain 1.99.1, both musl targets, clippy, rustfmt
+native/Cargo.toml           package foamy-<plugin>-helper (template below)
+native/src/main.rs          the helper; its contract is the doc comment at the top
+native/native.pin           written by tools/build-native.sh; never edit
+bin/x86_64/foamy-<plugin>-helper    built, mode 0755, static-pie ELF
+bin/aarch64/foamy-<plugin>-helper   built, mode 0755, static ELF
+kit/FoamyNative.js          kit: command builder for QML
+kit/node-loader.cjs         kit: loads FoamyNative.js in node tests
+kit/rust/release.toml       kit: the release profile (passed to cargo with --config)
+kit/rust/foamy-helper/…     kit: the shared crate, a path dependency
+```
+
+`Cargo.toml` at the plugin root, exactly (with `members = ["search"]` for a
+crate in `search/`):
+
+```toml
+[workspace]
+members = ["native"]
+exclude = ["kit"]
+resolver = "3"
+```
+
+The plugin root is the workspace root so that cargo identifies the vendored
+`kit/rust/foamy-helper` by its path relative to the plugin, not its absolute
+path; without it a worktree and the live checkout build different bytes.
+`exclude = ["kit"]` keeps workspace-wide cargo commands off the kit's code.
+
+`native/Cargo.toml`:
+
+```toml
+[package]
+name = "foamy-<plugin>-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+foamy-helper = { path = "../kit/rust/foamy-helper" }
+serde_json = "1"     # only what the helper needs; justify each one in the PR
+```
+
+No `[profile]` (in either manifest) and no `[workspace]` in the crate:
+`build-native.sh` refuses them. The release profile is `kit/rust/release.toml`
+(opt-level "s", lto "fat", codegen-units 1, panic "abort", strip "symbols"),
+which cargo ranks above the manifests. There is no `.cargo/config.toml`;
+linker and flags come from the build tool. `rust-toolchain.toml` sits at the
+plugin root because rustup reads it from the working directory upwards, so
+`cargo` anywhere in the plugin uses 1.99.1.
+
+The binary name defaults to `foamy-<x>-helper` for manifest id `foamy.<x>`
+and the crate dir to `native/`. Another layout (foamy-menu: `search/`,
+`foamy-menu-search`) is given once, `--crate search --bin foamy-menu-search`,
+and `<crate>/native.pin` remembers it.
+
+### Recipe
+
+From the plugin's worktree, with `KIT` the foamy-kit checkout:
+
+```bash
+$KIT/sync.sh . --add FoamyNative          # kit/FoamyNative.js, kit/rust/…, rust-toolchain.toml, tests/kit-check.sh
+# write Cargo.toml (workspace), native/Cargo.toml, native/src/main.rs
+(cd native && cargo generate-lockfile)    # writes ./Cargo.lock (only that file)
+$KIT/tools/build-native.sh . --test       # cargo fmt --check, clippy --all-targets -D warnings, cargo test
+$KIT/tools/build-native.sh .              # builds both arches, installs bin/<arch>/…, writes native/native.pin
+$KIT/tools/build-native.sh . --verify     # clean rebuild in a fresh target dir, byte compare with bin/
+bash tests/kit-check.sh                   # kit stamps + native pin, checksums, static ELF, staleness
+$KIT/check.sh .                           # the same from the kit, plus the design lint
+```
+
+Commit `Cargo.toml`, `Cargo.lock`, `native/`, `bin/x86_64/…`, `bin/aarch64/…`
+and the synced kit files together. After changing dependencies run
+`cargo update -p <crate>` (or `cargo generate-lockfile`) in `native/`; after a
+kit sync that changed `foamy-helper`'s dependencies, `cargo update -p
+foamy-helper`. Never run cargo in `kit/rust/`, and never point
+`CARGO_TARGET_DIR` into the plugin.
+
+`build-native.sh` (`tools/foamykit.py native`):
+
+- refuses to build when the kit files are edited or FoamyNative isn't synced,
+  when the root workspace, `Cargo.lock` or the crate is missing, or a manifest
+  declares `[profile]`;
+- runs `cargo build --locked --release --target <x86_64|aarch64>-unknown-linux-musl
+  --bin <binary> --config kit/rust/release.toml` with `RUSTUP_TOOLCHAIN` from
+  `rust-toolchain.toml`, `CARGO_TARGET_DIR=${FOAMY_NATIVE_CACHE:-~/.cache/foamy-native}/foamy-<x>`
+  (never inside the plugin: the shell hot-reloads plugin folders), `rust-lld`
+  as the linker, `-C link-self-contained=yes -C link-arg=--build-id=none`, and
+  `--remap-path-prefix` for `~/.cargo`, the rustup home, the target dir, the
+  plugin, `kit/rust` and the crate; the caller's `RUSTFLAGS`, `CARGO_PROFILE_*`,
+  `CARGO_TARGET_*` and wrappers are dropped;
+- installs each binary atomically (a temp file in `bin/<arch>/`, then a
+  rename) and only when its bytes changed, then writes `native.pin`: crate,
+  binary, toolchain, kit version, the **source hash** and a sha256 per arch;
+- `--verify` rebuilds in a fresh target dir (removed afterwards) and fails
+  unless both binaries are byte-identical to the committed ones and the pin
+  is current; `--test` runs fmt, clippy and tests in the same cache.
+
+The source hash covers the crate (without `native.pin` and `target/`),
+`kit/rust/`, and `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` at the
+root, each file hashed without its kit stamp, so a kit version bump that
+leaves the Rust code alone keeps the binaries fresh. `check.sh` and
+`tests/kit-check.sh` (bash, coreutils, `file`) fail when a pinned binary is
+missing, a symlink, not executable, has another checksum, is not a static
+64-bit ELF for its arch, or the sources changed since the build ("stale"),
+and when FoamyNative is synced without a `native.pin`.
+
+### Launching from QML
+
+```qml
+import "kit/FoamyNative.js" as FoamyNative
+
+Process {
+  command: ["timeout", "--kill-after=1s", "30s"].concat(FoamyNative.command(
+    FoamyNative.localPath(Qt.resolvedUrl(".")), "foamy-power-helper", ["set", profile]))
+  onExited: function(exitCode) {
+    if (FoamyNative.unavailable(exitCode)) service.error = FoamyI18n.t("This plugin's helper isn't available for this CPU.")
+  }
+}
+```
+
+`command(pluginDir, name, args)` returns
+`["bash", "-c", 'exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"', "foamy-native", pluginDir, name, …args]`:
+bash's builtin `$HOSTTYPE` picks `x86_64` or `aarch64` and `exec` replaces bash,
+so no extra process remains. A missing binary or an unsupported CPU exits 127
+(126: not executable) instead of a Process that never reports an exit.
+`unavailable(code)` is true for 126 and 127: show the message above (in the
+plugin's catalogs; `FoamyNative.UNAVAILABLE_TEXT` is the English text) and don't
+retry in a loop. Keep each call's `timeout --kill-after=…` wrapper, restart and
+backoff logic and stdin/stdout handling. `localPath(Qt.resolvedUrl(".."))` from a
+subdirectory. Helpers never exit 126 or 127 themselves.
+
+### The shared crate (`kit/rust/foamy-helper`)
+
+| Module | What |
+|---|---|
+| `io` | `read_limited`, `read_stdin_limited`, `LineReader` (max line length; an overlong line is reported and skipped, the next one still reads) |
+| `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
+| `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign owners, shared directories), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
+| `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`, 0600, owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700), `try_runtime_lock` |
+| `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding, `keep_env`/`env_clear`, `new_session`, rlimits, `PR_SET_PDEATHSIG` by default |
+| `process` | `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
+
+Dependencies: `rustix` (fs, process, event), `serde`, `serde_json`; no async
+runtime, no build script. Later modules with heavier dependencies come behind
+cargo features. Rules for helper code: std threads and blocking I/O, keep
+running the same system tools with the same argv, carry every bound of the
+code being replaced over on purpose, and use `json::run` (or `serve`) so every
+failure still prints JSON. `tests/fixtures/native-plugin` is a complete
+reference plugin (its `native/src/main.rs` documents a contract the way a
+plugin helper does).
+
+Requirements for building (developers only): rustup with the toolchain from
+`rust-toolchain.toml` (`rustup toolchain install 1.99.1 --profile minimal -c
+clippy,rustfmt -t x86_64-unknown-linux-musl,aarch64-unknown-linux-musl`),
+`file`, and qemu-user binfmt to run the aarch64 binary in tests.
 
 ## Preview
 
@@ -204,6 +386,14 @@ centred band, footer, buttons, info note and screen-height popups
 (`test_components.py`), and wheel scrolling (`test_wheel.py`, which also
 prints how far Qt's own Flickable gets per notch).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
+FoamyNative (0.5.0): `native.test.cjs` (command builder and the real `bash
+exec` launch: arguments verbatim, exit 126/127) and `test_native.py` (subdirectory
+sync and Rust/TOML stamps, `cargo fmt`/`clippy`/`test` of `foamy-helper`, the
+fixture plugin `tests/fixtures/native-plugin` built for both arches, `--verify`
+and a rebuild at another path byte-identical, check.sh and kit-check.sh on
+pins, tampered, dynamic, wrong-arch and stale binaries, the helper's contract
+on x86_64 and on aarch64 through qemu, and `FoamyNative.command` from node and
+from Quickshell's `Process`).
 
 ## Versioning
 
