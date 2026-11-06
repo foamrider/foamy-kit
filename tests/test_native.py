@@ -357,11 +357,12 @@ def rust_tests(base):
                  ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
                  ["cargo", "clippy", "--locked", "--all-targets", "--features", "favicon", "--", "-D", "warnings"],
                  ["cargo", "clippy", "--locked", "--all-targets", "--features", "sandbox", "--", "-D", "warnings"],
+                 ["cargo", "clippy", "--locked", "--all-targets", "--features", "tls", "--", "-D", "warnings"],
                  ["cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"],
                  ["cargo", "test", "--locked", "--all-features"]):
         code, out = sh(*step, env=crate_env, cwd=crate)
         tail = [line for line in out.splitlines() if "test result" in line or "error" in line.lower()][:4]
-        features = next((s for s in step if s in ("favicon", "sandbox", "--all-features")), "default features")
+        features = next((s for s in step if s in ("favicon", "sandbox", "tls", "--all-features")), "default features")
         ok &= report(f"foamy-helper: {' '.join(step[:2])} ({features})", code == 0, "; ".join(tail) if tail else "")
     ok &= report("the kit's cargo commands write nothing into kit/", not (crate / "target").exists())
 

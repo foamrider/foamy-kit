@@ -115,8 +115,23 @@ helpers" is the recipe.
   above the manifests) instead of a stamped `.cargo/config.toml`, and plugin
   manifests may not declare `[profile]`, so committed binaries depend only on
   the sources, the vendored kit and the toolchain.
+- **`foamy-helper::tls`** (cargo feature `tls`): the one crypto provider and
+  trust store for HTTPS in every helper: `provider()` (Graviola through
+  `rustls-graviola`), `system_roots()`/`system_roots_der()` (the system CA
+  store, loaded once), `client_config()` (WebPKI, TLS 1.2 and 1.3),
+  `cpu_supported()`/`ensure_supported()` and `UNSUPPORTED`, so a CPU without
+  the instructions Graviola needs reports an error instead of aborting.
 - `rust-toolchain.toml` goes to the plugin root, not the crate dir: rustup
   looks upwards from the working directory, so one file covers any crate dir.
+- **HTTPS crypto: Graviola for every helper, not ring or aws-lc-rs.** Both of
+  those compile C, so cross-building them needs a C compiler and musl
+  sysroot per target, and the committed bytes would depend on the build
+  machine's clang version (the same problem as `rusqlite` below). Graviola is
+  Rust and assembly only and builds byte-identically with rustc alone. The
+  cost: it needs AES, carry-less multiply, and on x86_64 AVX2, BMI2 and ADX
+  (Intel Broadwell / AMD Zen or newer), on aarch64 the ARMv8 crypto
+  extensions (Apple Silicon, Raspberry Pi 5, not a Pi 4). On other CPUs HTTPS
+  features report `UNSUPPORTED`; everything else in the helper still works.
 - **SQLite for `favicon`: a built-in read-only reader, not `rusqlite`.**
   `rusqlite` with `bundled` does cross-build for aarch64-musl with clang and
   rust-lld, byte-identically on one machine (tried: about 1.5 MB per arch for

@@ -305,13 +305,16 @@ fn main() -> ExitCode {
 | `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
 | `favicon` (feature) | `run` (browser-favicon.py's whole stdin/stdout contract), `resolve`, `lookup`, `Dirs`, `valid_png`, `valid_hostname`, `browser_roots`: favicons from local Chromium-family caches, never a web request; SQLite read by a built-in read-only reader (SQLite's `SHARED` lock on the live file, in-memory snapshot when the browser holds it, WAL frames, structural check) |
 | `sandbox` (feature) | `BpfFilter` (seccomp-BPF via `seccompiler`: `decoder()` is artwork.py's filter; `to_bytes`, `memfd` for `bwrap --seccomp`; `Bounded::seccomp`), `ExecOnly` (Landlock: only the given files may execute, applied in `pre_exec`; `probe` = github_status's setpriv probe and fallback; `Bounded::exec_only`, `apply_to(&mut Command)`), `Bwrap` (bubblewrap argv builder, `readonly_host`, fd options, `bounded`, `works`), `elf_interpreter`, `which` |
+| `tls` (feature) | `provider` (Graviola, the one crypto provider for every helper), `system_roots`/`system_roots_der` (system CA store, loaded once), `client_config` (WebPKI, TLS 1.2+1.3), `cpu_supported`/`ensure_supported`/`UNSUPPORTED` (Graviola needs AES/PCLMUL and on x86_64 AVX2/BMI2/ADX, on aarch64 the crypto extensions: check before a handshake, report instead of aborting). With ureq: `default-features = false, features = ["rustls-no-provider"]` and `unversioned_rustls_crypto_provider(tls::provider())` |
 
 Enable a feature in the plugin crate, `foamy-helper = { path =
-"../kit/rust/foamy-helper", features = ["favicon"] }` (or `["sandbox"]`),
+"../kit/rust/foamy-helper", features = ["favicon"] }` (or `["sandbox"]`, `["tls"]`),
 then `cargo update -p foamy-helper` for the lock. Dependencies: `rustix` (fs,
 process, event), `serde`, `serde_json`; `favicon` adds `libc`; `sandbox` adds
-`libc`, `seccompiler` and `landlock`. No async runtime, no build script, no
-C code. qemu-user has neither seccomp nor Landlock: the aarch64 binary
+`libc`, `seccompiler` and `landlock`; `tls` adds `rustls`, `rustls-graviola` and
+`rustls-native-certs`. No async runtime, no build script, no C code (do not
+add ring, aws-lc-rs or any `-sys` crate that compiles C: the bytes would
+depend on the build machine's C compiler). qemu-user has neither seccomp nor Landlock: the aarch64 binary
 reports them unsupported there (fail closed), so test sandboxing on x86_64. Rules for helper code: std threads and blocking I/O, keep
 running the same system tools with the same argv, carry every bound of the
 code being replaced over on purpose, and use `json::run` (or `serve`) so every

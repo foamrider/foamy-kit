@@ -31,6 +31,8 @@
 //!   (no web requests; a built-in read-only SQLite reader).
 //! - `sandbox`: [`sandbox`], seccomp-BPF filters, a Landlock exec
 //!   restriction for child processes and bubblewrap command lines.
+//! - `tls`: [`tls`], the one crypto provider (Graviola, with a CPU check)
+//!   and the system trust store for HTTPS.
 
 pub mod child;
 #[cfg(feature = "favicon")]
@@ -42,5 +44,7 @@ pub mod lock;
 pub mod process;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
+#[cfg(feature = "tls")]
+pub mod tls;
 
 pub use json::Failure;
