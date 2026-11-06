@@ -797,6 +797,8 @@ def cmd_native(args):
                 built = build_native(plugin, crate, binary, channel, fresh)
             finally:
                 shutil.rmtree(fresh, ignore_errors=True)
+            if native_source_hash(plugin, crate) != source:
+                raise KitError(f"{crate}/, kit/rust or the workspace files changed during the verify build; re-run it")
             for arch, data in sorted(built.items()):
                 rel = f"bin/{arch}/{binary}"
                 committed = (plugin / rel).read_bytes() if (plugin / rel).is_file() else b""
@@ -812,10 +814,15 @@ def cmd_native(args):
                 raise KitError("verify failed:\n  " + "\n  ".join(dict.fromkeys(problems)))
             print(f"{plugin.name}: verify OK ({binary}, {channel}, both arches reproducible)")
             return 0
+        # Hash before and after: an edit while cargo runs (or between the two
+        # arches) would otherwise pin binaries to sources they weren't built from.
+        source = native_source_hash(plugin, crate)
         built = build_native(plugin, crate, binary, channel, target_dir)
+        if native_source_hash(plugin, crate) != source:
+            raise KitError(f"{crate}/, kit/rust or the workspace files changed during the build; "
+                           "nothing was installed, re-run the build")
         changed = [f"bin/{arch}/{binary}" for arch, data in sorted(built.items())
                    if install_atomic(plugin / "bin" / arch / binary, data, 0o755)]
-        source = native_source_hash(plugin, crate)
         if install_atomic(crate_dir / PIN_NAME, pin_bytes(crate, binary, channel, source, built), 0o644):
             changed.append(f"{crate}/{PIN_NAME}")
         sizes = ", ".join(f"{arch} {len(data)} bytes" for arch, data in sorted(built.items()))

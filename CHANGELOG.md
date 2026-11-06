@@ -91,6 +91,10 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- `build-native.sh` hashed the sources after building, so an edit while cargo
+  ran (or between the two arches) was pinned to binaries built from the old
+  source. It now hashes before and after, and installs nothing (and `--verify`
+  fails) when they differ.
 - **Security:** `sync.sh` trusted every path in a plugin's `foamy-kit.lock`, so
   a crafted lock (`../x`, an absolute path, `kit/../../x`) could make a sync,
   `--force` or not, delete or overwrite a file outside the plugin. Lock paths
@@ -115,6 +119,11 @@ helpers" is the recipe.
   above the manifests) instead of a stamped `.cargo/config.toml`, and plugin
   manifests may not declare `[profile]`, so committed binaries depend only on
   the sources, the vendored kit and the toolchain.
+- **`foamy-helper::net`**: `DeadlineStream`, socket I/O bounded by one
+  absolute deadline. A socket timeout bounds each blocking call, so a peer
+  trickling bytes (or rustls making several reads per record) could stretch a
+  request far past its budget; the stream re-arms the timeout to the time left
+  before every read and write and fails with `DeadlineExceeded` after it.
 - **`foamy-helper::tls`** (cargo feature `tls`): the one crypto provider and
   trust store for HTTPS in every helper: `provider()` (Graviola through
   `rustls-graviola`), `system_roots()`/`system_roots_der()` (the system CA

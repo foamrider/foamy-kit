@@ -21,6 +21,9 @@
 //! - [`lock`]: `flock` locks, including under `$XDG_RUNTIME_DIR/<plugin>`.
 //! - [`child`]: bounded child processes (deadline, output cap, kill on
 //!   timeout, environment control, death with the parent).
+//! - [`net`]: [`net::DeadlineStream`], socket I/O bounded by one absolute
+//!   deadline (re-armed before every read and write, so a trickling peer or
+//!   a TLS layer's many reads cannot outlast it).
 //! - [`process`]: this process: exit on panic, `PR_SET_PDEATHSIG`,
 //!   `setsid`, rlimits, umask.
 //!
@@ -41,6 +44,7 @@ pub mod fs;
 pub mod io;
 pub mod json;
 pub mod lock;
+pub mod net;
 pub mod process;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;

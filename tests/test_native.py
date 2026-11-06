@@ -437,6 +437,7 @@ def rust_tests(base):
             print(f"SKIP native {host}: host not found at {harness.HOSTS[host]} (set FOAMY_HOST_{host.replace('.', '')})")
 
     ok &= tamper_tests(plugin, base)
+    ok &= racing_edit_test(plugin, base, env)
 
     profiled = fresh(base, "profiled")
     sh(SYNC, profiled, "--components", "FoamyNative")
@@ -486,6 +487,37 @@ def last(out):
 
 def harness_validator():
     return shutil.which("omarchy-plugin-validate") or "/usr/share/omarchy/bin/omarchy-plugin-validate"
+
+
+def racing_edit_test(plugin, base, env):
+    """A source edit while cargo runs must not be pinned to binaries built
+    from the old source: build and verify refuse, and nothing is installed."""
+    import argparse
+    racing = base / "racing" / plugin.name
+    shutil.copytree(plugin, racing)
+    pin = (racing / "native/native.pin").read_bytes()
+    binaries = {p: p.read_bytes() for p in (racing / "bin").rglob("*") if p.is_file()}
+    real = foamykit.build_native
+
+    def build_then_edit(plugin_dir, crate, binary, channel, target_dir):
+        with open(plugin_dir / crate / "src/main.rs", "a") as stream:
+            stream.write("// edited while cargo ran\n")
+        return {arch: b"stale " + arch.encode() for arch in ("x86_64", "aarch64")}
+
+    saved = dict(os.environ)
+    os.environ.update(env or {})
+    foamykit.build_native = build_then_edit
+    try:
+        codes = [foamykit.cmd_native(argparse.Namespace(plugin=str(racing), crate=None, bin=None, test=False, verify=verify))
+                 for verify in (False, True)]
+    finally:
+        foamykit.build_native = real
+        os.environ.clear()
+        os.environ.update(saved)
+    unchanged = (racing / "native/native.pin").read_bytes() == pin and all(p.read_bytes() == data for p, data in binaries.items())
+    shutil.rmtree(racing.parent)
+    return report("build and --verify refuse when the sources change during the build (nothing installed)",
+                  codes == [1, 1] and unchanged, f"{codes} unchanged={unchanged}")
 
 
 def main():
