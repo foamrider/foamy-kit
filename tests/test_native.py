@@ -451,7 +451,9 @@ def rust_tests(base):
             ("no-workspace", lambda p: (p / "Cargo.toml").unlink(), "no Cargo.toml at the plugin root"),
             ("not-member", lambda p: (p / "Cargo.toml").write_text('[workspace]\nmembers = []\nexclude = ["kit"]\n'), "in members"),
             ("crate-lock", lambda p: shutil.copyfile(p / "Cargo.lock", p / "native/Cargo.lock"), "native/Cargo.lock is unused"),
-            ("no-lock", lambda p: (p / "Cargo.lock").unlink(), "Cargo.lock is missing")):
+            ("no-lock", lambda p: (p / "Cargo.lock").unlink(), "Cargo.lock is missing"),
+            ("outside-path-dep", lambda p: open(p / "native/Cargo.toml", "a").write('\n[dev-dependencies]\ncommon = { path = "../common" }\n'),
+             "path dependencies outside the hashed sources")):
         broken = fresh(base, name)
         sh(SYNC, broken, "--components", "FoamyNative")
         edit(broken)

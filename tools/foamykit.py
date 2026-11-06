@@ -651,10 +651,48 @@ def native_preflight(plugin, crate):
             raise KitError(f"{rel} declares [profile]; remove it, the kit's {RELEASE_PROFILE} is the release profile")
     if "workspace" in read_toml(plugin / crate / "Cargo.toml"):
         raise KitError(f"{crate}/Cargo.toml declares [workspace]; the workspace is the plugin's root Cargo.toml")
+    outside = path_dependencies_outside(plugin, crate)
+    if outside:
+        raise KitError("path dependencies outside the hashed sources (the crate dir and kit/rust), so native.pin "
+                       "couldn't tell when they change; move them into " + crate + "/ or use a published crate:\n  "
+                       + "\n  ".join(outside))
     if not (plugin / "Cargo.lock").is_file():
         raise KitError("Cargo.lock is missing at the plugin root; run `cargo generate-lockfile` there and commit it")
     if (plugin / crate / "Cargo.lock").exists():
         raise KitError(f"{crate}/Cargo.lock is unused (the lock file lives at the plugin root); remove it")
+
+
+def path_dependencies_outside(plugin, crate):
+    """`path = …` dependencies (any table: dependencies, dev-, build-,
+    target-specific, workspace.dependencies, patch, replace) in the root and
+    crate manifests that resolve outside the crate dir and kit/rust, which
+    native_source_hash covers. ["<manifest>: <name> = <path>", …]."""
+    plugin = Path(plugin).resolve()
+    allowed = [(plugin / crate).resolve(), (plugin / "kit/rust").resolve()]
+    found = []
+
+    def walk(table, base, manifest, name=""):
+        if not isinstance(table, dict):
+            return
+        path = table.get("path")
+        if isinstance(path, str) and name:
+            target = (base / path).resolve()
+            if not any(target == root or root in target.parents for root in allowed):
+                found.append(f"{manifest}: {name} = {path!r}")
+        for key, value in table.items():
+            if isinstance(value, dict):
+                walk(value, base, manifest, key)
+
+    for rel in ("Cargo.toml", f"{crate}/Cargo.toml"):
+        manifest = plugin / rel
+        data = read_toml(manifest)
+        # [workspace] members/exclude are not dependencies.
+        tables = {k: v for k, v in data.items() if k not in ("package", "workspace", "lib", "bin", "profile")}
+        if isinstance(data.get("workspace"), dict):
+            tables["workspace.dependencies"] = data["workspace"].get("dependencies", {})
+        for key, value in tables.items():
+            walk(value, manifest.parent, rel, key if isinstance(value, dict) and "path" in value else "")
+    return found
 
 
 def cargo_env(target_dir, channel, flags=None, linker_triples=()):

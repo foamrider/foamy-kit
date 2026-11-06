@@ -91,6 +91,9 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- `build-native.sh` refuses `path` dependencies outside the crate dir and
+  `kit/rust` (in any dependency, patch or workspace table): their sources are
+  not in `native.pin`'s hash, so an edit there would go unnoticed.
 - `build-native.sh` hashed the sources after building, so an edit while cargo
   ran (or between the two arches) was pinned to binaries built from the old
   source. It now hashes before and after, and installs nothing (and `--verify`
