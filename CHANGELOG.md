@@ -91,6 +91,9 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- `build-native.sh` refuses symlinks among the build inputs (crate dir,
+  `kit/rust`, root Cargo files): the source hash skips them, so a link
+  target could change without the pin noticing.
 - **Security:** `build-native.sh` wrote `bin/<arch>/<binary>` and `native.pin`
   through their parent paths, so a symlinked `bin/` or `bin/<arch>` in a
   contributor's checkout redirected the built ELF outside the plugin. Every

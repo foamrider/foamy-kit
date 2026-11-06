@@ -670,6 +670,23 @@ def native_preflight(plugin, crate):
         raise KitError("Cargo configuration inside the plugin isn't allowed (it isn't part of native.pin and can "
                        "change the build); the kit's release profile and build flags are the only settings: "
                        + ", ".join(configs))
+    # native_source_hash skips symlinks, so a symlinked build input (or
+    # directory) would let its target change without the pin noticing.
+    linked = []
+    for top in (plugin / crate, plugin / "kit/rust"):
+        for dirpath, dirnames, filenames in os.walk(top):
+            current = Path(dirpath)
+            if current == plugin / crate:
+                dirnames[:] = [d for d in dirnames if d != "target"]
+            for name in dirnames + filenames:
+                if (current / name).is_symlink():
+                    linked.append((current / name).relative_to(plugin).as_posix())
+    linked += [rel for rel in ROOT_SOURCES if (plugin / rel).is_symlink()]
+    if (plugin / crate).is_symlink():
+        linked.append(crate)
+    if linked:
+        raise KitError("symlinked build inputs aren't allowed (native.pin hashes files, not link targets): "
+                       + ", ".join(sorted(linked)))
     outside = path_dependencies_outside(plugin, crate)
     if outside:
         raise KitError("path dependencies outside the hashed sources (the crate dir and kit/rust), so native.pin "
