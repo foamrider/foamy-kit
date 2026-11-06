@@ -167,6 +167,7 @@ and `<crate>/native.pin` remembers it.
 From the plugin's worktree, with `KIT` the foamy-kit checkout:
 
 ```bash
+export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-<plugin>   # before ANY cargo command (see below)
 $KIT/sync.sh . --add FoamyNative          # kit/FoamyNative.js, kit/rust/…, rust-toolchain.toml, tests/kit-check.sh
 # write Cargo.toml (workspace), native/Cargo.toml, native/src/main.rs
 (cd native && cargo generate-lockfile)    # writes ./Cargo.lock (only that file)
@@ -178,7 +179,40 @@ $KIT/check.sh .                           # the same from the kit, plus the desi
 ```
 
 Commit `Cargo.toml`, `Cargo.lock`, `native/`, `bin/x86_64/…`, `bin/aarch64/…`
-and the synced kit files together. After changing dependencies run
+and the synced kit files together, and add `/target/` to the plugin's
+`.gitignore`.
+
+Cargo hygiene:
+
+- **`CARGO_TARGET_DIR` first.** Plain `cargo test`, `cargo clippy` or
+  `cargo build` in a plugin would create `target/` inside it, and the shell
+  watches (and hot-reloads) plugin folders. Export
+  `CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-<plugin>` before any cargo
+  command (`build-native.sh` sets it itself). `check.sh` and
+  `tests/kit-check.sh` warn when they find a cargo target dir in the plugin.
+- **Format only your crate:** `cargo fmt -p foamy-<plugin>-helper`. Never
+  `cargo fmt --all`, which would reformat `kit/rust` (then the kit check
+  fails: the vendored files are edited). `build-native.sh --test` only checks.
+- **The source hash covers the whole crate dir** (every file but
+  `native.pin` and `target/`, docs and test data included), so any edit
+  there, even a README or a comment, makes the binaries stale: rebuild
+  (`build-native.sh .`) and commit the new pin.
+
+**An existing crate** (a helper that already had its own `Cargo.toml`, like
+foamy-menu's `search/`): `git mv <crate>/Cargo.lock Cargo.lock` (keep the
+lock, don't regenerate it), delete the crate's `[profile]` (the build tool
+refuses one) and any `.cargo/config.toml`, add the root workspace and the
+`foamy-helper` path dependency, then build with `--crate`/`--bin` once.
+
+**Vendored third-party modules** (code copied from another project into
+your crate) stay byte-identical to upstream: never edit or reformat them.
+Put the exemptions on the `mod` declaration in your own code:
+
+```rust
+#[rustfmt::skip]
+#[allow(clippy::all, dead_code, unused)]
+mod vendored_parser;
+``` After changing dependencies run
 `cargo update -p <crate>` (or `cargo generate-lockfile`) in `native/`; after a
 kit sync that changed `foamy-helper`'s dependencies, `cargo update -p
 foamy-helper`. Never run cargo in `kit/rust/`, and never point
@@ -238,20 +272,47 @@ retry in a loop. Keep each call's `timeout --kill-after=…` wrapper, restart an
 backoff logic and stdin/stdout handling. `localPath(Qt.resolvedUrl(".."))` from a
 subdirectory. Helpers never exit 126 or 127 themselves.
 
+### Panics and arguments
+
+The release profile has `panic = "abort"`, so a panic would end in
+`SIGABRT` and a core dump. `json::run` and `json::serve` install the kit's
+panic hook (a reply where there is one, then exit 101); **every helper that
+runs its own loop or protocol calls `foamy_helper::process::exit_on_panic(101)`
+first thing in `main`**. Read argv with `std::env::args_os()` inside the
+`json::run` closure (or after the hook), never `std::env::args()` before it:
+`args()` panics on a non-UTF-8 argument, before any hook exists. The
+fixture's `main` is the pattern:
+
+```rust
+fn main() -> ExitCode {
+    foamy_helper::process::exit_on_panic(101);
+    match std::env::args_os().nth(1).as_deref().and_then(OsStr::to_str) {
+        Some("serve") => serve(),                    // its own JSON-lines loop
+        _ => json::run(|| main_json(&args()?), json::error_reply), // args(): args_os → Strings, INVALID_ARGUMENT
+    }
+}
+```
+
 ### The shared crate (`kit/rust/foamy-helper`)
 
 | Module | What |
 |---|---|
 | `io` | `read_limited`, `read_stdin_limited`, `LineReader` (max line length; an overlong line is reported and skipped, the next one still reads) |
 | `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
-| `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign owners, shared directories), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
+| `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign-owned targets and directories, and directories that are world-writable without the sticky bit; group-writable own directories, as with umask 002, are fine), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
 | `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`, 0600, owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700), `try_runtime_lock` |
-| `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding, `keep_env`/`env_clear`, `new_session`, rlimits, `PR_SET_PDEATHSIG` by default |
-| `process` | `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
+| `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default |
+| `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
+| `favicon` (feature) | `run` (browser-favicon.py's whole stdin/stdout contract), `resolve`, `lookup`, `Dirs`, `valid_png`, `valid_hostname`, `browser_roots`: favicons from local Chromium-family caches, never a web request; SQLite read by a built-in read-only reader (SQLite's `SHARED` lock on the live file, in-memory snapshot when the browser holds it, WAL frames, structural check) |
+| `sandbox` (feature) | `BpfFilter` (seccomp-BPF via `seccompiler`: `decoder()` is artwork.py's filter; `to_bytes`, `memfd` for `bwrap --seccomp`; `Bounded::seccomp`), `ExecOnly` (Landlock: only the given files may execute, applied in `pre_exec`; `probe` = github_status's setpriv probe and fallback; `Bounded::exec_only`, `apply_to(&mut Command)`), `Bwrap` (bubblewrap argv builder, `readonly_host`, fd options, `bounded`, `works`), `elf_interpreter`, `which` |
 
-Dependencies: `rustix` (fs, process, event), `serde`, `serde_json`; no async
-runtime, no build script. Later modules with heavier dependencies come behind
-cargo features. Rules for helper code: std threads and blocking I/O, keep
+Enable a feature in the plugin crate, `foamy-helper = { path =
+"../kit/rust/foamy-helper", features = ["favicon"] }` (or `["sandbox"]`),
+then `cargo update -p foamy-helper` for the lock. Dependencies: `rustix` (fs,
+process, event), `serde`, `serde_json`; `favicon` adds `libc`; `sandbox` adds
+`libc`, `seccompiler` and `landlock`. No async runtime, no build script, no
+C code. qemu-user has neither seccomp nor Landlock: the aarch64 binary
+reports them unsupported there (fail closed), so test sandboxing on x86_64. Rules for helper code: std threads and blocking I/O, keep
 running the same system tools with the same argv, carry every bound of the
 code being replaced over on purpose, and use `json::run` (or `serve`) so every
 failure still prints JSON. `tests/fixtures/native-plugin` is a complete

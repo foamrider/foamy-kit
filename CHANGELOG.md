@@ -25,6 +25,36 @@ helpers" is the recipe.
   deadline, an output cap, a process-group kill, environment control, rlimits,
   sessions and `PR_SET_PDEATHSIG` (`child`); `PR_SET_PDEATHSIG`, `setsid`,
   rlimits and umask for the helper itself (`process`). 35 unit tests.
+- **`foamy-helper::favicon`** (cargo feature `favicon`): a port of
+  foamy-notifications' and foamy-notification-center's `bin/browser-favicon.py`
+  with the same stdin/stdout contract (`favicon::run`, reply lines in Python's
+  `json.dumps` format), browser roots, `Default/` plus at most fifteen
+  `Profile *` databases, 2 s deadline, no web request, PNG and hostname bounds,
+  the 0600 cache of at most 256 icons reused for 24 hours. A live database is
+  read under SQLite's own `SHARED` lock with a 100 ms busy timeout (a hot
+  journal fails like a read-only SQLite connection); a database the browser
+  holds exclusively is copied into memory with every Python check (32 MiB,
+  no transaction sidecars, unchanged during the copy, rollback header) and
+  checked structurally before it is queried. Nothing is ever written next to
+  the browser's files.
+- **`foamy-helper::sandbox`** (cargo feature `sandbox`): `BpfFilter`
+  (seccomp-BPF generated with `seccompiler`; `decoder()` is foamy-lock's
+  `decoder_filter`, proven equal for every syscall number on both arches,
+  including the x32 kill on x86_64; `memfd()` for `bwrap --seccomp`,
+  `Bounded::seccomp`), `ExecOnly` (a Landlock ruleset handling only
+  "execute", applied in `pre_exec`; `probe` is foamy-github's setpriv probe:
+  the program from `PATH` and its ELF interpreter, works and bites or `None`
+  for the unrestricted fallback; `Bounded::exec_only`), `Bwrap` (bubblewrap
+  argv for artwork.py's decoder and github_status's pinned namespace,
+  `readonly_host`, fd options inherited by the child, `works`), and
+  `elf_interpreter`/`which` as in github_status. 30 more unit tests.
+- `process::exit_on_panic(code)`: a panic exits with `code` instead of
+  aborting (the message still goes to stderr, nothing to stdout);
+  `json::run` and `json::serve` install it, and helpers with their own loop
+  call it first in `main`.
+- `Bounded::inherit_fd` (Python's `pass_fds`).
+- `check.sh` and `tests/kit-check.sh` warn about a cargo target dir inside a
+  plugin.
 - **`tools/build-native.sh <plugin> [--verify | --test] [--crate DIR] [--bin NAME]`**:
   both arches with `--locked --release`, the pinned toolchain, `rust-lld`
   self-contained, `--build-id=none` and path remapping, cargo output in
@@ -48,6 +78,23 @@ helpers" is the recipe.
   `tests/qml/Native.qml` (FoamyNative.command in Quickshell's Process).
 
 ### Changed
+- `fs::write_atomic` refuses a directory only when it is foreign-owned or
+  world-writable without the sticky bit; a group-writable directory of the
+  user's own (umask 002) is accepted. `ensure_private_dir` stays 0700-strict.
+- The fixture helper (the template for plugin helpers) installs the panic
+  hook first and reads argv with `args_os()` inside `json::run`, so a
+  non-UTF-8 argument is an `INVALID_ARGUMENT` reply instead of an abort; it
+  builds with both features on both arches.
+- README "Native helpers": `CARGO_TARGET_DIR` before any cargo command,
+  `/target/` in `.gitignore`, `cargo fmt -p <crate>` only, the recipe for an
+  existing crate, vendored third-party modules, re-pin after any edit in the
+  crate dir, panics and arguments.
+
+### Fixed
+- `Bounded::run` kept feeding standard input only while stdout or stderr was
+  open: a child that closed or redirected its output before reading its input
+  got it silently truncated. It now writes all of it (until the child stops
+  reading: `EPIPE`), within the deadline.
 - Stamps: `.toml` files use `#`; Rust and TOML files carry the stamp on line 1
   always (a `#![…]` attribute is not a shebang), so version changes never
   shift line numbers that panic locations embed.
@@ -63,6 +110,20 @@ helpers" is the recipe.
   the sources, the vendored kit and the toolchain.
 - `rust-toolchain.toml` goes to the plugin root, not the crate dir: rustup
   looks upwards from the working directory, so one file covers any crate dir.
+- **SQLite for `favicon`: a built-in read-only reader, not `rusqlite`.**
+  `rusqlite` with `bundled` does cross-build for aarch64-musl with clang and
+  rust-lld, byte-identically on one machine (tried: about 1.5 MB per arch for
+  "hello world"), but only with a musl sysroot that isn't packaged here (musl's
+  headers downloaded and installed by hand) and C flags the build tool would
+  have to inject, and the committed bytes would then depend on the host's
+  clang version: the next clang upgrade, or another developer's machine, would
+  fail `--verify` with no source change, and the pin records only the Rust
+  toolchain. The reader (`favicon/sqlite.rs`, about 1,200 lines with its tests) covers
+  what the Python query reads: rollback and WAL databases (committed frames,
+  checksums and salts as SQLite's recovery), table b-trees, records with
+  overflow pages, `CREATE TABLE` column lists, SQLite's lock protocol, and a
+  structural check of every b-tree for the snapshot (the part of `PRAGMA
+  quick_check` that matters here). UTF-8 databases only (Chromium's).
 
 ## 0.4.7 — 2026-11-05
 
