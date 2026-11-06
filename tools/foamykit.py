@@ -778,25 +778,84 @@ def build_native(plugin, crate, binary, channel, target_dir):
     return built
 
 
-def install_atomic(path, data, mode):
-    """Writes data to path through a temp file in the same directory and a
-    rename, so the running shell never sees a partial file. No-op when equal."""
-    path = Path(path)
-    if path.is_file() and not path.is_symlink() and path.read_bytes() == data and stat.S_IMODE(path.stat().st_mode) == mode:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+def open_contained_dir(plugin, rel_dir):
+    """An O_DIRECTORY fd for plugin/rel_dir, walked one component at a time
+    with O_NOFOLLOW (creating missing ones, 0755), so no symlinked parent
+    (bin -> elsewhere, bin/x86_64 -> elsewhere) can lead a write outside the
+    plugin. The caller closes it."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open(plugin, flags)
     try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temp, mode)
-        os.replace(temp, path)
+        for part in Path(rel_dir).parts:
+            if part in ("", ".", ".."):
+                raise KitError(f"invalid directory {rel_dir!r}")
+            try:
+                next_fd = os.open(part, flags, dir_fd=fd)
+            except FileNotFoundError:
+                os.mkdir(part, 0o755, dir_fd=fd)
+                next_fd = os.open(part, flags, dir_fd=fd)
+            except OSError as error:
+                raise KitError(f"{rel_dir}: {part} is not a plain directory inside the plugin "
+                               f"(a symlink or a file?): {error.strerror}") from None
+            os.close(fd)
+            fd = next_fd
+        return fd
     except BaseException:
-        Path(temp).unlink(missing_ok=True)
+        os.close(fd)
         raise
-    return True
+
+
+def install_atomic(plugin, rel, data, mode):
+    """Writes data to plugin/rel through a temp file in the same directory and
+    a rename, so the running shell never sees a partial file. Every directory
+    is opened without following symlinks and the file is replaced by name in
+    that directory, so nothing outside the plugin is written. No-op when equal."""
+    rel = Path(rel)
+    dir_fd = open_contained_dir(Path(plugin), rel.parent)
+    name = rel.name
+    try:
+        try:
+            current = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=dir_fd)
+        except OSError:
+            current = None
+        if current is not None:
+            try:
+                info = os.fstat(current)
+                if stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == mode and info.st_size == len(data):
+                    with os.fdopen(os.dup(current), "rb") as stream:
+                        if stream.read() == data:
+                            return False
+            finally:
+                os.close(current)
+        temp = None
+        for attempt in range(100):
+            candidate = f".{name}.{os.getpid()}.{attempt}"
+            try:
+                fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600,
+                             dir_fd=dir_fd)
+            except FileExistsError:
+                continue
+            temp = candidate
+            break
+        if temp is None:
+            raise KitError(f"{rel}: could not create a temporary file")
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fchmod(stream.fileno(), mode)
+                os.fsync(stream.fileno())
+            os.replace(temp, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+            os.fsync(dir_fd)
+        except BaseException:
+            try:
+                os.unlink(temp, dir_fd=dir_fd)
+            except OSError:
+                pass
+            raise
+        return True
+    finally:
+        os.close(dir_fd)
 
 
 def pin_bytes(crate, binary, channel, source, built):
@@ -878,9 +937,13 @@ def cmd_native(args):
         if native_source_hash(plugin, crate) != source:
             raise KitError(f"{crate}/, kit/rust or the workspace files changed during the build; "
                            "nothing was installed, re-run the build")
+        # Every target directory must be a plain directory inside the plugin
+        # before anything is written (install_atomic checks again, race-free).
+        for rel in [f"bin/{arch}" for arch in sorted(built)] + [crate]:
+            os.close(open_contained_dir(plugin, rel))
         changed = [f"bin/{arch}/{binary}" for arch, data in sorted(built.items())
-                   if install_atomic(plugin / "bin" / arch / binary, data, 0o755)]
-        if install_atomic(crate_dir / PIN_NAME, pin_bytes(crate, binary, channel, source, built), 0o644):
+                   if install_atomic(plugin, f"bin/{arch}/{binary}", data, 0o755)]
+        if install_atomic(plugin, f"{crate}/{PIN_NAME}", pin_bytes(crate, binary, channel, source, built), 0o644):
             changed.append(f"{crate}/{PIN_NAME}")
         sizes = ", ".join(f"{arch} {len(data)} bytes" for arch, data in sorted(built.items()))
         print(f"{plugin.name}: {binary} ({channel}): {sizes}; " + (f"updated {', '.join(changed)}" if changed else "up to date"))

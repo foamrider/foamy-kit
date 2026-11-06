@@ -438,6 +438,7 @@ def rust_tests(base):
 
     ok &= tamper_tests(plugin, base)
     ok &= racing_edit_test(plugin, base, env)
+    ok &= symlinked_bin_test(plugin, base, env)
 
     profiled = fresh(base, "profiled")
     sh(SYNC, profiled, "--components", "FoamyNative")
@@ -524,6 +525,45 @@ def racing_edit_test(plugin, base, env):
     shutil.rmtree(racing.parent)
     return report("build and --verify refuse when the sources change during the build (nothing installed)",
                   codes == [1, 1] and unchanged, f"{codes} unchanged={unchanged}")
+
+
+def symlinked_bin_test(plugin, base, env):
+    """A symlinked bin/ or bin/<arch> (contributor content) must not lead the
+    build's writes outside the plugin."""
+    import argparse
+    ok = True
+    for layout in ("bin", "bin/x86_64"):
+        work = base / "symlinked" / plugin.name
+        shutil.copytree(plugin, work)
+        outside = base / "symlinked" / "outside"
+        outside.mkdir()
+        victim = outside / BINARY
+        victim.write_bytes(b"keep me")
+        if layout == "bin":
+            shutil.rmtree(work / "bin")
+            for arch in ("x86_64", "aarch64"):
+                (outside / arch).mkdir()
+                (outside / arch / BINARY).write_bytes(b"keep me")
+            (work / "bin").symlink_to(outside)
+        else:
+            shutil.rmtree(work / "bin/x86_64")
+            (work / "bin/x86_64").symlink_to(outside)
+        real = foamykit.build_native
+        foamykit.build_native = lambda *a: {arch: b"new " + arch.encode() for arch in ("x86_64", "aarch64")}
+        saved = dict(os.environ)
+        os.environ.update(env or {})
+        try:
+            code = foamykit.cmd_native(argparse.Namespace(plugin=str(work), crate=None, bin=None, test=False, verify=False))
+        finally:
+            foamykit.build_native = real
+            os.environ.clear()
+            os.environ.update(saved)
+        written = sorted(p.relative_to(outside).as_posix() for p in outside.rglob("*")
+                         if p.is_file() and p.read_bytes() != b"keep me")
+        ok &= report(f"build-native.sh refuses a symlinked {layout} (nothing written outside the plugin)",
+                     code == 1 and not written, f"code={code} written={written}")
+        shutil.rmtree(base / "symlinked")
+    return ok
 
 
 def main():

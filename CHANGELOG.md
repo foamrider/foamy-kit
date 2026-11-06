@@ -91,6 +91,11 @@ helpers" is the recipe.
   crate dir, panics and arguments.
 
 ### Fixed
+- **Security:** `build-native.sh` wrote `bin/<arch>/<binary>` and `native.pin`
+  through their parent paths, so a symlinked `bin/` or `bin/<arch>` in a
+  contributor's checkout redirected the built ELF outside the plugin. Every
+  directory is now opened component by component without following symlinks,
+  and files are created and renamed relative to that directory.
 - **Security:** `build-native.sh` refuses a `.cargo/config(.toml)` in the plugin
   root or the crate dir (or between): Cargo would load it, it isn't in
   `native.pin`, and a `rustc-wrapper` there could alter both the build and
