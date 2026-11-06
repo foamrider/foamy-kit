@@ -14,6 +14,7 @@
 //! an output cap. Nothing here starts an async runtime or a background thread
 //! that outlives a call.
 //!
+//! - [`hash`]: SHA-256 in plain Rust (`sha256`, `sha256_hex`).
 //! - [`io`]: bounded reads (whole streams, files, lines with a maximum length).
 //! - [`json`]: JSON-lines requests and replies, and [`json::run`], the
 //!   "every failure still prints JSON" entry point.
@@ -41,6 +42,7 @@ pub mod child;
 #[cfg(feature = "favicon")]
 pub mod favicon;
 pub mod fs;
+pub mod hash;
 pub mod io;
 pub mod json;
 pub mod lock;

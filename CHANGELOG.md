@@ -119,6 +119,8 @@ helpers" is the recipe.
   above the manifests) instead of a stamped `.cargo/config.toml`, and plugin
   manifests may not declare `[profile]`, so committed binaries depend only on
   the sources, the vendored kit and the toolchain.
+- **`foamy-helper::hash`**: `sha256`/`sha256_hex` in plain Rust (the favicon
+  module's, now public), so helpers need neither `sha2` nor ring for cache names.
 - **`foamy-helper::net`**: `DeadlineStream`, socket I/O bounded by one
   absolute deadline. A socket timeout bounds each blocking call, so a peer
   trickling bytes (or rustls making several reads per record) could stretch a

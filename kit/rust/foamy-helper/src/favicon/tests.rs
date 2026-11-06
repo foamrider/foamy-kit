@@ -200,21 +200,21 @@ fn png_bounds() {
 #[test]
 fn sha256_and_uris_match_python() {
     assert_eq!(
-        hex(&sha256(b"")),
+        hex(&crate::hash::sha256(b"")),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
     assert_eq!(
-        hex(&sha256(b"abc")),
+        hex(&crate::hash::sha256(b"abc")),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
     // hashlib.sha256(…).hexdigest()
     assert_eq!(
-        hex(&sha256(b"vivaldi\nexample.com")),
+        hex(&crate::hash::sha256(b"vivaldi\nexample.com")),
         "61400a381a3bc23c14ba54c1a8543f9241ae78f58115e77d7c6f0450467a14b9"
     );
     let long: Vec<u8> = (0..1000u32).map(|i| i as u8).collect();
     assert_eq!(
-        hex(&sha256(&long)),
+        hex(&crate::hash::sha256(&long)),
         "a8af099bf2e878609558dbf69d8f88f4a31040a8cf84b549a0cfa912f12ffc3f"
     );
     assert_eq!(
