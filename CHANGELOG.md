@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.5.2 — 2026-11-07
+
+Omarchy 4.5.0 is the installed shell now: the kit is previewed and tested on it,
+and 4.0 is opt-in.
+
+### Changed (on resync, native plugins must rebuild)
+- `foamy-helper::tls::UNSUPPORTED` named only AES and carry-less multiply,
+  but `cpu_supported()` also needs SSSE3, AVX, AVX2, BMI1, BMI2 and ADX on
+  x86_64 and NEON, AES, PMULL and SHA-2 on aarch64. It is now exactly
+  `HTTPS isn't supported on this CPU (foamy helpers need AES, carry-less
+  multiply, AVX2, BMI2 and ADX on x86-64, or the crypto extensions on ARMv8)`.
+  Plugins use this text as an i18n catalog key: update the catalogs to the
+  new key. A unit test pins it; the module docs list every checked feature.
+- **The message is in `kit/rust`, so it changes `native.pin`'s source hash:
+  after syncing 0.5.2, every plugin with FoamyNative must run
+  `tools/build-native.sh <plugin>` and commit the new `bin/<arch>/` binaries
+  and `native.pin`**, or `check.sh` and `tests/kit-check.sh` report them stale.
+
+### Tooling
+- Hosts: `preview/harness.py` defaults `HOSTS["4.5"]` to the installed shell,
+  `/usr/share/omarchy/shell` (`FOAMY_HOST_45` still overrides). 4.0 has no
+  default: `HOSTS["4.0"]` exists only when `FOAMY_HOST_40` points at a 4.0
+  shell directory (its code paths in the harness and kit stay). Before, 4.0
+  defaulted to `/usr/share/omarchy/shell` and 4.5 to
+  `/tmp/omarchy-ref/v45/shell`, which on a 4.5 machine ran "4.0" against the
+  4.5 shell.
+- `harness.available_hosts()` (and `host_problem()`): the usable hosts, with
+  a `SKIP … on 4.0: host 4.0 is opt-in: set FOAMY_HOST_40 …` line for the
+  others, and an error when none is usable. `render.py --host both`, `--trio`
+  and `--before-host` and every kit test that loops over hosts use it;
+  `--host 4.0` without `FOAMY_HOST_40` fails with that message. `--host both`
+  always writes `<out>/<host>/`.
+- `render.py --trio`: one After column per available host; labels say "4.0",
+  not "4.0.6". A pre-kit fork clipped on 4.5 with no other host to try is
+  labelled `Before (dev, 4.5 host; popup fork clipped)`.
+- `test_ipc_cli.py` and `test_harness.py` run on 4.5; `test_harness.py`
+  checks the host defaults. README, `tests/run-all.sh` and test docstrings no
+  longer describe `/usr/share/omarchy/shell` as 4.0.6 or 4.5 at
+  `/tmp/omarchy-ref`.
+
 ## 0.5.1 — 2026-11-06
 
 ### Added
