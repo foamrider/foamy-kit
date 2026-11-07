@@ -5,9 +5,10 @@
 //!   `rustls-graviola`: Rust and assembly only, so both musl targets build
 //!   with rustc alone and reproducibly (ring and aws-lc-rs compile C, which
 //!   would tie the binaries' bytes to the build machine's C compiler).
-//! - Graviola needs AES, carry-less multiplication and, on x86_64, AVX2, BMI2
-//!   and ADX (Intel Broadwell / AMD Zen or newer); on aarch64 the ARMv8
-//!   crypto extensions (Apple Silicon, Raspberry Pi 5; **not** a Pi 4).
+//! - Graviola needs, on x86_64, AES-NI, carry-less multiplication
+//!   (PCLMULQDQ), SSSE3, AVX, AVX2, BMI1, BMI2 and ADX (Intel Broadwell / AMD
+//!   Zen or newer); on aarch64 the ARMv8 crypto extensions: AES, PMULL and
+//!   SHA-2, with NEON (Apple Silicon, Raspberry Pi 5; **not** a Pi 4).
 //!   Without them it would abort in the first handshake, so call
 //!   [`cpu_supported`] (or let [`client_config`] do it) and report
 //!   [`UNSUPPORTED`] instead.
@@ -46,8 +47,11 @@ use rustls::crypto::CryptoProvider;
 use rustls::pki_types::CertificateDer;
 use rustls::{ClientConfig, RootCertStore};
 
-/// The user-facing reason when [`cpu_supported`] is false.
-pub const UNSUPPORTED: &str = "HTTPS isn't supported on this CPU (it lacks the AES/carry-less multiply instructions foamy helpers need)";
+/// The user-facing reason when [`cpu_supported`] is false. It names the
+/// headline requirements; [`cpu_supported`] checks the full list (the module
+/// docs). Plugins use this exact text as an i18n catalog key, so a change here
+/// is a change to every plugin's catalogs.
+pub const UNSUPPORTED: &str = "HTTPS isn't supported on this CPU (foamy helpers need AES, carry-less multiply, AVX2, BMI2 and ADX on x86-64, or the crypto extensions on ARMv8)";
 
 /// Why a TLS configuration could not be built.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,8 +76,9 @@ impl fmt::Display for TlsError {
 
 impl std::error::Error for TlsError {}
 
-/// True when this CPU has every instruction Graviola needs. Checked at run
-/// time, once per call (`is_*_feature_detected!` caches).
+/// True when this CPU has every instruction Graviola needs (x86_64: AES,
+/// PCLMULQDQ, SSSE3, AVX, AVX2, BMI1, BMI2, ADX; aarch64: NEON, AES, PMULL,
+/// SHA-2). Checked at run time, once per call (`is_*_feature_detected!` caches).
 pub fn cpu_supported() -> bool {
     #[cfg(target_arch = "x86_64")]
     {
@@ -169,5 +174,15 @@ mod tests {
             Err(other) => panic!("unexpected {other}"),
         }
         assert_eq!(TlsError::UnsupportedCpu.to_string(), UNSUPPORTED);
+    }
+
+    #[test]
+    fn unsupported_text_is_the_catalog_key() {
+        // Plugins' i18n catalogs are keyed by this exact text.
+        assert_eq!(
+            UNSUPPORTED,
+            "HTTPS isn't supported on this CPU (foamy helpers need AES, carry-less multiply, \
+             AVX2, BMI2 and ADX on x86-64, or the crypto extensions on ARMv8)"
+        );
     }
 }
