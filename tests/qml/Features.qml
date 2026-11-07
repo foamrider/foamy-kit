@@ -9,7 +9,7 @@ import "harness"
 import "plugin/kit"
 import "plugin/kit/FoamyIpcResolver.js" as Resolver
 
-// kit 0.2.0 features on both hosts: icons, numeral/menu tokens, cursor
+// kit 0.2.0 features on every host: icons, numeral/menu tokens, cursor
 // shape, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue (inline
 // and CLI), FoamyIpcResolver.prefer/others/call, FoamyIpcPreference,
 // FoamyPeerIpc, FoamySettingsState, and D-Bus isolation.

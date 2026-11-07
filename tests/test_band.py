@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FoamyHeroBand on 4.0.6 and 4.5-rc2, dark and light themes, LTR and RTL:
+"""FoamyHeroBand on 4.5 (and 4.0 with FOAMY_HOST_40), dark and light themes, LTR and RTL:
 geometry inside a real FoamyPopup card, and pixels of the captured card
 (rounded transparent corners, tinted band vs body, hairline edge, glow on the
 trailing side, clipped picture)."""
@@ -69,7 +69,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     plugin = synced_demo()
     results = [run(host, theme, rtl, plugin, out_dir)
-               for host in ("4.0", "4.5") for theme in ("dark", "light") for rtl in (False, True)]
+               for host in harness.available_hosts(what="band") for theme in ("dark", "light") for rtl in (False, True)]
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

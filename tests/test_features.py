@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.2.0 features under both hosts (tests/qml/Features.qml): icons,
+"""kit 0.2.0 features on 4.5 and, with FOAMY_HOST_40, 4.0 (tests/qml/Features.qml): icons,
 tokens, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue inline
 and CLI (fake omarchy / omarchy-shell on PATH, never the real ones), IPC
 prefer/others/call, FoamyIpcPreference, FoamyPeerIpc, FoamySettingsState and
@@ -65,7 +65,7 @@ def run(host):
 
 def main():
     harness.install_signal_cleanup()
-    results = [run("4.0"), run("4.5")]
+    results = [run(host) for host in harness.available_hosts(what="features")]
     return 0 if all(results) else 1
 
 

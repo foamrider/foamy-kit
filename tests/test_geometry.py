@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""FoamyPopup/FoamyPopupCard placement on 4.0.6 (strip bar window) and
-4.5-rc2 (full-screen bar window), all four bar positions, plus a negative
-control: the old forked 4.0 popup misplaces on the 4.5 full-screen window."""
+"""FoamyPopup/FoamyPopupCard placement on 4.5 (full-screen bar window) and,
+with FOAMY_HOST_40, 4.0 (strip bar window), all four bar positions, plus a
+negative control: the old forked 4.0 popup misplaces on the 4.5 full-screen
+window."""
 import re
 import shutil
 import sys
@@ -48,7 +49,8 @@ def run(host, mode, out_dir):
 def main():
     out_dir = KIT_ROOT / "tests/out"
     out_dir.mkdir(exist_ok=True)
-    results = [run("4.0", "strip", out_dir), run("4.5", "fullscreen", out_dir)]
+    modes = {"4.0": "strip", "4.5": "fullscreen"}
+    results = [run(host, modes[host], out_dir) for host in harness.available_hosts(what="geometry")]
     return 0 if all(results) else 1
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.4.0 header overflow menu (tests/qml/Menu.qml) on 4.0.6 and 4.5-rc2,
+"""kit 0.4.0 header overflow menu (tests/qml/Menu.qml) on 4.5 (and 4.0 with FOAMY_HOST_40),
 LTR and RTL, at display scale 1.0 and 1.25: at most three buttons top
 right, Settings in the ⋯ menu when overflowing, the in-card menu anchored to
 the ⋯ button's trailing edge, keyboard (single cursor, submenu, Esc), press
@@ -17,7 +17,7 @@ def main():
     plugin = synced_demo()
     out = KIT_ROOT / "tests/out/menu"
     results = []
-    for host in ("4.0", "4.5"):
+    for host in harness.available_hosts(what="menu"):
         for rtl in (False, True):
             for scale in (1.0, 1.25):
                 tag = f"{host}/{'rtl' if rtl else 'ltr'}@{scale}"

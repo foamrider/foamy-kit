@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.4.2 settings rows (tests/qml/Rows.qml) on 4.0.6 and 4.5-rc2, LTR and
+"""kit 0.4.2 settings rows (tests/qml/Rows.qml) on 4.5 (and 4.0 with FOAMY_HOST_40), LTR and
 RTL, at display scale 1.0 and 1.25: toggle rows, compact FoamyNumberFields
 and compact FoamyDropdowns share a row height and a trailing edge; the
 compact dropdown's width, cap, elision and open list; a section title with
@@ -19,7 +19,7 @@ def main():
     plugin = synced_demo()
     out = Path(os.environ.get("FOAMY_ROWS_OUT") or KIT_ROOT / "tests/out/rows")
     results = []
-    for host in ("4.0", "4.5"):
+    for host in harness.available_hosts(what="rows"):
         for rtl in (False, True):
             for scale in (1.0, 1.25):
                 direction = "rtl" if rtl else "ltr"

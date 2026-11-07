@@ -429,12 +429,8 @@ def rust_tests(base):
     ok &= report("FoamyNative.command (from the plugin's kit) runs the built helper; a missing one exits 127",
                  code == 0 and replies[0]["args"] == ["a b", ""] and code2 == 127, out.strip())
 
-    hosts = [host for host, path in harness.HOSTS.items() if (path / "Commons").is_dir() and (path / "Ui").is_dir()]
-    for host in harness.HOSTS:
-        if host in hosts:
-            ok &= run_shell("Native.qml", host, plugin, host)
-        else:
-            print(f"SKIP native {host}: host not found at {harness.HOSTS[host]} (set FOAMY_HOST_{host.replace('.', '')})")
+    for host in harness.available_hosts(what="native", require=False):
+        ok &= run_shell("Native.qml", host, plugin, host)
 
     ok &= tamper_tests(plugin, base)
     ok &= racing_edit_test(plugin, base, env)

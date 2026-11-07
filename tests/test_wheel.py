@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wheel scrolling (tests/qml/Wheel.qml) on 4.0.6 and 4.5-rc2 at display
+"""Wheel scrolling (tests/qml/Wheel.qml) on 4.5 (and 4.0 with FOAMY_HOST_40) at display
 scale 1.0 and 1.25: why settings pages moved only a few px per notch (Qt's
 Flickable loses most of a high-resolution notch; printed as NOTE lines) and
 FoamyWheelScroll / FoamySettingsPage / ensureVisible / FoamyInfoNote."""
@@ -15,7 +15,7 @@ def main():
     harness.install_signal_cleanup()
     plugin = synced_demo()
     results = [run_shell("Wheel.qml", host, plugin, f"{host}@{scale}", scale=scale, notes=True)
-               for host in ("4.0", "4.5") for scale in (1.0, 1.25)]
+               for host in harness.available_hosts(what="wheel") for scale in (1.0, 1.25)]
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

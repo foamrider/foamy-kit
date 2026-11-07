@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.4.0 components (tests/qml/Components.qml) on 4.0.6 and 4.5-rc2, LTR
+"""kit 0.4.0 components (tests/qml/Components.qml) on 4.5 (and 4.0 with FOAMY_HOST_40), LTR
 and RTL, at display scale 1.0 and 1.25: centred hero band, FoamyPanelFooter,
 FoamyButton, FoamyInfoNote, popup height following the screen. Card
 screenshots: tests/out/components/."""
@@ -16,7 +16,7 @@ def main():
     plugin = synced_demo()
     out = KIT_ROOT / "tests/out/components"
     results = []
-    for host in ("4.0", "4.5"):
+    for host in harness.available_hosts(what="components"):
         for rtl in (False, True):
             for scale in (1.0, 1.25):
                 direction = "rtl" if rtl else "ltr"

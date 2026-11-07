@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demo preview render under both hosts, plus publish-screenshots.sh on a
+"""Demo preview render on 4.5 (and 4.0 with FOAMY_HOST_40), plus publish-screenshots.sh on a
 throwaway git repository (orphan branch, untouched working tree, no push)."""
 import re
 import shutil
@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import KIT_ROOT, report, synced_demo  # noqa: E402
+from common import KIT_ROOT, harness, report, synced_demo  # noqa: E402
 
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import render  # noqa: E402
@@ -69,7 +69,7 @@ def main():
     ok = True
     out_root = KIT_ROOT / "tests/out/preview"
     plugin = synced_demo()
-    for host in ("4.0", "4.5"):
+    for host in harness.available_hosts(what="preview render"):
         out = out_root / host
         shutil.rmtree(out, ignore_errors=True)
         shots = render.render(plugin, host, out)

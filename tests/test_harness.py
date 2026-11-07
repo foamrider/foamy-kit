@@ -22,7 +22,7 @@ CHILD = f"""
 import sys, time
 sys.path.insert(0, {str(KIT_ROOT / 'preview')!r})
 import harness
-run = harness.Run("4.0", {HANG!r}, prefix="foamy-kit-orphan-")
+run = harness.Run("4.5", {HANG!r}, prefix="foamy-kit-orphan-")
 run.start()
 print(run.base, flush=True)
 time.sleep(120)
@@ -63,13 +63,13 @@ def main():
     shutil.rmtree(base, ignore_errors=True)
 
     # 3. Context manager.
-    with harness.Run("4.0", HANG, prefix="foamy-kit-ctx-") as ctx:
+    with harness.Run("4.5", HANG, prefix="foamy-kit-ctx-") as ctx:
         ctx.start()
         base = ctx.base
         time.sleep(1)
     ok &= report("Run as a context manager stops and removes everything", gone(base) and not base.exists())
     # 4. Temp-dir hygiene: own dir per run, PID-tagged, 0700; gc removes only dead runs' dirs.
-    run = harness.Run("4.0", HANG, prefix="foamy-kit-hygiene-")
+    run = harness.Run("4.5", HANG, prefix="foamy-kit-hygiene-")
     mode = run.base.stat().st_mode & 0o777
     ok &= report("each run owns a PID-tagged 0700 dir", f"-{os.getpid()}-" in run.base.name and mode == 0o700, f"{run.base.name} {oct(mode)}")
     run.cleanup()
@@ -90,6 +90,25 @@ def main():
     ok &= report("gc removes only dead runs' dirs (not live, in use, or unknown)",
                  removed == [stale] and mine.exists() and busy.exists() and legacy.exists() and not stale.exists(), str(removed))
     shutil.rmtree(tmp, ignore_errors=True)
+
+    # 5. Hosts: 4.5 defaults to the installed shell, 4.0 exists only with FOAMY_HOST_40.
+    probe = ("import sys; sys.path.insert(0, sys.argv[1]); import harness; "
+             "print(sorted((k, str(v)) for k, v in harness.HOSTS.items())); "
+             "print(harness.available_hosts(require=False))")
+    env = {k: v for k, v in os.environ.items() if k not in ("FOAMY_HOST_40", "FOAMY_HOST_45")}
+    plain = subprocess.run([sys.executable, "-I", "-c", probe, str(KIT_ROOT / "preview")], env=env, capture_output=True, text=True)
+    ok &= report("4.5 defaults to /usr/share/omarchy/shell; 4.0 is unset and skipped, naming FOAMY_HOST_40",
+                 plain.stdout.startswith("[('4.5', '/usr/share/omarchy/shell')]\n")
+                 and "SKIP on 4.0: host 4.0 is opt-in: set FOAMY_HOST_40" in plain.stdout, plain.stdout.strip().replace("\n", "; "))
+    fake = Path(tempfile.mkdtemp(prefix="foamy-kit-host-test-"))
+    for name in ("40", "45"):
+        (fake / name / "Commons").mkdir(parents=True)
+        (fake / name / "Ui").mkdir()
+    both = subprocess.run([sys.executable, "-I", "-c", probe, str(KIT_ROOT / "preview")], capture_output=True, text=True,
+                          env={**env, "FOAMY_HOST_40": str(fake / "40"), "FOAMY_HOST_45": str(fake / "45")})
+    ok &= report("FOAMY_HOST_40 opts in to 4.0 and FOAMY_HOST_45 overrides 4.5",
+                 both.stdout.splitlines()[-1:] == ["['4.0', '4.5']"] and "SKIP" not in both.stdout, both.stdout.strip().replace("\n", "; "))
+    shutil.rmtree(fake, ignore_errors=True)
     return 0 if ok else 1
 
 

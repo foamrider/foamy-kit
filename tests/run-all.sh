@@ -1,7 +1,8 @@
 #!/bin/bash
 # Run every foamy-kit test. Needs qs (Quickshell), node, python3, git, and
-# the hosts: 4.0.6 at /usr/share/omarchy/shell and 4.5-rc2 at
-# /tmp/omarchy-ref/v45/shell (override with FOAMY_HOST_40 / FOAMY_HOST_45).
+# the Omarchy 4.5 shell at /usr/share/omarchy/shell (override with
+# FOAMY_HOST_45). 4.0 is opt-in: set FOAMY_HOST_40 to a 4.0 shell directory,
+# else every 4.0 run prints a SKIP line.
 # test_native.py also needs rustup with the toolchain in
 # kit/rust/rust-toolchain.toml, file(1), and qemu-aarch64 binfmt for the
 # aarch64 runs (each skipped with a SKIP line when missing).

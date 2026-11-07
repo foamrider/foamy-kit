@@ -47,10 +47,14 @@ from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = KIT_ROOT / "preview"
-HOSTS = {
-    "4.0": Path(os.environ.get("FOAMY_HOST_40", "/usr/share/omarchy/shell")),
-    "4.5": Path(os.environ.get("FOAMY_HOST_45", "/tmp/omarchy-ref/v45/shell")),
-}
+# Host shells. 4.5 is the installed one (FOAMY_HOST_45 overrides). 4.0 is
+# opt-in: it exists only when FOAMY_HOST_40 points at a 4.0 shell directory.
+# Callers that loop over hosts use available_hosts(), which skips the others.
+KNOWN_HOSTS = ("4.0", "4.5")
+HOSTS = {}
+if os.environ.get("FOAMY_HOST_40"):
+    HOSTS["4.0"] = Path(os.environ["FOAMY_HOST_40"])
+HOSTS["4.5"] = Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")
 SCREEN = (1920, 1080)
 FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration",
                    "Cannot assign", "Unable to assign", "Non-existent attached object", "SAVE FAILED")
@@ -115,13 +119,45 @@ def processes_under(path):
     return found
 
 
-def host_dir(name):
+def host_variable(name):
+    """The environment variable that points at host `name` (FOAMY_HOST_45)."""
+    return f"FOAMY_HOST_{name.replace('.', '')}"
+
+
+def host_problem(name):
+    """Why host `name` can't be used, or None when it can."""
+    if name not in KNOWN_HOSTS:
+        return f"unknown host {name!r}; use one of {', '.join(KNOWN_HOSTS)}"
     if name not in HOSTS:
-        raise SystemExit(f"unknown host {name!r}; use one of {', '.join(HOSTS)}")
+        return f"host {name} is opt-in: set {host_variable(name)} to an Omarchy {name} shell directory"
     path = HOSTS[name]
     if not (path / "Commons").is_dir() or not (path / "Ui").is_dir():
-        raise SystemExit(f"host {name} not found at {path} (set FOAMY_HOST_{name.replace('.', '')})")
-    return path
+        return f"host {name} not found at {path} (set {host_variable(name)})"
+    return None
+
+
+def available_hosts(wanted=KNOWN_HOSTS, what="", require=True):
+    """The hosts of `wanted` that can be used, in order. Prints a `SKIP` line
+    (naming `what`, the check or render being skipped) for each other one, e.g.
+    4.0 unless FOAMY_HOST_40 is set. With `require`, none usable is an error,
+    so a run without any host fails instead of passing on SKIPs."""
+    usable = []
+    for name in wanted:
+        problem = host_problem(name)
+        if problem is None:
+            usable.append(name)
+        else:
+            print(f"SKIP {what + ' ' if what else ''}on {name}: {problem}", flush=True)
+    if require and not usable:
+        raise SystemExit(f"no usable host among {', '.join(wanted)}")
+    return usable
+
+
+def host_dir(name):
+    problem = host_problem(name)
+    if problem:
+        raise SystemExit(problem)
+    return HOSTS[name]
 
 
 def _code_only(line):

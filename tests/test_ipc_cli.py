@@ -29,7 +29,7 @@ ShellRoot {
 
 def main():
     ok = True
-    with harness.Run("4.0", SHELL, prefix="foamy-kit-ipc-cli-") as run:
+    with harness.Run("4.5", SHELL, prefix="foamy-kit-ipc-cli-") as run:
         run.start()
         by_id = Path(run.env["XDG_RUNTIME_DIR"]) / "quickshell/by-id"
         for _ in range(100):

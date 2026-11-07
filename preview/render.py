@@ -16,6 +16,11 @@ copied onto the screen at its anchor), or for service plugins any Item with a
 `cardItem`, drawn in screen coordinates. Without a cardItem only the screen
 is captured.
 
+Hosts: 4.5 is the installed shell (/usr/share/omarchy/shell; FOAMY_HOST_45
+overrides). 4.0 is opt-in: set FOAMY_HOST_40 to a 4.0 shell directory.
+`--host both`, `--trio` and `--before-host` use the hosts that are there and
+print a SKIP line for the others.
+
 Nothing touches ~/.config, the live session or its D-Bus: see preview/harness.py.
 """
 import argparse
@@ -76,7 +81,7 @@ def render(plugin, host, out, preview=None, states=None, theme="dark", language=
             run.cleanup()
 
 
-HOST_LABEL = {"4.0": "4.0.6", "4.5": "4.5"}
+HOST_LABEL = {"4.0": "4.0", "4.5": "4.5"}
 
 
 def dev_copy(plugin, ref, before_preview):
@@ -119,15 +124,19 @@ def dev_copy(plugin, ref, before_preview):
 
 def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("4.5", "4.0"), states=None,
          theme="dark", url_prefix="", timeout=120):
-    """Render <view>-before.png (dev), <view>-after-4.0.png, <view>-after-4.5.png
-    and trio.md (a PR-body table). Returns (rows, before_label)."""
+    """Render <view>-before.png (dev), <view>-after-<host>.png for each
+    available host (4.5; 4.0 only with FOAMY_HOST_40) and trio.md (a PR-body
+    table). Before tries the available hosts of `before_hosts` in order.
+    Returns (rows, before_label)."""
     plugin = Path(plugin).resolve()
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f"foamy-kit-trio-{os.getpid()}-"))
     after = {}
+    after_hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="trio after")
+    before_hosts = harness.available_hosts(before_hosts, what="trio before", require=False)
     try:
-        for host in ("4.0", "4.5"):
+        for host in after_hosts:
             shots = render(plugin, host, work / f"after-{host}", states=states, theme=theme, timeout=timeout)
             after[host] = {}
             for path, _ in shots or []:
@@ -145,6 +154,8 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("
             if not preview.is_file():
                 before_label = "Before (dev: no preview/Before.qml)"
             reason = ""
+            if preview.is_file() and not before_hosts:
+                before_label = "Before (dev: no host to render on)"
             for host in before_hosts if preview.is_file() else ():
                 shots = render(copy, host, work / f"before-{host}", preview=preview, states=states, theme=theme,
                                timeout=timeout, lenient=True)
@@ -163,26 +174,33 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("
                             target = out / f"{path.stem}-before.png"
                             shutil.copyfile(path, target)
                             before[path.stem] = target
-                    fallback = host != before_hosts[0]
-                    before_label = f"Before (dev, {HOST_LABEL[host]} host" + (f"; {reason})" if fallback else ")")
+                    if host != before_hosts[0]:
+                        before_label = f"Before (dev, {HOST_LABEL[host]} host; {reason})"
+                    elif clipped:
+                        # No other host to try (4.0 is opt-in): say the card is the clipped fork.
+                        before_label = f"Before (dev, {HOST_LABEL[host]} host; popup fork clipped)"
+                    else:
+                        before_label = f"Before (dev, {HOST_LABEL[host]} host)"
                     break
                 print(f"before: dev did not render on {HOST_LABEL[host]}", file=sys.stderr)
                 reason = f"did not render on {HOST_LABEL[host]}"
             else:
-                if preview.is_file():
+                if preview.is_file() and before_hosts:
                     before_label = "Before (dev did not render)"
             shutil.rmtree(copy.parent, ignore_errors=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    views = list(after.get("4.5", {}))
-    views += [v for v in after.get("4.0", {}) if v not in views]
+    views = []
+    for host in sorted(after, key=lambda h: h != "4.5"):
+        views += [v for v in after[host] if v not in views]
     views += [v for v in before if v not in views]
     prefix = url_prefix.rstrip("/") + "/" if url_prefix else ""
     cell = lambda files, view, alt: f"![{alt}]({prefix}{files[view].name})" if view in files else "—"
-    lines = [f"| View | {before_label} | After 4.0.6 | After 4.5 |", "|---|---|---|---|"]
+    lines = ["| View | " + " | ".join([before_label] + [f"After {HOST_LABEL[h]}" for h in after_hosts]) + " |",
+             "|---" * (2 + len(after_hosts)) + "|"]
     for view in views:
-        lines.append(f"| {view} | {cell(before, view, view + ' before')} | {cell(after.get('4.0', {}), view, view + ' after 4.0.6')}"
-                     f" | {cell(after.get('4.5', {}), view, view + ' after 4.5')} |")
+        lines.append(f"| {view} | {cell(before, view, view + ' before')} | "
+                     + " | ".join(cell(after[h], view, f"{view} after {HOST_LABEL[h]}") for h in after_hosts) + " |")
     (out / "trio.md").write_text("\n".join(lines) + "\n")
     return lines, before_label
 
@@ -205,11 +223,12 @@ def main():
     parser.add_argument("--bus", default="private", choices=["private", "none"],
                         help="session D-Bus: a private daemon (default) or none; never the desktop's")
     parser.add_argument("--trio", action="store_true",
-                        help="Before (dev) / After 4.0.6 / After 4.5 per view, plus trio.md")
+                        help="Before (dev) / After per host (4.5; 4.0 with FOAMY_HOST_40) per view, plus trio.md")
     parser.add_argument("--dev-ref", default="origin/dev", help="git ref for Before (default origin/dev)")
     parser.add_argument("--before-preview", default=None,
                         help="preview for the dev tree (default <plugin>/preview/Before.qml, else dev's preview/Preview.qml)")
-    parser.add_argument("--before-host", default="4.5,4.0", help="hosts to try for Before, in order")
+    parser.add_argument("--before-host", default="4.5,4.0",
+                        help="hosts to try for Before, in order (unavailable ones are skipped: 4.0 needs FOAMY_HOST_40)")
     parser.add_argument("--url-prefix", default="", help="image URL prefix for trio.md (e.g. the pr-assets raw URL)")
     args = parser.parse_args()
     harness.install_signal_cleanup()
@@ -223,10 +242,10 @@ def main():
         return 0
     plugin = Path(args.plugin).resolve()
     out = Path(args.out or f"/tmp/foamy-preview-{plugin.name}")
-    hosts = ["4.0", "4.5"] if args.host == "both" else [args.host]
+    hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="render") if args.host == "both" else [args.host]
     status = 0
     for host in hosts:
-        target = out / host if len(hosts) > 1 else out
+        target = out / host if args.host == "both" else out
         shots = render(plugin, host, target, args.preview, [s for s in args.states.split(",") if s], args.theme,
                        args.language, args.position, args.rounding, args.keep, args.timeout, args.bus, scale=args.scale)
         if shots is None:

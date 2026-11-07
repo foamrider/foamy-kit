@@ -339,9 +339,13 @@ preview/publish-screenshots.sh ../foamy-audio /tmp/audio-shots/4.5 fix-omarchy-4
 ```
 
 `render.py` runs Quickshell offscreen (software renderer, temp HOME and XDG
-dirs, no Wayland/Hyprland variables) against a host shell: `--host 4.0`
-(`/usr/share/omarchy/shell`) or `--host 4.5` (`/tmp/omarchy-ref/v45/shell`;
-QML is loaded, no host script or binary is ever run). Offscreen Qt has no
+dirs, no Wayland/Hyprland variables) against a host shell (only its QML is
+loaded, no host script or binary is ever run): `--host 4.5` (the default) is
+the installed Omarchy 4.5 shell, `/usr/share/omarchy/shell` (`FOAMY_HOST_45`
+overrides). 4.0 is opt-in: `--host 4.0` needs `FOAMY_HOST_40` pointing at a 4.0
+shell directory. `--host both`, `--trio` and `--before-host` use the hosts that
+are there and print a `SKIP … set FOAMY_HOST_40` line for 4.0 otherwise
+(`harness.available_hosts()`); with `--host both` the PNGs go to `<out>/<host>/`. Offscreen Qt has no
 layer shell, so the host's own `Ui/KeyboardPanel.qml` is loaded with its
 `PanelWindow` swapped for an item that draws into a simulated 1920x1080
 screen; its geometry and motion code is the host's. 4.5 runs use a full-screen
@@ -410,18 +414,21 @@ directories). It compares RGB and alpha; never compare one without the other.
 preview/render.py ../foamy-power --trio --url-prefix https://raw.githubusercontent.com/foamrider/foamy-power/pr-assets/fix-omarchy-45/power
 ```
 
-Renders each view three times: `<view>-before.png` (the `origin/dev` tree,
-`--dev-ref`), `<view>-after-4.0.png` and `<view>-after-4.5.png` (the working
-tree), and writes `trio.md`, a PR-body table. Before comes from `git archive`
+Renders each view per host: `<view>-before.png` (the `origin/dev` tree,
+`--dev-ref`) and `<view>-after-4.5.png` (the working tree; plus
+`<view>-after-4.0.png` with `FOAMY_HOST_40`), and writes `trio.md`, a PR-body
+table with one After column per host. Before comes from `git archive`
 (the plugin repo is not touched), with layer-shell windows (pre-kit popup
 forks, overlay windows) swapped for the offscreen stand-in — only the windows
 and their own `anchors { }` blocks are rewritten — and bare `Color.` qualified
 (Qt 6.12 shadows it), so dev looks as it did. Describe the dev UI in
 `preview/Before.qml` in the current tree (or `--before-preview FILE`); else dev's
-own `preview/Preview.qml` is used. Before tries `--before-host 4.5,4.0` in order:
-when dev doesn't render on 4.5, or its popup fork is clipped there (the 120 px
-card the kit fixed), it falls back to the 4.0.6 host and the column header says
-so. Card images only; `--states` limits the views.
+own `preview/Preview.qml` is used. Before tries the available hosts of
+`--before-host 4.5,4.0` in order: when dev doesn't render on 4.5, or its popup
+fork is clipped there (the 120 px card the kit fixed), it falls back to the 4.0
+host if `FOAMY_HOST_40` is set, and the column header says so; without it the
+header says the fork is clipped (or that dev did not render). Card images only;
+`--states` limits the views.
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
 branch through a temporary worktree (the working tree is untouched), prints
@@ -429,8 +436,9 @@ branch through a temporary worktree (the working tree is untouched), prints
 
 ## Compatibility
 
-`dev` plugins target Omarchy 4.5 and must keep loading on 4.0.6. The kit
-does that with runtime feature detection only: the stock KeyboardPanel and
+`dev` plugins target Omarchy 4.5, the installed shell; only 4.5 is tested by
+default. The kit keeps its 4.0 code paths (opt-in tests: `FOAMY_HOST_40`), with
+runtime feature detection only: the stock KeyboardPanel and
 PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
 4.5-only singletons through `Qt.createQmlObject`, `FoamyMotion` checks
 `typeof Style.duration`. No dual code paths beyond that.
@@ -441,14 +449,18 @@ PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
 tests/run-all.sh
 ```
 
+Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`)
+and on 4.0 only when `FOAMY_HOST_40` points at a 4.0 shell; otherwise each
+prints `SKIP … on 4.0` and passes.
+
 Runs FoamyPrefs unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
-on throwaway copies, the FoamyPopup geometry test (4 bar positions, both hosts,
-max height, menu padding, plus the old fork as a negative control), runtime
-tests of i18n/motion/palette/prefs/cursor/leader election/IPC on both hosts
+on throwaway copies, the FoamyPopup geometry test (4 bar positions, max
+height, menu padding, plus the old fork as a negative control), runtime
+tests of i18n/motion/palette/prefs/cursor/leader election/IPC
 (English, Danish, Arabic), the 0.2 features (icons, tokens, dropdown binding,
 prefs queue inline and CLI with fake `omarchy`, IPC preference and peer
 calls, settings state, private D-Bus), a `qs ipc` argument probe, harness
-leak tests, the demo, menu-card and service previews, and (0.4.0, both hosts,
+leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and screen-height popups
 (`test_components.py`), and wheel scrolling (`test_wheel.py`, which also
