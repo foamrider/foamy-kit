@@ -117,7 +117,9 @@ const CLONE_NEW: [u32; 7] = [
 
 /// A classic BPF seccomp program: kill the process on a foreign
 /// architecture (and, on x86_64, for any x32 syscall), return `errno` for
-/// the listed syscalls, allow everything else.
+/// the listed syscalls (with [`threaded_decoder`](Self::threaded_decoder)
+/// also for `clone` with the wrong flags, and `ENOSYS` for `clone3`), allow
+/// everything else.
 #[derive(Debug, Clone)]
 pub struct BpfFilter {
     program: Vec<sock_filter>,
