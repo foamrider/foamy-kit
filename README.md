@@ -342,16 +342,18 @@ about the sandbox stays as it is.
 | `clone` | `EPERM` | allowed only with `CLONE_THREAD` and no `CLONE_NEW*` flag (masked compares on the low 32 bits of argument 0, the bits the kernel reads); otherwise `EPERM` |
 | `clone3` | `EPERM` | `ENOSYS` (its flags are in memory, where seccomp can't look), so glibc falls back to `clone` |
 | `fork`, `vfork`, `ptrace`, `mount`, `unshare`, `setns`, `bpf` | `EPERM` | `EPERM` |
+| `io_uring_setup`, `io_uring_enter`, `io_uring_register`, `add_key`, `request_key`, `keyctl`, `userfaultfd` (0.6.0) | `EPERM` | `EPERM` |
 | another architecture, x32 (x86_64) | killed | killed |
 
 So the decoder can start threads but no process and no namespace. The
-`decoder()` program is unchanged (a unit test pins its bytes). Only x86_64
+`decoder()` program changed only by 0.6.0's hardening row (a unit test pins
+its bytes, and 0.5.2's list still gives 0.5.2's). Only x86_64
 tests it live: unit tests run the test binary under the filter (a thread
 starts; fork, `clone` without `CLONE_THREAD` or with `CLONE_NEWUSER`,
-`unshare` fail; an x32 call is killed). aarch64 is covered by the BPF
-interpreter tests, which check both profiles for every syscall number on
-both architectures; qemu-user has no seccomp, so the aarch64 binary fails
-closed there.
+`unshare` and the hardening row fail; an x32 call is killed). aarch64 is
+covered by the BPF interpreter tests, which check both profiles for every
+syscall number on both architectures; qemu-user has no seccomp, so the
+aarch64 binary fails closed there.
 
 `Bounded` runs the stages:
 
