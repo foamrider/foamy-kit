@@ -25,7 +25,7 @@ sandbox = ["dep:libc", "dep:seccompiler", "dep:landlock"]
 tls = ["dep:rustls", "dep:rustls-graviola", "dep:rustls-native-certs"]
 
 [dependencies]
-rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event"] }
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event", "pipe"] }
 serde = { version = "1", default-features = false, features = ["std"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
 libc = { version = "0.2.153", optional = true }
