@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.6.0 — 2026-11-08
+
+For foamy-lock's video wallpapers: a sandboxed, multithreaded ffmpeg
+conversion in two stages. Everything is additive; existing filters and
+`Bounded` calls behave as before. README.md "Two-stage jobs" is the recipe.
+
+### Added
+- `foamy-helper::sandbox::BpfFilter::threaded_decoder()` (feature
+  `sandbox`), with `threaded_decoder_denied(arch)`: the image decoder's
+  filter for a decoder that runs threads. `clone` is allowed only with
+  `CLONE_THREAD` and no `CLONE_NEW*` flag (masked compares on the low 32
+  bits of argument 0), `clone3` returns `ENOSYS` so glibc falls back to
+  `clone`, and `fork`, `vfork`, `ptrace`, `mount`, `unshare`, `setns` and
+  `bpf` stay `EPERM`. Foreign architectures and x32 are killed as before.
+- `Bounded::stdin_fd(fd)`: standard input straight from an open file, as
+  fd 0 and still seekable (`ffmpeg -fd 0 -i fd:`).
+- `Bounded::nice(n)` and `Bounded::io_idle()`: niceness (only ever raised)
+  and the idle I/O class for one child, inherited by its threads and
+  children.
+- `Bounded::pipe_into(next)` → `child::Pipeline` (`run`,
+  `run_with_progress`) → `child::PipelineOutput` (`first`, `second`,
+  `piped`, `cancelled`, `success()`): the first child's standard output
+  into the second one's input through the helper, moved with `splice` and
+  counted. The progress callback runs after every transfer and at least
+  every 100 ms and can cancel. The deadline is the shorter of the two
+  timeouts. A timeout, an overflow, a cancel or an error kills both process
+  groups, and both children are always reaped.
+- Tests: the threaded profile against an independent reference for every
+  syscall and many `clone` flags on both arches, and live in a child (a
+  thread starts; fork, `clone` without `CLONE_THREAD` or with
+  `CLONE_NEWUSER`, `unshare`, `setns` and `bpf` fail; x32 is killed); the
+  decoder program's bytes pinned to 0.5.2's; `stdin_fd`, `nice`,
+  `io_idle`, and pipelines (counting, progress, both ends closing, deadline,
+  cancel, overflow, spawn failure, no zombies). 90 unit tests.
+
+### Changed
+- `foamy-helper` is 0.1.1 (new public API) and enables rustix's `pipe`
+  feature; its dependencies are unchanged. A plugin that syncs 0.6.0 runs
+  `cargo update -p foamy-helper` (in `native/`, or its crate dir) and,
+  being FoamyNative, rebuilds: `kit/rust` changed, so `native.pin`'s
+  source hash changes too.
+- `Bounded::run` now also reaps a child it killed after an error, instead
+  of leaving a zombie.
+
 ## 0.5.2 — 2026-11-07
 
 Omarchy 4.5.0 is the installed shell now: the kit is previewed and tested on it,
