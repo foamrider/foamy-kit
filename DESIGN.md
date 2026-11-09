@@ -81,6 +81,16 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   slot and its menu holds the actions that didn't fit, then `menuItems`, then a
   separator and **Settings, always last**. With menu items and room to spare,
   ⋯ sits beside Settings. Every menu entry has an icon.
+  - **Settings in the menu**: a panel whose header keeps one action plus a
+    state toggle that is not an everyday action (Snooze in train and zendesk)
+    puts the toggle in `menuItems` and sets `maxButtons: 2`, so Settings moves
+    into the ⋯ menu and the row shows the action and ⋯. The toggle is one
+    entry whose text and icon say what it will do now (moon "Snooze until
+    tomorrow"; sun "Stop snoozing" / "Resume now"), not a checked state.
+    Settings stays reachable with `s` and right-click; the ⋯ button is the
+    Settings cursor stop (`settingsHasCursor` and `menuHasCursor` on the same
+    stop, Enter calls `openMenu(true)` while `settingsInMenu`), and the key
+    catcher is `blocked` while `menuOpen`.
 - **Menus** (`FoamyMenu`, the ⋯ menu): an overlay inside the popup card, never a
   separate window or a Controls.Menu positioned by hand. It drops from the
   button, its trailing edge on the button's trailing edge (mirrored in RTL),
