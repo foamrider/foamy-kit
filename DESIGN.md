@@ -240,6 +240,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   available for this CPU." in the plugin's language, keeps whatever works
   without it, and does not retry in a loop. Helpers answer in JSON, also on
   failure. Layout, build and checks: README.md, "Native helpers".
+  One exception: a helper whose job is a library that only has a working
+  Python binding stays Python, and its README says why. Today that is
+  foamy-clock (Evolution's libecal through GObject introspection: the
+  Evolution D-Bus API is private, versioned and doesn't expand recurring
+  events) and foamy-bolt (Solaar's receiver library, years of device
+  quirks). Anything else is Rust.
 - **Effects**: MultiEffect, ShaderEffect and layer effects draw nothing under
   the software renderer (Omarchy CPU rendering, the preview harness). Gate them
   with `layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software` and keep the
