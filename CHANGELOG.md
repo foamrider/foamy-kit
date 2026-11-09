@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.6.0 — 2026-11-08
+
+For foamy-lock's video wallpapers: a sandboxed, multithreaded ffmpeg
+conversion in two stages, and stricter decoder filters (a deliberate
+hardening, below). Otherwise everything is additive; `Bounded` calls behave
+as before. README.md "Two-stage jobs" is the recipe.
+
+### Added
+- `foamy-helper::sandbox::BpfFilter::threaded_decoder()` (feature
+  `sandbox`), with `threaded_decoder_denied(arch)`: the image decoder's
+  filter for a decoder that runs threads. `clone` is allowed only with
+  `CLONE_THREAD` and no `CLONE_NEW*` flag (masked compares on the low 32
+  bits of argument 0), `clone3` returns `ENOSYS` so glibc falls back to
+  `clone`, and `fork`, `vfork`, `ptrace`, `mount`, `unshare`, `setns` and
+  `bpf` stay `EPERM` (and the hardening below). Foreign architectures and
+  x32 are killed as before.
+- `Bounded::stdin_fd(fd)`: standard input straight from an open file, as
+  fd 0 and still seekable (`ffmpeg -fd 0 -i fd:`).
+- `Bounded::nice(n)` and `Bounded::io_idle()`: niceness (only ever raised)
+  and the idle I/O class for one child, inherited by its threads and
+  children.
+- `Bounded::pipe_into(next)` → `child::Pipeline` (`run`,
+  `run_with_progress`) → `child::PipelineOutput` (`first`, `second`,
+  `piped`, `cancelled`, `success()`): the first child's standard output
+  into the second one's input through the helper, moved with `splice` and
+  counted. The progress callback runs after every transfer and at least
+  every 100 ms and can cancel. The deadline is the shorter of the two
+  timeouts. A timeout, an overflow, a cancel or an error kills both process
+  groups, and both children are always reaped.
+- Tests: the threaded profile against an independent reference for every
+  syscall and many `clone` flags on both arches, and live in a child (a
+  thread starts; fork, `clone` without `CLONE_THREAD` or with
+  `CLONE_NEWUSER`, `unshare`, `setns` and `bpf` fail; x32 is killed); the
+  decoder program's bytes pinned; `stdin_fd`, `nice`, `io_idle`, and
+  pipelines (counting, progress, both ends closing, deadline, cancel,
+  overflow, spawn failure, no zombies).
+
+### Changed (security hardening: the image decoder's filter is new)
+- Both decoder profiles, `BpfFilter::decoder()` and `threaded_decoder()`,
+  are denylists, so they now also deny (`EPERM`) kernel interfaces a
+  decoder never needs and that have a history of privilege-escalation
+  bugs: io_uring (`io_uring_setup`, `io_uring_enter`, `io_uring_register`),
+  the kernel key store (`add_key`, `request_key`, `keyctl`) and
+  `userfaultfd`. `decoder_denied(arch)` and `threaded_decoder_denied(arch)`
+  list them too. This deliberately changes the `decoder()` program that
+  0.5.2 and artwork.py built (x86_64: 53 → 88 instructions, aarch64: 40 →
+  75): the unit test that pinned its bytes to 0.5.2's now pins the new
+  bytes and also checks that 0.5.2's list still compiles to 0.5.2's bytes,
+  so the list is the only change. ImageMagick and ffmpeg use none of these
+  calls (foamy-lock's image and video tests run under the new filters).
+- Tests for each new denial: the BPF interpreter (both profiles, both
+  arches, every syscall against the references) and, on x86_64, live in a
+  child: each call is `EPERM` under the threaded profile (installed before
+  exec) and under the image decoder profile (installed by the probe on its
+  own thread, since the test harness needs a thread first), while without
+  a filter the kernel answers otherwise (`EBADF`, `EFAULT`, `EINVAL`,
+  `EOPNOTSUPP`). 92 unit tests.
+
+### Changed
+- `foamy-helper` is 0.1.1 (new public API) and enables rustix's `pipe`
+  feature; its dependencies are unchanged. A plugin that syncs 0.6.0 runs
+  `cargo update -p foamy-helper` (in `native/`, or its crate dir) and,
+  being FoamyNative, rebuilds: `kit/rust` changed, so `native.pin`'s
+  source hash changes too.
+- `Bounded::run` now also reaps a child it killed after an error, instead
+  of leaving a zombie.
+
 ## 0.5.2 — 2026-11-07
 
 Omarchy 4.5.0 is the installed shell now: the kit is previewed and tested on it,

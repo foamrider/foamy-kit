@@ -304,17 +304,17 @@ fn main() -> ExitCode {
 | `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
 | `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign-owned targets and directories, and directories that are world-writable without the sticky bit; group-writable own directories, as with umask 002, are fine), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
 | `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`, 0600, owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700), `try_runtime_lock` |
-| `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default |
+| `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default; `stdin_fd` (standard input straight from an open file, still seekable), `nice`, `io_idle`; `pipe_into` → `Pipeline` (one child's standard output into another's input, moved with `splice` and counted: `run`, `run_with_progress`, `PipelineOutput`; see [Two-stage jobs](#two-stage-jobs)) |
 | `net` | `DeadlineStream` (wraps a `TcpStream`/`UnixStream`; re-arms the socket timeout to the time left before every read and write, so rustls, an HTTP parser or `read_to_end` on top is bounded as a whole; `DeadlineExceeded`, `is_deadline`), `set_deadline` for long-lived connections |
 | `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
 | `favicon` (feature) | `run` (browser-favicon.py's whole stdin/stdout contract), `resolve`, `lookup`, `Dirs`, `valid_png`, `valid_hostname`, `browser_roots`: favicons from local Chromium-family caches, never a web request; SQLite read by a built-in read-only reader (SQLite's `SHARED` lock on the live file, in-memory snapshot when the browser holds it, WAL frames, structural check) |
-| `sandbox` (feature) | `BpfFilter` (seccomp-BPF via `seccompiler`: `decoder()` is artwork.py's filter; `to_bytes`, `memfd` for `bwrap --seccomp`; `Bounded::seccomp`), `ExecOnly` (Landlock: only the given files may execute, applied in `pre_exec`; `probe` = github_status's setpriv probe and fallback; `Bounded::exec_only`, `apply_to(&mut Command)`), `Bwrap` (bubblewrap argv builder, `readonly_host`, fd options, `bounded`, `works`), `elf_interpreter`, `which` |
+| `sandbox` (feature) | `BpfFilter` (seccomp-BPF via `seccompiler`: `decoder()` is artwork.py's filter, `threaded_decoder()` the same for a decoder that runs threads; `to_bytes`, `memfd` for `bwrap --seccomp`; `Bounded::seccomp`), `ExecOnly` (Landlock: only the given files may execute, applied in `pre_exec`; `probe` = github_status's setpriv probe and fallback; `Bounded::exec_only`, `apply_to(&mut Command)`), `Bwrap` (bubblewrap argv builder, `readonly_host`, fd options, `bounded`, `works`), `elf_interpreter`, `which` |
 | `tls` (feature) | `provider` (Graviola, the one crypto provider for every helper), `system_roots`/`system_roots_der` (system CA store, loaded once), `client_config` (WebPKI, TLS 1.2+1.3), `cpu_supported`/`ensure_supported`/`UNSUPPORTED` (Graviola needs AES/PCLMUL, SSSE3, AVX, AVX2, BMI1/BMI2 and ADX on x86_64, NEON/AES/PMULL/SHA-2 on aarch64: check before a handshake, report instead of aborting; `UNSUPPORTED` is an i18n catalog key, translate it verbatim). With ureq: `default-features = false, features = ["rustls-no-provider"]` and `unversioned_rustls_crypto_provider(tls::provider())` |
 
 Enable a feature in the plugin crate, `foamy-helper = { path =
 "../kit/rust/foamy-helper", features = ["favicon"] }` (or `["sandbox"]`, `["tls"]`),
 then `cargo update -p foamy-helper` for the lock. Dependencies: `rustix` (fs,
-process, event), `serde`, `serde_json`; `favicon` adds `libc`; `sandbox` adds
+process, event, pipe), `serde`, `serde_json`; `favicon` adds `libc`; `sandbox` adds
 `libc`, `seccompiler` and `landlock`; `tls` adds `rustls`, `rustls-graviola` and
 `rustls-native-certs`. No async runtime, no build script, no C code (do not
 add ring, aws-lc-rs or any `-sys` crate that compiles C: the bytes would
@@ -330,6 +330,77 @@ Requirements for building (developers only): rustup with the toolchain from
 `rust-toolchain.toml` (`rustup toolchain install 1.99.1 --profile minimal -c
 clippy,rustfmt -t x86_64-unknown-linux-musl,aarch64-unknown-linux-musl`),
 `file`, and qemu-user binfmt to run the aarch64 binary in tests.
+
+### Two-stage jobs
+
+A decoder that must run threads (ffmpeg converting a video) gets
+`BpfFilter::threaded_decoder()` instead of `decoder()`; everything else
+about the sandbox stays as it is.
+
+| Syscall | `decoder()` | `threaded_decoder()` |
+|---|---|---|
+| `clone` | `EPERM` | allowed only with `CLONE_THREAD` and no `CLONE_NEW*` flag (masked compares on the low 32 bits of argument 0, the bits the kernel reads); otherwise `EPERM` |
+| `clone3` | `EPERM` | `ENOSYS` (its flags are in memory, where seccomp can't look), so glibc falls back to `clone` |
+| `fork`, `vfork`, `ptrace`, `mount`, `unshare`, `setns`, `bpf` | `EPERM` | `EPERM` |
+| `io_uring_setup`, `io_uring_enter`, `io_uring_register`, `add_key`, `request_key`, `keyctl`, `userfaultfd` (0.6.0) | `EPERM` | `EPERM` |
+| another architecture, x32 (x86_64) | killed | killed |
+
+So the decoder can start threads but no process and no namespace. The
+`decoder()` program changed only by 0.6.0's hardening row (a unit test pins
+its bytes, and 0.5.2's list still gives 0.5.2's). Only x86_64
+tests it live: unit tests run the test binary under the filter (a thread
+starts; fork, `clone` without `CLONE_THREAD` or with `CLONE_NEWUSER`,
+`unshare` and the hardening row fail; an x32 call is killed). aarch64 is
+covered by the BPF interpreter tests, which check both profiles for every
+syscall number on both architectures; qemu-user has no seccomp, so the
+aarch64 binary fails closed there.
+
+`Bounded` runs the stages:
+
+- **`stdin_fd(file)`** hands a file the helper opened and checked to the
+  child as fd 0, nothing copied, still seekable: `ffmpeg -fd 0 -i fd:`
+  reads an MP4 whose index is at the end (`-i pipe:0` would not seek).
+- **`nice(19)`** and **`io_idle()`** (`ionice -c 3`) per child; threads and
+  children inherit them. `nice` only raises the niceness: a child already
+  nicer keeps its own.
+- **`a.pipe_into(b)`** is a `Pipeline`: `a`'s standard output into `b`'s
+  standard input through the helper, moved with `splice` (no copy) and
+  counted. `run_with_progress(|bytes| …)` is called after every transfer
+  and at least every 100 ms; `ControlFlow::Break(())` cancels (check a
+  flag your signal handler sets there). The deadline is the shorter of the
+  two timeouts. A timeout, an output over a stage's `max_output`, a cancel
+  or an error kills both process groups, and both children are always
+  reaped. `PipelineOutput` has both `Output`s, `piped` (bytes) and
+  `cancelled`; the second stage's `stdin` must stay unset.
+
+```rust
+let filter_a = BpfFilter::threaded_decoder()?.memfd()?;
+let filter_b = BpfFilter::threaded_decoder()?.memfd()?;
+let decode = sandbox(&filter_a)          // your Bwrap: --unshare-all, read-only /usr, --seccomp …
+    .bounded(["/usr/bin/ffmpeg", "-nostdin", "-protocol_whitelist", "fd", "-fd", "0", "-i", "fd:",
+              /* … */ "-f", "rawvideo", "-pix_fmt", "yuv420p", "pipe:1"])
+    .env_clear()
+    .stdin_fd(input)                     // the File the helper opened
+    .nice(19)
+    .io_idle()
+    .rlimit(Resource::As, limit)
+    .timeout(Duration::from_secs(600));
+let encode = sandbox(&filter_b)
+    .bounded(["/usr/bin/ffmpeg", "-nostdin", "-f", "rawvideo", /* … */ "-i", "pipe:0", /* … */ "pipe:1"])
+    .env_clear()
+    .nice(19)
+    .io_idle()
+    .max_output(150 << 20)
+    .timeout(Duration::from_secs(600));
+let output = decode.pipe_into(encode).run_with_progress(|bytes| {
+    report_frames(bytes / frame_bytes);
+    if cancel.load(Ordering::Relaxed) { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+})?;
+```
+
+Give each stage its own filter memfd: bubblewrap reads the program from the
+fd's shared offset, so with one memfd for both a stage gets a partial or
+empty program and bubblewrap refuses to start it (it fails closed).
 
 ## Preview
 

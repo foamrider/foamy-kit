@@ -21,7 +21,10 @@
 //! - [`fs`]: atomic file writes, private directories, bounded file reads.
 //! - [`lock`]: `flock` locks, including under `$XDG_RUNTIME_DIR/<plugin>`.
 //! - [`child`]: bounded child processes (deadline, output cap, kill on
-//!   timeout, environment control, death with the parent).
+//!   timeout, environment control, death with the parent, standard input
+//!   from bytes or an open file, CPU and I/O priority), and
+//!   [`child::Pipeline`], one child's output into another's input,
+//!   counted.
 //! - [`net`]: [`net::DeadlineStream`], socket I/O bounded by one absolute
 //!   deadline (re-armed before every read and write, so a trickling peer or
 //!   a TLS layer's many reads cannot outlast it).

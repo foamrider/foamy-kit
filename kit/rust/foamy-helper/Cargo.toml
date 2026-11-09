@@ -4,7 +4,7 @@
 # a kit release that leaves this crate alone needs no new plugin Cargo.lock.
 [package]
 name = "foamy-helper"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -25,7 +25,7 @@ sandbox = ["dep:libc", "dep:seccompiler", "dep:landlock"]
 tls = ["dep:rustls", "dep:rustls-graviola", "dep:rustls-native-certs"]
 
 [dependencies]
-rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event"] }
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event", "pipe"] }
 serde = { version = "1", default-features = false, features = ["std"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
 libc = { version = "0.2.153", optional = true }
