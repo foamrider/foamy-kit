@@ -1299,7 +1299,10 @@ def notices_bytes(plugin, channel, binaries, env, cwd):
         for arch, triple in ARCHES.items():
             packages = linked_packages(plugin, crate, triple, env)
             data = entry["files"].get(arch)
-            if data is not None:
+            # Another crate's binary that its sources have outgrown (a shared
+            # dependency was updated) shows the old graph; it is rebuilt next,
+            # and until then kit-check and --verify report it stale.
+            if data is not None and not entry.get("stale"):
                 seen = elf_sources(data)
                 missing = sorted(nv for nv in seen["crates"] if nv not in packages)
                 if missing:
@@ -1457,7 +1460,10 @@ def notices_problems(plugin, pins):
 def notice_entries(plugin, current=None):
     """notices_bytes' binaries: every pinned crate with its committed
     binaries, `current` ({"crate", "binary", "source", "files"}) in place of
-    its crate's."""
+    its crate's. A committed binary whose pin no longer matches its sources
+    is marked "stale": its embedded paths are not checked against the new
+    dependency graph, so crates sharing an updated dependency can be rebuilt
+    one after another."""
     plugin = Path(plugin)
     entries = [current] if current else []
     for pin_path in native_pins(plugin):
@@ -1470,7 +1476,8 @@ def notice_entries(plugin, current=None):
             raise KitError(f"{crate}/{PIN_NAME} has no valid binary name")
         files = {arch: (plugin / f"bin/{arch}/{binary}").read_bytes() for arch in ARCHES
                  if (plugin / f"bin/{arch}/{binary}").is_file() and not (plugin / f"bin/{arch}/{binary}").is_symlink()}
-        entries.append({"crate": crate, "binary": binary, "source": pin.get("source"), "files": files})
+        entries.append({"crate": crate, "binary": binary, "source": pin.get("source"), "files": files,
+                        "stale": native_source_hash(plugin, crate) != pin.get("source")})
     return entries
 
 
