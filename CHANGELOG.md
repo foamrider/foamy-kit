@@ -12,7 +12,14 @@ Answers two marketplace review findings that apply to every plugin
   path that rolls back, reports the error and keeps retry, so `inFlight` can
   no longer stick and later saves are never blocked. The next save waits until
   the previous process has really exited. stderr is read in chunks and only
-  the first 4096 characters are kept. The inline save path is unchanged.
+  the first 4096 characters are kept. Every CLI save runs under coreutils
+  `timeout --signal=KILL` (`FoamyPrefs.bounded()`), which leads its own
+  process group and kills the whole group at the deadline, so a child of the
+  array-save `sh -c` wrapper can't write a rolled-back value later; a save
+  stopped by a signal or a queue destroyed mid-save also kills what is left
+  of the group (`FoamyPrefs.killGroupCommand()`), and the next save waits
+  for it. The queue's own deadline is a backstop at `saveTimeoutMs` + 2 s.
+  The inline save path is unchanged.
 - `FoamyPeerIpc`: a call whose `omarchy-shell` can't start calls
   `done(false, "")` instead of never finishing; the unread stderr collector
   is gone.
@@ -28,7 +35,12 @@ Answers two marketplace review findings that apply to every plugin
   `build-native.sh .` writes it, `--notices` rewrites only it, `--verify`
   fails when it differs from a fresh generation, and `tests/kit-check.sh` /
   `check.sh` fail when it is missing or doesn't match `native.pin`. Not a
-  hashed build input, so binaries and pins are unchanged.
+  hashed build input, so binaries and pins are unchanged. Texts come only
+  from the `.crate` whose SHA-256 matches Cargo.lock (one `cargo fetch
+  --locked` if it's missing), a manifest `license-file` is included in full,
+  and a plugin with several helpers can rebuild them one at a time after a
+  shared dependency changes (a stale sibling binary skips the ELF
+  cross-check and stays reported stale until rebuilt).
 - `tests/test_lifecycle.py`: failed start, deadline, bounded stderr, cancel
   and destruction for the queue, and failed start for peer calls.
 
