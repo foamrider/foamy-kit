@@ -293,9 +293,11 @@ binaries. Per binary it lists:
   schannel, …), which are never compiled. While generating, the tool checks
   that every crate source path embedded in the binaries (panic locations)
   is in the list, and fails otherwise;
-- the **toolchain's code**: the Rust standard library and its own crates
-  (notices from the pinned toolchain's `share/doc/rust/COPYRIGHT-library.html`;
-  std dependencies that file has no entry for are named), musl libc and the
+- the **toolchain's code**: the Rust standard library (in-tree notices from
+  the pinned toolchain's `share/doc/rust/COPYRIGHT-library.html`) and its
+  crates.io dependencies (addr2line, adler2, gimli, hashbrown, miniz_oxide,
+  object, …) at the versions and checksums of the toolchain's
+  `library/Cargo.lock` (see below), musl libc and the
   C runtime objects of the self-contained musl linking (musl 1.2.5's
   `COPYRIGHT`, embedded in the tool, which checks `libc.a`'s version), and
   LLVM's libunwind and crtbegin/crtend (the toolchain's `COPYRIGHT.html`);
@@ -317,9 +319,28 @@ crate that ships no license file at all
 reproduced and marked so. Where a crate offers a choice of licenses, all its
 texts are kept. The file is a supply-chain record, not a legal opinion.
 
+**The standard library's dependencies** are crates.io crates that cargo
+never fetches (they come precompiled in the toolchain). Their versions and
+`.crate` checksums are the registry packages of the toolchain's
+`library/Cargo.lock`: read from the rust-src component when it is installed,
+else from the table `STD_LOCKS` in `native.py`, generated from that file for
+each pinned toolchain (the build only needs the minimal profile, and CI
+doesn't install rust-src; when both exist they must agree). Each linked one
+(the sysroot crates of the musl targets, at the version the binaries name)
+gets the notices of the toolchain's `COPYRIGHT-library.html` entry for that
+exact version, else those of its `.crate` archive: from cargo's registry
+cache, else `${FOAMY_NATIVE_CACHE:-~/.cache/foamy-native}/crates/`, else
+downloaded from `static.crates.io` (not with `CARGO_NET_OFFLINE=true`), and
+used and cached only when its SHA-256 matches the lock. Generation fails, and
+nothing is written, when a dependency the binaries or the sysroot show has no
+locked version or no notice text. A toolchain bump needs its `STD_LOCKS`
+entry (or rust-src installed); `rust-toolchain.toml` itself stays as it is.
+
 The generation is deterministic (the same plugin commit and toolchain give
 the same bytes on any machine) and offline once the crates are fetched
-(`cargo fetch --locked`; a build has already fetched them). The file sits at
+(`cargo fetch --locked`; a build has already fetched them) and the standard
+library's few archives are cached (the first generation downloads those
+cargo doesn't have, under 1 MB for Rust 1.99.1). The file sits at
 the plugin root, next to `LICENSE`, where reviewers look and where it ships
 with the plugin; it is not one of the hashed build inputs (the crate dir,
 `kit/rust`, the root `Cargo.*` and `rust-toolchain.toml`), so writing it never
