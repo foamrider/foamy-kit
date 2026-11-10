@@ -102,9 +102,11 @@ no Rust; other CPUs get a clear "unavailable" state. The `FoamyNative`
 component brings everything the build needs, including the build tool
 itself (`kit/native/build-native.sh`), so a plugin's binaries can be rebuilt
 and verified from the plugin's repository alone. The build is reproducible,
-`check.sh` / `tests/kit-check.sh` verify the result, and the plugin's
+`check.sh` / `tests/kit-check.sh` verify the result, the plugin's
 `verify-native.yml` workflow rebuilds it on GitHub and attests it
-([Provenance](#provenance-ci-rebuild-and-attestation)).
+([Provenance](#provenance-ci-rebuild-and-attestation)), and the build writes
+the licenses of everything linked into it to `THIRD_PARTY_NOTICES.md`
+([Third-party notices](#third-party-notices)).
 
 ### Layout in a plugin
 
@@ -117,6 +119,7 @@ native/src/main.rs          the helper; its contract is the doc comment at the t
 native/native.pin           written by kit/native/build-native.sh; never edit
 bin/x86_64/foamy-<plugin>-helper    built, mode 0755, static-pie ELF
 bin/aarch64/foamy-<plugin>-helper   built, mode 0755, static ELF
+THIRD_PARTY_NOTICES.md      written by kit/native/build-native.sh with the binaries; never edit
 kit/FoamyNative.js          kit: command builder for QML
 kit/node-loader.cjs         kit: loads FoamyNative.js in node tests
 kit/rust/release.toml       kit: the release profile (passed to cargo with --config)
@@ -183,6 +186,7 @@ $KIT/sync.sh . --add FoamyNative          # kit/FoamyNative.js, kit/rust/…, ki
 (cd native && cargo generate-lockfile)    # writes ./Cargo.lock (only that file)
 kit/native/build-native.sh . --test       # cargo fmt --check, clippy --all-targets -D warnings, cargo test
 kit/native/build-native.sh .              # builds both arches, installs bin/<arch>/…, writes native/native.pin
+                                          # and THIRD_PARTY_NOTICES.md
 kit/native/build-native.sh . --verify     # clean rebuild in a fresh target dir, byte compare with bin/
 bash tests/kit-check.sh                   # kit stamps + native pin, checksums, static ELF, staleness
 $KIT/check.sh .                           # the same from the kit, plus the design lint
@@ -190,8 +194,8 @@ $KIT/check.sh .                           # the same from the kit, plus the desi
 
 `$KIT/tools/build-native.sh <plugin> …` is a shortcut that runs the plugin's
 copy. Commit `Cargo.toml`, `Cargo.lock`, `native/`, `bin/x86_64/…`,
-`bin/aarch64/…` and the synced kit files together, and add `/target/` to the
-plugin's `.gitignore`.
+`bin/aarch64/…`, `THIRD_PARTY_NOTICES.md` and the synced kit files together,
+and add `/target/` to the plugin's `.gitignore`.
 
 Cargo hygiene:
 
@@ -246,12 +250,15 @@ foamy-helper`. Never run cargo in `kit/rust/`, and never point
 - installs each binary atomically (a temp file in `bin/<arch>/`, then a
   rename) and only when its bytes changed, then writes `native.pin`: crate,
   binary, toolchain, kit version (the plugin's `foamy-kit.lock` version, the
-  version of the tool that built it), the **source hash** and a sha256 per arch;
+  version of the tool that built it), the **source hash** and a sha256 per arch,
+  and `THIRD_PARTY_NOTICES.md` ([Third-party notices](#third-party-notices));
 - `--verify` rebuilds in a fresh target dir (removed afterwards) and fails
-  unless both binaries are byte-identical to the committed ones and the pin
-  is current; `--verify --out DIR` also writes the rebuilt files to
+  unless both binaries are byte-identical to the committed ones, the pin
+  is current and `THIRD_PARTY_NOTICES.md` equals a fresh generation;
+  `--verify --out DIR` also writes the rebuilt binaries to
   `DIR/<arch>/<binary>` (outside the plugin), which is what CI attests;
-  `--test` runs fmt, clippy and tests in the same cache.
+  `--test` runs fmt, clippy and tests in the same cache; `--notices` only
+  rewrites `THIRD_PARTY_NOTICES.md` (for binaries that are current).
 
 The source hash covers the crate (without `native.pin` and `target/`),
 `kit/rust/`, and `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` at the
@@ -260,7 +267,65 @@ leaves the Rust code alone keeps the binaries fresh. `check.sh` and
 `tests/kit-check.sh` (bash, coreutils, `file`) fail when a pinned binary is
 missing, a symlink, not executable, has another checksum, is not a static
 64-bit ELF for its arch, or the sources changed since the build ("stale"),
-and when FoamyNative is synced without a `native.pin`.
+when FoamyNative is synced without a `native.pin`, and when
+`THIRD_PARTY_NOTICES.md` is missing or doesn't name the pin's source hash
+and checksums.
+
+### Third-party notices
+
+A static binary contains its dependencies' code, so their license texts and
+copyright notices ship with it. The marketplace reviewers check this too:
+the plugin's own `LICENSE*` files cover the plugin and the projects it ports,
+not crates such as rustls-webpki (ISC, "Copyright 2015 Brian Smith") or rustls
+(Joseph Birr-Pixton) that the TLS helpers link. `kit/native/build-native.sh`
+therefore writes **`THIRD_PARTY_NOTICES.md`** at the plugin root with the
+binaries. Per binary it lists:
+
+- the binary checksums and the pin's source hash (what `tests/kit-check.sh`
+  matches against `native.pin`);
+- every **crate** compiled into it for each musl target: name, version,
+  SPDX license from its `Cargo.toml`, the `Cargo.lock` checksum, the arches,
+  and links to its notices. The list is `cargo tree --locked --target <triple>
+  --edges normal,no-proc-macro` with the build's features and flags.
+  Build-dependencies and proc-macro crates (serde_derive, syn, …) only run on
+  the build host and are left out; so are crates `Cargo.lock` records for
+  other platforms or features the build doesn't enable (windows-*, ring,
+  schannel, …), which are never compiled. While generating, the tool checks
+  that every crate source path embedded in the binaries (panic locations)
+  is in the list, and fails otherwise;
+- the **toolchain's code**: the Rust standard library and its own crates
+  (notices from the pinned toolchain's `share/doc/rust/COPYRIGHT-library.html`;
+  std dependencies that file has no entry for are named), musl libc and the
+  C runtime objects of the self-contained musl linking (musl 1.2.5's
+  `COPYRIGHT`, embedded in the tool, which checks `libc.a`'s version), and
+  LLVM's libunwind and crtbegin/crtend (the toolchain's `COPYRIGHT.html`);
+- the first-party crates: the plugin's crate (`LICENSE`) and the vendored
+  `kit/rust/foamy-helper` (foamy-kit's MIT license).
+
+Then each distinct notice text once, with the crates that ship it: every
+`LICENSE*`, `LICENCE*`, `COPYING*`, `NOTICE*`, `COPYRIGHT*` and `UNLICENSE`
+file in the crate (vendored subdirectories included, tests, benches and
+examples not) and its `license-file`, plus the copyright lines and SPDX ids
+at the top of its source files, which is where vendored code keeps its
+notices (graviola's s2n-bignum, mlkem-native and OpenSSL parts). The texts
+come from the `.crate` archive in the cargo registry whose SHA-256 is the
+`Cargo.lock` checksum; for a crate that ships no license file at all
+(graviola) the standard text of each license in its SPDX expression is
+reproduced and marked so. Where a crate offers a choice of licenses, all its
+texts are kept. The file is a supply-chain record, not a legal opinion.
+
+The generation is deterministic (the same plugin commit and toolchain give
+the same bytes on any machine) and offline once the crates are fetched
+(`cargo fetch --locked`; a build has already fetched them). The file sits at
+the plugin root, next to `LICENSE`, where reviewers look and where it ships
+with the plugin; it is not one of the hashed build inputs (the crate dir,
+`kit/rust`, the root `Cargo.*` and `rust-toolchain.toml`), so writing it never
+makes the binaries stale. `--verify` (and so the CI workflow) regenerates it
+and fails when the committed file differs; `tests/kit-check.sh` and
+`check.sh`, which run without cargo, fail when it is missing or names other
+binaries than `native.pin`. After a kit sync that introduces it, run
+`kit/native/build-native.sh .` (the binaries don't change) or
+`kit/native/build-native.sh . --notices`, and commit the file.
 
 ### Provenance: CI rebuild and attestation
 
@@ -303,6 +368,8 @@ for that push must be green. Put this in the issue:
   (`git rev-parse <commit>:bin/x86_64/<binary>`) and SHA-256, as in the
   run's summary;
 - the `gh attestation verify` commands above, with the commit;
+- a link to `THIRD_PARTY_NOTICES.md` at that commit (the notice mapping of
+  the code linked into the binaries);
 - the local rebuild from the README.
 
 **The plugin README's "Verifying the helper binaries"** section names the
@@ -318,6 +385,10 @@ dependencies locked in `Cargo.lock` and the toolchain pinned in
 `rust-toolchain.toml`, with the build tool in `kit/native/`. The build is
 reproducible. `native/native.pin` records the toolchain, a hash of every
 build input (`source`) and the SHA-256 of each binary.
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists the third-party code
+linked into the binaries (crates, the Rust standard library, musl, LLVM's
+libunwind) with the license texts and copyright notices it ships; the build
+writes it and the verification below regenerates and compares it.
 
 **CI.** The [Verify native helpers](https://github.com/foamrider/foamy-<plugin>/actions/workflows/verify-native.yml)
 workflow rebuilds both binaries on a GitHub-hosted runner for every push,
@@ -346,8 +417,9 @@ kit/native/build-native.sh . --verify
 
 It builds both binaries from scratch in `~/.cache/foamy-native/` (nothing is
 written to the checkout), compares them byte for byte with `bin/`, checks
-that the kit files are unmodified and that `native.pin` matches the source,
-and ends with `verify OK (<binary>, <toolchain>, both arches reproducible)`.
+that the kit files are unmodified, that `native.pin` matches the source and
+that `THIRD_PARTY_NOTICES.md` equals a fresh generation, and ends with
+`verify OK (<binary>, <toolchain>, both arches reproducible)`.
 
 ### Building the helper yourself
 
@@ -659,7 +731,9 @@ exec` launch: arguments verbatim, exit 126/127) and `test_native.py` (subdirecto
 sync and Rust/TOML stamps, `cargo fmt`/`clippy`/`test` of `foamy-helper`, the
 fixture plugin `tests/fixtures/native-plugin` built for both arches, `--verify`
 and a rebuild at another path byte-identical, check.sh and kit-check.sh on
-pins, tampered, dynamic, wrong-arch and stale binaries, the helper's contract
+pins, tampered, dynamic, wrong-arch and stale binaries, `THIRD_PARTY_NOTICES.md`
+(linked crates only, checksums, shipped texts, an ISC crate's copyright line,
+standard texts for a crate without one, a stale, edited or missing file), the helper's contract
 on x86_64 and on aarch64 through qemu, and `FoamyNative.command` from node and
 from Quickshell's `Process`).
 
