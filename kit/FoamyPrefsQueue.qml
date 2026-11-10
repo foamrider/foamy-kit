@@ -19,6 +19,11 @@ import "FoamyPrefs.js" as Prefs
 //   else through the CLI (FoamyPrefs.saveCommand), one process at a time.
 // - While a CLI save runs, later saves wait; only the newest value per key
 //   is kept.
+// - A CLI save fails (rolled back, retryable) when its command exits non-zero,
+//   can't start (Quickshell then emits no exited(), only running -> false),
+//   is stopped, or runs past saveTimeoutMs (then it is killed). Every one of
+//   these ends in finish(), so `saving` always clears. At most
+//   stderrLimit characters of its stderr are kept for the log.
 // - Each save merges over `effectiveSettings` (settings + values saved but
 //   not yet reflected back), so two quick saves never undo each other.
 // - A pending value is dropped once `settings` shows it, or after
@@ -33,6 +38,9 @@ QtObject {
   property var fields: []
   property var settings: ({})
   property int reflectTimeoutMs: 10000
+  // A CLI save normally takes well under a second (4.0's `qs ipc call` a few).
+  property int saveTimeoutMs: 20000
+  readonly property int stderrLimit: 4096
 
   property var pending: ({})
   readonly property var effectiveSettings: Prefs.overlay(settings, pending)
@@ -47,6 +55,7 @@ QtObject {
   property var waiting: []
   property var current: null
   property var pendingSince: ({})
+  property string stderrHead: ""
 
   signal saved(string key, var value)
   signal failed(string key, var value, string error)
@@ -63,7 +72,8 @@ QtObject {
     }
     error = ""
     lastFailed = null
-    if (inFlight || waiting.length > 0) {
+    // proc.running: a killed (timed-out) command that hasn't exited yet.
+    if (inFlight || waiting.length > 0 || proc.running) {
       var next = waiting.filter(function(item) { return item.key !== key })
       next.push({ key: key, value: value })
       waiting = next
@@ -123,13 +133,53 @@ QtObject {
     }
     current = { key: key, value: value, hadPrevious: hadPrevious, previous: previous }
     inFlight = true
+    stderrHead = ""
+    deadline.restart()
     proc.command = result.command
     proc.running = true
     return true
   }
 
+  // The one way a CLI save ends: exited, failed to start, stopped, timed out.
+  // Later calls for the same attempt (running -> false after exited(), the
+  // exit of a command killed at the deadline) find nothing in flight.
+  function finish(ok, detail) {
+    if (!inFlight) return
+    deadline.stop()
+    var done = current
+    current = null
+    inFlight = false
+    if (ok) {
+      if (done) {
+        var since = Prefs.overlay({}, pendingSince)
+        since[done.key] = Date.now()
+        pendingSince = since
+        saved(done.key, done.value)
+      }
+    } else if (done) {
+      // Back to what was saved before this attempt.
+      if (done.hadPrevious) {
+        var restored = Prefs.overlay({}, pending)
+        restored[done.key] = done.previous
+        pending = restored
+      } else {
+        dropPending(done.key)
+      }
+      error = "Couldn't save the setting."
+      lastFailed = done
+      var output = stderrHead.trim()
+      console.warn("foamy-kit: saving " + done.key + " failed (" + detail + ")" + (output ? ": " + output : ""))
+      failed(done.key, done.value, error)
+    }
+    Qt.callLater(advance)
+  }
+
+  function keepStderr(data) {
+    if (stderrHead.length < stderrLimit) stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
+  }
+
   function advance() {
-    if (inFlight || waiting.length === 0) return
+    if (inFlight || proc.running || waiting.length === 0) return
     var next = waiting[0]
     waiting = waiting.slice(1)
     run(next.key, next.value)
@@ -148,33 +198,39 @@ QtObject {
     }
   }
 
+  property Timer deadline: Timer {
+    interval: Math.max(1, queue.saveTimeoutMs)
+    onTriggered: {
+      queue.finish(false, "no exit after " + interval + " ms")
+      // SIGKILL: running = false only sends SIGTERM, which a stuck command
+      // may ignore. Its exit (or nothing) comes later; advance() waits for it.
+      if (queue.proc.running) queue.proc.signal(9)
+    }
+  }
+
+  // Destroyed mid-save (the panel went away): Quickshell kills the command
+  // and emits nothing, so just let go.
+  Component.onDestruction: {
+    deadline.stop()
+    current = null
+    inFlight = false
+    waiting = []
+  }
+
   property Process proc: Process {
-    stderr: StdioCollector { id: stderrText }
-    onExited: function(code) {
-      var done = queue.current
-      queue.current = null
-      queue.inFlight = false
-      if (code === 0) {
-        if (done) {
-          var since = Prefs.overlay({}, queue.pendingSince)
-          since[done.key] = Date.now()
-          queue.pendingSince = since
-          queue.saved(done.key, done.value)
-        }
-      } else if (done) {
-        // Back to what was saved before this attempt.
-        if (done.hadPrevious) {
-          var restored = Prefs.overlay({}, queue.pending)
-          restored[done.key] = done.previous
-          queue.pending = restored
-        } else {
-          queue.dropPending(done.key)
-        }
-        queue.error = "Couldn't save the setting."
-        queue.lastFailed = done
-        console.warn("foamy-kit: saving " + done.key + " failed: " + String(stderrText.text || "").trim())
-        queue.failed(done.key, done.value, queue.error)
-      }
+    // Chunks as they arrive (no split), so only stderrLimit is ever kept.
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(data) { queue.keepStderr(data) }
+    }
+    onExited: function(code, status) {
+      queue.finish(code === 0 && status === 0, status === 0 ? "exit " + code : "stopped by signal " + code)
+    }
+    // After exited() this finds nothing in flight. Without exited() before it
+    // (missing or non-executable command) the save never started.
+    onRunningChanged: {
+      if (running) return
+      queue.finish(false, "the command couldn't start")
       Qt.callLater(queue.advance)
     }
   }

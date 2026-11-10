@@ -37,17 +37,24 @@ QtObject {
     Process {
       id: proc
       property var done: null
+      property bool finished: false
       running: true
       stdout: StdioCollector { id: output }
-      stderr: StdioCollector {}
-      onExited: function(code, status) {
+      function complete(ok, text) {
+        if (finished) return
+        finished = true
         root.running = Math.max(0, root.running - 1)
-        var text = String(output.text || "").trim()
-        // omarchy-shell exits 0 with an error line when the target is missing.
-        var ok = code === 0 && status === 0 && !/^(error|No such|Target not found|Function not found)/i.test(text)
         if (proc.done) proc.done(ok, text)
         proc.destroy()
       }
+      onExited: function(code, status) {
+        var text = String(output.text || "").trim()
+        // omarchy-shell exits 0 with an error line when the target is missing.
+        complete(code === 0 && status === 0 && !/^(error|No such|Target not found|Function not found)/i.test(text), text)
+      }
+      // After exited() this does nothing. Without it (omarchy-shell missing)
+      // Quickshell emits no exited(), only running -> false.
+      onRunningChanged: if (!running) complete(false, "")
     }
   }
 }
