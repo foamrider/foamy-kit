@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.8.0 — 2026-11-10
+
+Answers two marketplace review findings that apply to every plugin
+(omacom/omarchy-plugin-marketplace#14501).
+
+### Fixed
+- `FoamyPrefsQueue`: a CLI-fallback save always ends. A command that can't
+  start (Quickshell emits no `exited` then), hangs past `saveTimeoutMs`
+  (default 20 s; then SIGKILL) or is cancelled goes through one completion
+  path that rolls back, reports the error and keeps retry, so `inFlight` can
+  no longer stick and later saves are never blocked. The next save waits until
+  the previous process has really exited. stderr is read in chunks and only
+  the first 4096 characters are kept. The inline save path is unchanged.
+- `FoamyPeerIpc`: a call whose `omarchy-shell` can't start calls
+  `done(false, "")` instead of never finishing; the unread stderr collector
+  is gone.
+
+### Added
+- Native helpers ship `THIRD_PARTY_NOTICES.md` at the plugin root: per
+  binary and arch, every crate linked into it (`cargo tree --edges
+  normal,no-proc-macro` per musl target, cross-checked against registry paths
+  in the ELF), with its version, SPDX expression and Cargo.lock checksum, and
+  each distinct license and notice text, read from the checksum-verified
+  `.crate`. Also the Rust standard library (from the toolchain's
+  COPYRIGHT-library.html), musl 1.2.5, LLVM libunwind and crtbegin/crtend.
+  `build-native.sh .` writes it, `--notices` rewrites only it, `--verify`
+  fails when it differs from a fresh generation, and `tests/kit-check.sh` /
+  `check.sh` fail when it is missing or doesn't match `native.pin`. Not a
+  hashed build input, so binaries and pins are unchanged.
+- `tests/test_lifecycle.py`: failed start, deadline, bounded stderr, cancel
+  and destruction for the queue, and failed start for peer calls.
+
+### Upgrading
+After syncing, run `kit/native/build-native.sh . --notices` (or a normal
+build) once in each plugin with a helper and commit `THIRD_PARTY_NOTICES.md`;
+until then kit-check and CI fail.
+
 ## 0.7.0 — 2026-11-10
 
 A plugin's helper binaries can now be rebuilt, verified and attested from the
