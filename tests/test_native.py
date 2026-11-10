@@ -84,6 +84,25 @@ def sync_tests(base):
                  f"{root_files}")
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
     ok &= report("a leading #![attribute] is not taken for a shebang", attribute[0].startswith("// foamy-kit 0.5.0 "))
+    native = foamykit.native
+    ok &= report("the build tool's copy of foamy-kit's LICENSE (for kit/rust in the notices) equals LICENSE",
+                 native.KIT_LICENSE == (KIT_ROOT / "LICENSE").read_text())
+    ok &= report("the embedded musl COPYRIGHT is the v1.2.5 file",
+                 foamykit.sha256(native.MUSL_COPYRIGHT.encode()) == "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af")
+    files = [("LICENSE-MIT", b"MIT text\r\n"), ("licenses/ISC.txt", b"ISC"), ("third_party/fiat/LICENSE", b"fiat"),
+             ("tests/LICENSE", b"test data"), ("license.rs", b"code"), ("src/a.rs", b"// Copyright 2020 A\n// SPDX-License-Identifier: MIT OR Apache-2.0\n"),
+             ("src/b.rs", b"//! The above copyright notice and this permission notice shall be included\n"),
+             ("benches/c.rs", b"// Copyright 1999 B\n")]
+    shipped = native.license_files(files, {})
+    ok &= report("license files: root, LICENSES/ and vendored dirs, not tests or code",
+                 shipped == [("LICENSE-MIT", "MIT text"), ("licenses/ISC.txt", "ISC"), ("third_party/fiat/LICENSE", "fiat")], f"{shipped}")
+    ok &= report("source headers: copyright lines and SPDX ids, not license boilerplate or benches",
+                 native.header_notices(files) == (["Copyright 2020 A"], ["Apache-2.0", "MIT"]), f"{native.header_notices(files)}")
+    elf = (b"\0/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rustls-webpki-0.103.16/src/crl/types.rs\0"
+           b"/rust/deps/wasip2-1.0.2+wasi-0.2.9/src/lib.rs\0/rustc/" + b"a" * 40 + b"/library/std/src/io.rs\0")
+    ok &= report("the binary's embedded source paths name the linked crates and versions",
+                 native.elf_sources(elf) == {"crates": {("rustls-webpki", "0.103.16")}, "std_deps": {("wasip2", "1.0.2+wasi-0.2.9")},
+                                             "std": {"std"}}, f"{native.elf_sources(elf)}")
     short = foamykit.stamped("kit/x.rs", b"//! a\nfn f() {}\n", "0.5.0").decode().splitlines()
     long = foamykit.stamped("kit/x.rs", b"//! a\nfn f() {}\n", "10.200.3000").decode().splitlines()
     ok &= report("the stamp line is fixed: a version change shifts no line", len(short) == len(long) and short[1:] == long[1:])
@@ -386,9 +405,10 @@ def rust_tests(base):
     added = sorted(set(after) - set(before))
     changed = sorted(rel for rel in before if after.get(rel) != before[rel])
     ok &= report("build-native.sh builds both arches", code == 0 and f"{BINARY} ({CHANNEL})" in out, last(out) if out.strip() else "")
-    ok &= report("the build adds only the binaries and native.pin to the plugin (cargo output stays in the cache)",
-                 added == [f"bin/aarch64/{BINARY}", f"bin/x86_64/{BINARY}", "native/native.pin"] and not changed
-                 and (cache / "foamy-native-demo").is_dir(), f"added {added}, changed {changed}")
+    ok &= report("the build adds only the binaries, native.pin and THIRD_PARTY_NOTICES.md (cargo output stays in the cache)",
+                 added == ["THIRD_PARTY_NOTICES.md", f"bin/aarch64/{BINARY}", f"bin/x86_64/{BINARY}", "native/native.pin"]
+                 and not changed and (cache / "foamy-native-demo").is_dir(), f"added {added}, changed {changed}")
+    ok &= notices_tests(plugin, base, env)
     sizes = {arch: (plugin / "bin" / arch / BINARY).stat().st_size for arch in foamykit.ARCHES}
     modes = {arch: (plugin / "bin" / arch / BINARY).stat().st_mode & 0o777 for arch in foamykit.ARCHES}
     print(f"    binary sizes: x86_64 {sizes['x86_64']} bytes, aarch64 {sizes['aarch64']} bytes")
@@ -479,6 +499,7 @@ def rust_tests(base):
 
     ok &= tamper_tests(plugin, base)
     ok &= racing_edit_test(plugin, base, env)
+    ok &= two_helpers_test(base, env)
     ok &= symlinked_bin_test(plugin, base, env)
 
     profiled = fresh(base, "profiled")
@@ -531,6 +552,248 @@ def rust_tests(base):
     return ok
 
 
+def notices_tests(plugin, base, env):
+    """THIRD_PARTY_NOTICES.md for the fixture: the crates linked for both
+    musl targets with their Cargo.lock checksums and shipped license texts,
+    nothing that is only on the build host, the toolchain's code; byte-stable;
+    --verify and the checks catch an edited, mismatched or missing file."""
+    ok = True
+    path = plugin / "THIRD_PARTY_NOTICES.md"
+    text = path.read_text()
+    lock = foamykit.native.lock_packages(plugin)
+    table = text.split("### Toolchain code")[0]
+    rows = {line.split(" | ")[0][2:]: line for line in table.splitlines() if line.startswith("| ") and " | " in line}
+    linked = {"serde", "serde_core", "serde_json", "rustix", "linux-raw-sys", "libc", "landlock", "seccompiler",
+              "thiserror", "enumflags2", "bitflags", "itoa", "memchr", "zmij"}
+    host_only = {"serde_derive", "thiserror-impl", "enumflags2_derive", "syn", "quote", "proc-macro2", "unicode-ident",
+                 "windows-sys", "windows-link", "errno"}
+    checksums = all(f"`{lock[(name, rows[name].split(' | ')[1])]['checksum']}`" in rows[name] for name in linked if name in rows)
+    ok &= report("notices list the crates linked into both arches, with version, SPDX license and Cargo.lock checksum",
+                 linked <= set(rows) and checksums and all(" | both | " in rows[name] for name in linked),
+                 f"missing {sorted(linked - set(rows))}")
+    ok &= report("proc-macro crates, their dependencies and other-platform crates are not listed",
+                 not host_only & set(rows), f"{sorted(host_only & set(rows))}")
+    serde_json = rows.get("serde_json", "")
+    ids = [ref.split("](")[0].lstrip("[") for ref in serde_json.split(" | ")[-1].split(", ")]
+    bodies = {ident: text.split(f"### {ident}\n", 1)[1].split("\n### ", 1)[0] for ident in ids if f"### {ident}\n" in text}
+    ok &= report("a crate's shipped license files are reproduced (serde_json: LICENSE-MIT and LICENSE-APACHE)",
+                 any("Permission is hereby granted" in b and "serde_json 1.0.154: `LICENSE-MIT`" in b for b in bodies.values())
+                 and any("Apache License" in b and "serde_json 1.0.154: `LICENSE-APACHE`" in b for b in bodies.values()),
+                 serde_json)
+    ok &= report("the first-party crates, the standard library, musl and LLVM are covered",
+                 "`kit/rust/foamy-helper/` (foamy-kit, vendored)" in text and foamykit.native.KIT_LICENSE.strip() in text
+                 and "| Rust standard library (" in text and "Copyright © 2005-2020 Rich Felker, et al." in text
+                 and "src/llvm-project" in text and f"- `native/native.pin`: source `{foamykit.read_pin(plugin / 'native/native.pin')['source']}`" in text)
+    code, out = sh(BUILD, plugin, "--notices", env=env)
+    ok &= report("--notices regenerates the same bytes", code == 0 and "up to date" in out and path.read_text() == text, last(out))
+
+    saved = path.read_bytes()
+    path.write_bytes(saved.replace(b"Rich Felker, et al.", b"someone else", 1))
+    code, out = sh(BUILD, plugin, "--verify", env=env)
+    code2, out2 = kit_check(plugin)
+    ok &= report("--verify fails on an edited notices file (kit-check, without cargo, cannot see the text)",
+                 code != 0 and "THIRD_PARTY_NOTICES.md: a fresh generation differs" in out and code2 == 0, last(out))
+    path.write_bytes(saved.replace(b"sha256 `", b"sha256 `0", 1))
+    code, out = kit_check(plugin)
+    code2, out2 = sh(CHECK, "--no-lint", plugin)
+    ok &= report("kit-check and check.sh fail when the notices name other binaries than native.pin",
+                 code != 0 and "THIRD_PARTY_NOTICES.md does not match native/native.pin" in out
+                 and code2 != 0 and "does not match native/native.pin" in out2, (out + out2).strip())
+    path.unlink()
+    code, out = kit_check(plugin)
+    code2, out2 = sh(CHECK, "--no-lint", plugin)
+    ok &= report("kit-check and check.sh fail when the notices file is missing",
+                 code != 0 and "THIRD_PARTY_NOTICES.md is missing" in out and code2 != 0 and "THIRD_PARTY_NOTICES.md is missing" in out2,
+                 (out + out2).strip())
+    code, out = sh(BUILD, plugin, "--notices", env=env)
+    ok &= report("--notices writes it again, byte-identical", code == 0 and path.read_bytes() == saved, last(out))
+
+    main = plugin / "native/src/main.rs"
+    source = main.read_bytes()
+    main.write_bytes(source + b"// changed\n")
+    code, out = sh(BUILD, plugin, "--notices", env=env)
+    main.write_bytes(source)
+    ok &= report("--notices refuses stale binaries (it never pins notices to sources the binaries weren't built from)",
+                 code != 0 and "is stale" in out and path.read_bytes() == saved, out.strip()[-300:])
+    ok &= isc_notice_test(plugin, base, env)
+    return ok
+
+
+def fake_crate(home, name, version, files):
+    """A .crate archive in a fake CARGO_HOME's registry cache; its sha256."""
+    import io
+    import tarfile
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for rel, data in sorted(files.items()):
+            info = tarfile.TarInfo(f"{name}-{version}/{rel}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    path = home / "registry/cache/index.crates.io-0000000000000000" / f"{name}-{version}.crate"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(buffer.getvalue())
+    return foamykit.sha256(buffer.getvalue())
+
+
+WEBPKI_LICENSE = b"""Except as otherwise noted, this project is licensed under the following
+(ISC-style) terms:
+
+Copyright 2015 Brian Smith.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+"""
+
+
+def isc_notice_test(plugin, base, env):
+    """The rustls-webpki case: an ISC crate whose LICENSE carries the
+    copyright line ends up in the notices with its text; a crate with no
+    license file gets the standard texts of its SPDX ids; an archive that
+    doesn't match its Cargo.lock checksum is refused."""
+    native = foamykit.native
+    home = base / "fake-cargo-home"
+    isc = fake_crate(home, "fake-webpki", "0.103.16", {
+        "Cargo.toml": b'[package]\nname = "fake-webpki"\nversion = "0.103.16"\nlicense = "ISC"\n',
+        "LICENSE": WEBPKI_LICENSE,
+        "src/lib.rs": b"// Copyright 2015-2021 Brian Smith.\n// SPDX-License-Identifier: ISC\npub fn f() {}\n",
+        "tests/vectors.rs": b"// Copyright 1999 Not Linked\n"})
+    bare = fake_crate(home, "fake-graviola", "0.4.4", {
+        "Cargo.toml": b'[package]\nname = "fake-graviola"\nversion = "0.4.4"\nlicense = "Apache-2.0 OR ISC OR MIT-0"\n',
+        "src/lib.rs": b"// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n"})
+    legal_only = fake_crate(home, "fake-legal", "1.0.0", {
+        "Cargo.toml": b'[package]\nname = "fake-legal"\nversion = "1.0.0"\nlicense-file = "legal.txt"\n',
+        "legal.txt": b"Fake Legal terms. Copyright 2024 Legal Only Ltd.\n"})
+    legal_spdx = fake_crate(home, "fake-legal-spdx", "2.0.0", {
+        "Cargo.toml": b'[package]\nname = "fake-legal-spdx"\nversion = "2.0.0"\nlicense = "MIT"\nlicense-file = "./docs/legal.txt"\n',
+        "docs/legal.txt": b"MIT terms as shipped. Copyright 2024 Spdx And File Ltd.\n"})
+    real_linked, real_lock, real_home = native.linked_packages, native.lock_packages, native.cargo_home
+    fakes = {("fake-webpki", "0.103.16"): isc, ("fake-graviola", "0.4.4"): bare, ("fake-legal", "1.0.0"): legal_only,
+             ("fake-legal-spdx", "2.0.0"): legal_spdx}
+
+    def linked(plugin_dir, crate, triple, cargo_env_):
+        found = real_linked(plugin_dir, crate, triple, cargo_env_)
+        found.update({key: None for key in fakes})
+        return found
+
+    def lock(plugin_dir):
+        packages = real_lock(plugin_dir)
+        for (name, version), checksum in fakes.items():
+            packages[(name, version)] = {"name": name, "version": version, "checksum": checksum,
+                                         "source": "registry+https://github.com/rust-lang/crates.io-index"}
+        return packages
+
+    def cargo_home():
+        return home if fake_home[0] else real_home()
+
+    fake_home = [False]
+    channel = native.toolchain_channel(plugin)
+    pin = foamykit.read_pin(plugin / "native/native.pin")
+    entry = {"crate": "native", "binary": BINARY, "source": pin["source"],
+             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}}
+    cargo = native.notices_env(plugin, "native", channel, base / "cache")
+    native.linked_packages, native.lock_packages, native.cargo_home = linked, lock, cargo_home
+    try:
+        # Real crates from the real registry, the fakes from the fake home.
+        real_files = native.crate_files
+
+        def crate_files(name, version, checksum, fetch=None):
+            fake_home[0] = (name, version) in fakes
+            try:
+                return real_files(name, version, checksum, fetch)
+            finally:
+                fake_home[0] = False
+
+        native.crate_files = crate_files
+        text = native.notices_bytes(plugin, channel, [entry], cargo, plugin / "native").decode()
+        row = next((line for line in text.splitlines() if line.startswith("| fake-webpki | 0.103.16 | ISC | ")), "")
+        isc_body = next((part for part in text.split("\n### N") if "fake-webpki 0.103.16: `LICENSE`" in part), "")
+        headers = next((part for part in text.split("\n### N") if "fake-webpki 0.103.16: source file headers" in part), "")
+        bare_ids = [p for p in text.split("\n### N") if "fake-graviola 0.4.4: standard" in p]
+        ok = report("an ISC crate's LICENSE with its copyright line is reproduced (the rustls-webpki case)",
+                    bool(row) and f"`{isc}`" in row and "Copyright 2015 Brian Smith." in isc_body
+                    and "Permission to use, copy, modify" in isc_body and "Copyright 2015-2021 Brian Smith." in headers
+                    and "Not Linked" not in text, row)
+        ok &= report("a crate with no license file gets the standard text of each SPDX id, marked as such",
+                     len(bare_ids) == 3 and any("MIT No Attribution" in p for p in bare_ids)
+                     and any("Apache License" in p for p in bare_ids) and "Copyright Amazon.com, Inc." in text,
+                     f"{len(bare_ids)} standard texts")
+        legal = next((part for part in text.split("\n### N") if "fake-legal 1.0.0: `legal.txt`" in part), "")
+        legal_spdx_part = next((part for part in text.split("\n### N") if "fake-legal-spdx 2.0.0: `docs/legal.txt`" in part), "")
+        ok &= report("a nonstandard license-file is reproduced, alone or next to an SPDX license (no boilerplate instead)",
+                     "Copyright 2024 Legal Only Ltd." in legal and "Copyright 2024 Spdx And File Ltd." in legal_spdx_part
+                     and "fake-legal-spdx 2.0.0: standard" not in text and "fake-legal 1.0.0: standard" not in text,
+                     next((line for line in text.splitlines() if line.startswith("| fake-legal")), ""))
+        fakes[("fake-webpki", "0.103.16")] = "0" * 64
+        try:
+            native.notices_bytes(plugin, channel, [entry], cargo, plugin / "native")
+            refused = ""
+        except native.KitError as error:
+            refused = str(error)
+        ok &= report("a crate archive that doesn't match its Cargo.lock checksum is refused",
+                     "does not match the Cargo.lock checksum of fake-webpki" in refused, refused)
+    finally:
+        native.linked_packages, native.lock_packages, native.cargo_home = real_linked, real_lock, real_home
+        native.crate_files = real_files
+    return ok
+
+
+def crate_archive_tests(base):
+    """crate_files reads only the checksum-verified .crate: a missing one is
+    fetched once and must then exist; cargo's unpacked copy (here with a
+    tampered LICENSE) is never used; a license-file outside the archive is
+    an error. No cargo needed."""
+    native = foamykit.native
+    ok = True
+    home = base / "archive-home"
+    good = {"Cargo.toml": b'[package]\nname = "fake-fetched"\nversion = "0.1.0"\nlicense = "ISC"\n',
+            "LICENSE": b"Genuine ISC text. Copyright 2015 Brian Smith.\n"}
+    checksum = fake_crate(home, "fake-fetched", "0.1.0", good)
+    archive = home / "registry/cache/index.crates.io-0000000000000000/fake-fetched-0.1.0.crate"
+    data = archive.read_bytes()
+    archive.unlink()
+    unpacked = home / "registry/src/index.crates.io-0000000000000000/fake-fetched-0.1.0"
+    unpacked.mkdir(parents=True)
+    (unpacked / ".cargo-ok").write_text('{"v":1}')
+    (unpacked / "Cargo.toml").write_bytes(good["Cargo.toml"])
+    (unpacked / "LICENSE").write_text("Tampered text.\n")
+    real_home = native.cargo_home
+    native.cargo_home = lambda: home
+    calls = []
+
+    def attempt(fetch):
+        try:
+            return native.crate_files("fake-fetched", "0.1.0", checksum, fetch), ""
+        except native.KitError as error:
+            return None, str(error)
+
+    try:
+        files, error = attempt(None)
+        ok &= report("a missing .crate is refused even when cargo's unpacked copy exists (never unverified bytes)",
+                     files is None and "no .crate archive" in error, error)
+        files, error = attempt(lambda: calls.append(1))
+        ok &= report("a missing .crate is fetched once, and refused when the fetch doesn't bring it",
+                     files is None and calls == [1] and "no .crate archive" in error, error)
+        files, error = attempt(lambda: (calls.append(2), archive.write_bytes(data)))
+        texts = dict(native.license_files(files or [], {}))
+        ok &= report("after the fetch the archive's own text is used, not the tampered unpacked one",
+                     calls == [1, 2] and texts.get("LICENSE") == "Genuine ISC text. Copyright 2015 Brian Smith.", f"{texts} {error}")
+        archive.write_bytes(data[:-10] + b"x" * 10)
+        files, error = attempt(None)
+        ok &= report("an archive that doesn't match its checksum is refused", files is None and "does not match" in error, error)
+        missing = fake_crate(home, "fake-missing-file", "0.1.0", {
+            "Cargo.toml": b'[package]\nname = "fake-missing-file"\nversion = "0.1.0"\nlicense-file = "legal.txt"\n'})
+        try:
+            native.crate_files("fake-missing-file", "0.1.0", missing)
+            error = ""
+        except native.KitError as failure:
+            error = str(failure)
+        ok &= report("a license-file the archive doesn't contain is an error", "is not in the crate archive" in error, error)
+    finally:
+        native.cargo_home = real_home
+    return ok
+
+
 def last(out):
     lines = out.strip().splitlines()
     return lines[-1] if lines else ""
@@ -570,6 +833,76 @@ def racing_edit_test(plugin, base, env):
     shutil.rmtree(racing.parent)
     return report("build and --verify refuse when the sources change during the build (nothing installed)",
                   codes == [1, 1] and unchanged, f"{codes} unchanged={unchanged}")
+
+
+def two_helpers_test(base, env):
+    """Two pinned crates sharing a dependency that gets updated: both are
+    stale, and rebuilding them one after the other works in either order
+    (the other crate's old binary still names the old version, which must
+    not block the notices). A current build's paths are still checked.
+    Cargo and the builds are stubbed: the graph is `shared` 1.0.0, then 2.0.0."""
+    import argparse
+    native = foamykit.native
+    ok = True
+    home = base / "two-helpers-home"
+    sums = {v: fake_crate(home, "shared", v, {"Cargo.toml": f'[package]\nname = "shared"\nversion = "{v}"\nlicense = "MIT"\n'.encode(),
+                                               "LICENSE": f"shared {v}: Copyright 2024 Shared Authors\n".encode()})
+            for v in ("1.0.0", "2.0.0")}
+    state = {"graph": "1.0.0", "built": "1.0.0"}
+
+    def linked(plugin_dir, crate, triple, cargo_env_):
+        return {("shared", state["graph"]): None}
+
+    def lock(plugin_dir):
+        v = state["graph"]
+        return {("shared", v): {"name": "shared", "version": v, "checksum": sums[v],
+                                "source": "registry+https://github.com/rust-lang/crates.io-index"}}
+
+    def build(plugin_dir, crate, binary, channel, target_dir):
+        path = f"/cargo/registry/src/index.crates.io-0000000000000000/shared-{state['built']}/src/lib.rs"
+        return {arch: f"\x7fELF {binary} {arch} \0{path}\0".encode() for arch in foamykit.ARCHES}
+
+    def run(plugin_dir, crate, binary):
+        return native.cmd_native(argparse.Namespace(plugin=str(plugin_dir), crate=crate, bin=binary, test=False,
+                                                    verify=False, out=None, notices=False))
+
+    crates = {"native": BINARY, "second": "foamy-native-demo-second"}
+    real = (native.linked_packages, native.lock_packages, native.cargo_home, native.build_native)
+    saved = dict(os.environ)
+    os.environ.update(env or {})
+    native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = linked, lock, lambda: home, build
+    try:
+        for order in (["native", "second"], ["second", "native"]):
+            work = fresh(base, "two-helpers-" + order[0])
+            shutil.copytree(work / "native", work / "second")
+            manifest = work / "second/Cargo.toml"
+            manifest.write_text(manifest.read_text().replace(f'name = "{BINARY}"', 'name = "foamy-native-demo-second"'))
+            workspace = work / "Cargo.toml"
+            workspace.write_text(workspace.read_text().replace('members = ["native"]', 'members = ["native", "second"]'))
+            sh(SYNC, work, "--components", "FoamyNative")
+            state.update(graph="1.0.0", built="1.0.0")
+            first = [run(work, crate, binary) for crate, binary in crates.items()]
+            state.update(graph="2.0.0", built="2.0.0")
+            with open(work / "Cargo.lock", "a") as stream:
+                stream.write("\n# shared 2.0.0\n")
+            stale = all(native.native_source_hash(work, c) != foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            codes = [run(work, crate, crates[crate]) for crate in order]
+            notices = (work / "THIRD_PARTY_NOTICES.md").read_text()
+            fresh_pins = all(native.native_source_hash(work, c) == foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            ok &= report(f"two helpers sharing an updated dependency rebuild one after the other ({' then '.join(order)})",
+                         first == [0, 0] and stale and codes == [0, 0] and fresh_pins and "| shared | 2.0.0 |" in notices
+                         and "| shared | 1.0.0 |" not in notices and not native.notices_problems(work, native.native_pins(work)),
+                         f"initial {first}, stale {stale}, rebuilds {codes}")
+            state.update(built="1.0.0")
+            code = run(work, order[0], crates[order[0]])
+            ok &= report(f"a current build that embeds a crate the graph doesn't list is still refused ({order[0]})",
+                         code == 1 and "| shared | 2.0.0 |" in (work / "THIRD_PARTY_NOTICES.md").read_text(), f"code {code}")
+            shutil.rmtree(work)
+    finally:
+        native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = real
+        os.environ.clear()
+        os.environ.update(saved)
+    return ok
 
 
 def symlinked_bin_test(plugin, base, env):
@@ -615,6 +948,7 @@ def symlinked_bin_test(plugin, base, env):
 def main():
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-native-"))
     ok = sync_tests(base)
+    ok &= crate_archive_tests(base)
     if shutil.which("cargo") and shutil.which("rustup"):
         ok &= rust_tests(base)
     else:

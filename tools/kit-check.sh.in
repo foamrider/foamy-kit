@@ -117,6 +117,33 @@ for pin in "${pins[@]}"; do
   native_bins+=("$binary")
 done
 
+# Third-party notices: the build writes THIRD_PARTY_NOTICES.md (the licenses
+# and copyright notices of the code linked into the binaries) with the
+# binaries, and `build-native.sh . --verify` regenerates and compares it.
+# Here, without cargo: it exists and names each pin's source hash and checksums.
+notices="$root/THIRD_PARTY_NOTICES.md"
+if (( ${#pins[@]} > 0 )); then
+  if [[ -L $notices || ! -f $notices ]]; then
+    fail "THIRD_PARTY_NOTICES.md is missing (run kit/native/build-native.sh .)"
+  else
+    [[ $(head -n 1 "$notices") == "# Third-party notices: native helpers" ]] ||
+      fail "THIRD_PARTY_NOTICES.md was not written by kit/native/build-native.sh"
+    for pin in "${pins[@]}"; do
+      crate=${pin%/native.pin}
+      crate=${crate##*/}
+      pin_source=$(awk '$1 == "source" && NF == 2 { print $2; exit }' "$pin")
+      toolchain=$(awk '$1 == "toolchain" && NF == 2 { print $2; exit }' "$pin")
+      matches=1
+      grep -qxF -- "- \`$crate/native.pin\`: source \`$pin_source\`, toolchain $toolchain" "$notices" || matches=0
+      while read -r hash rel; do
+        grep -qxF -- "- \`$rel\`: sha256 \`$hash\`" "$notices" || matches=0
+      done < <(awk 'NF == 2 && length($1) == 64 && $1 ~ /^[0-9a-f]+$/ { print }' "$pin")
+      (( matches == 1 )) ||
+        fail "THIRD_PARTY_NOTICES.md does not match $crate/native.pin (run kit/native/build-native.sh .)"
+    done
+  fi
+fi
+
 # A cargo target dir inside the plugin (cargo run without CARGO_TARGET_DIR)
 # is only a warning: the shell watches plugin folders, so remove it.
 while IFS= read -r -d '' tag; do
