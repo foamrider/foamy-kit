@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.1 — 2026-11-10
+
+### Fixed
+- `THIRD_PARTY_NOTICES.md` covers every crates.io dependency of the Rust
+  standard library linked into the helpers. 0.8.0 named addr2line, adler2,
+  miniz_oxide and object as omissions (the toolchain's
+  `COPYRIGHT-library.html` has no entry for them) and `--verify` accepted
+  that. Their versions and `.crate` checksums now come from the toolchain's
+  `library/Cargo.lock` (rust-src's copy when installed, else the `STD_LOCKS`
+  table in `native.py`, generated for 1.99.1 from rust-src; both must
+  agree), and each gets the notice file's entry for that exact version or
+  the texts of its checksum-verified archive (cargo's cache, the
+  foamy-native cache, or a download from static.crates.io, cached; not with
+  `CARGO_NET_OFFLINE`). Generation fails when a dependency the binaries or
+  the sysroot show has no locked version or no notice text. Versions are now
+  exact (libc 0.2.189, memchr 2.8.3, hashbrown 0.17.1).
+
+  After syncing, run `kit/native/build-native.sh . --notices` (or a build;
+  the binaries and `native.pin` source hash don't change) and commit the
+  file; until then `--verify` and CI fail on the stale notices.
+
 ## 0.8.0 — 2026-11-10
 
 Answers two marketplace review findings that apply to every plugin
