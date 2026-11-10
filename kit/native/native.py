@@ -592,6 +592,31 @@ def install_atomic(plugin, rel, data, mode):
         os.close(dir_fd)
 
 
+def export_rebuilt(out_dir, binary, built):
+    """Writes each rebuilt binary to out_dir/<arch>/<binary> as a new file
+    (mode 0755). The arch directories are opened without following symlinks
+    and an existing file is refused, so --out can never write through a link
+    into the plugin (bin/) or replace an earlier export."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for arch, data in sorted(built.items()):
+        try:
+            dir_fd = open_contained_dir(out_dir, arch)
+        except KitError:
+            raise KitError(f"--out: {out_dir / arch} is not a plain directory (a symlink?); use an empty directory") from None
+        try:
+            try:
+                fd = os.open(binary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o755,
+                             dir_fd=dir_fd)
+            except FileExistsError:
+                raise KitError(f"--out: {out_dir / arch / binary} already exists; use an empty directory") from None
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                os.fchmod(stream.fileno(), 0o755)
+        finally:
+            os.close(dir_fd)
+        print(f"{out_dir / arch / binary}: {len(data)} bytes, sha256 {sha256(data)}")
+
+
 def pin_bytes(crate, binary, channel, source, built, kit):
     lines = [
         f"# {PIN_NAME}: written by kit/native/build-native.sh; do not edit.",
@@ -656,15 +681,6 @@ def cmd_native(args):
                 shutil.rmtree(fresh, ignore_errors=True)
             if native_source_hash(plugin, crate) != source:
                 raise KitError(f"{crate}/, kit/rust or the workspace files changed during the verify build; re-run it")
-            if out_dir is not None:
-                # The rebuilt files themselves, for CI to attest and publish:
-                # kept even when they differ, so a mismatch can be inspected.
-                for arch, data in sorted(built.items()):
-                    path = out_dir / arch / binary
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(data)
-                    path.chmod(0o755)
-                    print(f"{path}: {len(data)} bytes, sha256 {sha256(data)}")
             for arch, data in sorted(built.items()):
                 rel = f"bin/{arch}/{binary}"
                 committed = (plugin / rel).read_bytes() if (plugin / rel).is_file() else b""
@@ -672,6 +688,11 @@ def cmd_native(args):
                     problems.append(f"{rel}: a clean rebuild differs from the committed binary ({sha256(data)[:16]}… vs {sha256(committed)[:16]}…)")
                 else:
                     print(f"{rel}: byte-identical to a clean rebuild ({len(data)} bytes, sha256 {sha256(data)[:16]}…)")
+            if out_dir is not None:
+                # The rebuilt files themselves, for CI to attest and publish,
+                # written only after the comparison above read bin/, and kept
+                # even when they differ, so a mismatch can be inspected.
+                export_rebuilt(out_dir, binary, built)
             if pin.get("toolchain") != channel:
                 problems.append(f"{crate}/{PIN_NAME} says toolchain {pin.get('toolchain')}, {TOOLCHAIN_FILE} says {channel}")
             if pin.get("source") != source:

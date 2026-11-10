@@ -58,11 +58,17 @@ jobs:
       - name: Check the kit files and the committed binaries
         run: bash tests/kit-check.sh
 
-      - name: Format, lint and test the helper crate
-        run: bash kit/native/build-native.sh . --test
+      - name: Format, lint and test the helper crates
+        run: |
+          for pin in */native.pin; do
+            bash kit/native/build-native.sh . --test --crate "${pin%/native.pin}"
+          done
 
       - name: Rebuild from source and compare with bin/
-        run: bash kit/native/build-native.sh . --verify --out "$RUNNER_TEMP/rebuilt"
+        run: |
+          for pin in */native.pin; do
+            bash kit/native/build-native.sh . --verify --crate "${pin%/native.pin}" --out "$RUNNER_TEMP/rebuilt"
+          done
 
       - name: Report the binaries
         if: always()

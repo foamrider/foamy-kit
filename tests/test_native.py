@@ -436,8 +436,23 @@ def rust_tests(base):
     ok &= report("--out inside the plugin, or without --verify, is refused",
                  code != 0 and "inside the plugin" in out and not (alone / "rebuilt").exists()
                  and code2 != 0 and "--out goes with --verify" in out2, (out + out2).strip())
+    # A symlink inside --out (an arch dir into the plugin's bin/) must not let
+    # the export overwrite the binaries being verified; an existing file is refused.
+    linked_out = base / "linked-out"
+    linked_out.mkdir()
+    (linked_out / "x86_64").symlink_to(alone / "bin/x86_64")
+    saved = {arch: (alone / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}
+    (alone / "bin/x86_64" / BINARY).write_bytes(b"tampered")
+    code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", linked_out, env=env, cwd=alone)
+    ok &= report("--verify --out refuses a symlinked arch dir and still reports the tampered binary",
+                 code != 0 and (alone / "bin/x86_64" / BINARY).read_bytes() == b"tampered" and "verify OK" not in out,
+                 last(out))
+    (alone / "bin/x86_64" / BINARY).write_bytes(saved["x86_64"])
+    code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", out_dir, env=env, cwd=alone)
+    ok &= report("--out refuses to replace an earlier export", code != 0 and "already exists" in out, last(out))
     shutil.rmtree(alone.parent)
     shutil.rmtree(out_dir)
+    shutil.rmtree(linked_out)
     code, out = sh(BUILD, plugin, "--test", env=env)
     ok &= report("build-native.sh --test runs fmt, clippy and the crate's tests", code == 0 and "fmt, clippy and tests OK" in out,
                  last(out))
