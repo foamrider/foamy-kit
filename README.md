@@ -309,7 +309,10 @@ examples not) and its `license-file`, plus the copyright lines and SPDX ids
 at the top of its source files, which is where vendored code keeps its
 notices (graviola's s2n-bignum, mlkem-native and OpenSSL parts). The texts
 come from the `.crate` archive in the cargo registry whose SHA-256 is the
-`Cargo.lock` checksum; for a crate that ships no license file at all
+`Cargo.lock` checksum (never from cargo's unpacked copy; a missing archive
+is fetched once with `cargo fetch --locked`, and one that doesn't match is
+refused), including a nonstandard `license-file` the manifest names; for a
+crate that ships no license file at all
 (graviola) the standard text of each license in its SPDX expression is
 reproduced and marked so. Where a crate offers a choice of licenses, all its
 texts are kept. The file is a supply-chain record, not a legal opinion.

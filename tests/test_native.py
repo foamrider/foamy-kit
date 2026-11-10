@@ -660,8 +660,15 @@ def isc_notice_test(plugin, base, env):
     bare = fake_crate(home, "fake-graviola", "0.4.4", {
         "Cargo.toml": b'[package]\nname = "fake-graviola"\nversion = "0.4.4"\nlicense = "Apache-2.0 OR ISC OR MIT-0"\n',
         "src/lib.rs": b"// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.\n"})
+    legal_only = fake_crate(home, "fake-legal", "1.0.0", {
+        "Cargo.toml": b'[package]\nname = "fake-legal"\nversion = "1.0.0"\nlicense-file = "legal.txt"\n',
+        "legal.txt": b"Fake Legal terms. Copyright 2024 Legal Only Ltd.\n"})
+    legal_spdx = fake_crate(home, "fake-legal-spdx", "2.0.0", {
+        "Cargo.toml": b'[package]\nname = "fake-legal-spdx"\nversion = "2.0.0"\nlicense = "MIT"\nlicense-file = "./docs/legal.txt"\n',
+        "docs/legal.txt": b"MIT terms as shipped. Copyright 2024 Spdx And File Ltd.\n"})
     real_linked, real_lock, real_home = native.linked_packages, native.lock_packages, native.cargo_home
-    fakes = {("fake-webpki", "0.103.16"): isc, ("fake-graviola", "0.4.4"): bare}
+    fakes = {("fake-webpki", "0.103.16"): isc, ("fake-graviola", "0.4.4"): bare, ("fake-legal", "1.0.0"): legal_only,
+             ("fake-legal-spdx", "2.0.0"): legal_spdx}
 
     def linked(plugin_dir, crate, triple, cargo_env_):
         found = real_linked(plugin_dir, crate, triple, cargo_env_)
@@ -689,10 +696,10 @@ def isc_notice_test(plugin, base, env):
         # Real crates from the real registry, the fakes from the fake home.
         real_files = native.crate_files
 
-        def crate_files(name, version, checksum):
+        def crate_files(name, version, checksum, fetch=None):
             fake_home[0] = (name, version) in fakes
             try:
-                return real_files(name, version, checksum)
+                return real_files(name, version, checksum, fetch)
             finally:
                 fake_home[0] = False
 
@@ -710,6 +717,12 @@ def isc_notice_test(plugin, base, env):
                      len(bare_ids) == 3 and any("MIT No Attribution" in p for p in bare_ids)
                      and any("Apache License" in p for p in bare_ids) and "Copyright Amazon.com, Inc." in text,
                      f"{len(bare_ids)} standard texts")
+        legal = next((part for part in text.split("\n### N") if "fake-legal 1.0.0: `legal.txt`" in part), "")
+        legal_spdx_part = next((part for part in text.split("\n### N") if "fake-legal-spdx 2.0.0: `docs/legal.txt`" in part), "")
+        ok &= report("a nonstandard license-file is reproduced, alone or next to an SPDX license (no boilerplate instead)",
+                     "Copyright 2024 Legal Only Ltd." in legal and "Copyright 2024 Spdx And File Ltd." in legal_spdx_part
+                     and "fake-legal-spdx 2.0.0: standard" not in text and "fake-legal 1.0.0: standard" not in text,
+                     next((line for line in text.splitlines() if line.startswith("| fake-legal")), ""))
         fakes[("fake-webpki", "0.103.16")] = "0" * 64
         try:
             native.notices_bytes(plugin, channel, [entry], cargo, plugin / "native")
@@ -721,6 +734,62 @@ def isc_notice_test(plugin, base, env):
     finally:
         native.linked_packages, native.lock_packages, native.cargo_home = real_linked, real_lock, real_home
         native.crate_files = real_files
+    return ok
+
+
+def crate_archive_tests(base):
+    """crate_files reads only the checksum-verified .crate: a missing one is
+    fetched once and must then exist; cargo's unpacked copy (here with a
+    tampered LICENSE) is never used; a license-file outside the archive is
+    an error. No cargo needed."""
+    native = foamykit.native
+    ok = True
+    home = base / "archive-home"
+    good = {"Cargo.toml": b'[package]\nname = "fake-fetched"\nversion = "0.1.0"\nlicense = "ISC"\n',
+            "LICENSE": b"Genuine ISC text. Copyright 2015 Brian Smith.\n"}
+    checksum = fake_crate(home, "fake-fetched", "0.1.0", good)
+    archive = home / "registry/cache/index.crates.io-0000000000000000/fake-fetched-0.1.0.crate"
+    data = archive.read_bytes()
+    archive.unlink()
+    unpacked = home / "registry/src/index.crates.io-0000000000000000/fake-fetched-0.1.0"
+    unpacked.mkdir(parents=True)
+    (unpacked / ".cargo-ok").write_text('{"v":1}')
+    (unpacked / "Cargo.toml").write_bytes(good["Cargo.toml"])
+    (unpacked / "LICENSE").write_text("Tampered text.\n")
+    real_home = native.cargo_home
+    native.cargo_home = lambda: home
+    calls = []
+
+    def attempt(fetch):
+        try:
+            return native.crate_files("fake-fetched", "0.1.0", checksum, fetch), ""
+        except native.KitError as error:
+            return None, str(error)
+
+    try:
+        files, error = attempt(None)
+        ok &= report("a missing .crate is refused even when cargo's unpacked copy exists (never unverified bytes)",
+                     files is None and "no .crate archive" in error, error)
+        files, error = attempt(lambda: calls.append(1))
+        ok &= report("a missing .crate is fetched once, and refused when the fetch doesn't bring it",
+                     files is None and calls == [1] and "no .crate archive" in error, error)
+        files, error = attempt(lambda: (calls.append(2), archive.write_bytes(data)))
+        texts = dict(native.license_files(files or [], {}))
+        ok &= report("after the fetch the archive's own text is used, not the tampered unpacked one",
+                     calls == [1, 2] and texts.get("LICENSE") == "Genuine ISC text. Copyright 2015 Brian Smith.", f"{texts} {error}")
+        archive.write_bytes(data[:-10] + b"x" * 10)
+        files, error = attempt(None)
+        ok &= report("an archive that doesn't match its checksum is refused", files is None and "does not match" in error, error)
+        missing = fake_crate(home, "fake-missing-file", "0.1.0", {
+            "Cargo.toml": b'[package]\nname = "fake-missing-file"\nversion = "0.1.0"\nlicense-file = "legal.txt"\n'})
+        try:
+            native.crate_files("fake-missing-file", "0.1.0", missing)
+            error = ""
+        except native.KitError as failure:
+            error = str(failure)
+        ok &= report("a license-file the archive doesn't contain is an error", "is not in the crate archive" in error, error)
+    finally:
+        native.cargo_home = real_home
     return ok
 
 
@@ -808,6 +877,7 @@ def symlinked_bin_test(plugin, base, env):
 def main():
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-native-"))
     ok = sync_tests(base)
+    ok &= crate_archive_tests(base)
     if shutil.which("cargo") and shutil.which("rustup"):
         ok &= rust_tests(base)
     else:

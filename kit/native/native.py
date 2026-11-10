@@ -1010,50 +1010,62 @@ def linked_packages(plugin, crate, triple, env):
     return found
 
 
-def crate_files(name, version, checksum):
-    """[(path in the crate, bytes)]: the crate's Cargo.toml and license files
-    whole, its source files' first 4 KiB, read from the .crate archive in the
-    cargo registry cache whose sha256 is the Cargo.lock checksum (or, when
-    cargo has dropped the archive, from the directory it unpacked it to)."""
+def manifest_license_file(manifest):
+    """The crate-relative path of a manifest's `license-file`, or None."""
+    package = manifest.get("package") if isinstance(manifest, dict) else None
+    value = package.get("license-file") if isinstance(package, dict) else None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    import posixpath
+    rel = posixpath.normpath(value.strip().replace("\\", "/")).removeprefix("./")
+    return None if rel.startswith(("/", "../")) or rel in (".", "..") else rel
+
+
+def crate_files(name, version, checksum, fetch=None):
+    """[(path in the crate, bytes)]: the crate's Cargo.toml, its license
+    files and its manifest's `license-file` whole, its source files' first
+    4 KiB. Read only from the .crate archive in the cargo registry cache
+    whose sha256 is the Cargo.lock checksum, never from an unpacked copy
+    (nothing vouches for those bytes). A missing archive is fetched once
+    through `fetch` (cargo fetch --locked), then it must be there."""
+    import io
+    import tarfile
     registry = cargo_home() / "registry"
     prefix = f"{name}-{version}/"
-
-    def wanted(rel):
-        parts = rel.split("/")
-        return ".." not in parts and (rel == "Cargo.toml" or rel.endswith(SOURCE_SUFFIXES)
-                                      or notice_name(parts))
-
-    for archive in sorted((registry / "cache").glob(f"*/{name}-{version}.crate")):
-        data = archive.read_bytes()
-        if sha256(data) != checksum:
-            raise KitError(f"{archive} does not match the Cargo.lock checksum of {name} {version}; remove it and "
-                           "run `cargo fetch --locked`")
-        import io
-        import tarfile
-        files = []
+    archives = sorted((registry / "cache").glob(f"*/{name}-{version}.crate"))
+    if not archives and fetch is not None:
+        fetch()
+        archives = sorted((registry / "cache").glob(f"*/{name}-{version}.crate"))
+    if not archives:
+        raise KitError(f"{name} {version}: no .crate archive in the cargo registry cache ({registry / 'cache'}); "
+                       "run `cargo fetch --locked` in the plugin")
+    archive = archives[0]
+    data = archive.read_bytes()
+    if sha256(data) != checksum:
+        raise KitError(f"{archive} does not match the Cargo.lock checksum of {name} {version}; remove it and "
+                       "run `cargo fetch --locked`")
+    try:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
-            for member in tar:
-                if not member.isfile() or not member.name.startswith(prefix):
-                    continue
-                rel = member.name[len(prefix):]
-                if wanted(rel):
+            members = {m.name[len(prefix):]: m for m in tar.getmembers()
+                       if m.isfile() and m.name.startswith(prefix) and ".." not in m.name.split("/")}
+            manifest = {}
+            if "Cargo.toml" in members:
+                try:
+                    manifest = tomllib.loads(tar.extractfile(members["Cargo.toml"]).read().decode("utf-8", errors="replace"))
+                except tomllib.TOMLDecodeError as error:
+                    raise KitError(f"{name} {version}: Cargo.toml: {error}") from None
+            license_file = manifest_license_file(manifest)
+            if license_file is not None and license_file not in members:
+                raise KitError(f"{name} {version}: its license-file {license_file!r} is not in the crate archive")
+            files = []
+            for rel, member in sorted(members.items()):
+                whole = rel == "Cargo.toml" or rel == license_file or notice_name(rel.split("/"))
+                if whole or rel.endswith(SOURCE_SUFFIXES):
                     stream = tar.extractfile(member)
-                    files.append((rel, stream.read() if not rel.endswith(SOURCE_SUFFIXES) else stream.read(4096)))
-        return sorted(files)
-    for unpacked in sorted((registry / "src").glob(f"*/{name}-{version}")):
-        if not (unpacked / ".cargo-ok").is_file():
-            continue
-        files = []
-        for dirpath, dirnames, filenames in os.walk(unpacked):
-            dirnames.sort()
-            for filename in filenames:
-                path = Path(dirpath) / filename
-                rel = path.relative_to(unpacked).as_posix()
-                if path.is_file() and not path.is_symlink() and wanted(rel) and rel != ".cargo-ok":
-                    with open(path, "rb") as stream:
-                        files.append((rel, stream.read() if not rel.endswith(SOURCE_SUFFIXES) else stream.read(4096)))
-        return sorted(files)
-    raise KitError(f"{name} {version} is not in the cargo registry ({registry}); run `cargo fetch --locked` in the plugin")
+                    files.append((rel, stream.read() if whole else stream.read(4096)))
+    except (tarfile.TarError, OSError, EOFError) as error:
+        raise KitError(f"{archive}: unreadable crate archive ({error})") from None
+    return files
 
 
 def license_files(files, manifest):
@@ -1061,9 +1073,7 @@ def license_files(files, manifest):
     COPYING*, NOTICE*, COPYRIGHT*, UNLICENSE and LICENSES/* anywhere outside
     tests, benches and examples (vendored code keeps its own: ring's
     third_party/fiat, …), and its Cargo.toml `license-file`."""
-    package = manifest.get("package", {}) if isinstance(manifest.get("package"), dict) else {}
-    license_file = package.get("license-file")
-    license_file = license_file.removeprefix("./") if isinstance(license_file, str) else None
+    license_file = manifest_license_file(manifest)
     found = {}
     for rel, data in files:
         parts = rel.split("/")
@@ -1220,6 +1230,18 @@ def notices_bytes(plugin, channel, binaries, env, cwd):
     toolchain = toolchain_notices(sysroot)
     lock = lock_packages(plugin)
     pool, uses, order = {}, {}, []
+    fetched = []
+
+    def fetch():
+        """cargo fetch --locked, once per generation (the build's environment)."""
+        if fetched:
+            return
+        fetched.append(True)
+        crate_dir = plugin / binaries[0]["crate"] if binaries else Path(cwd)
+        result = subprocess.run(["cargo", "fetch", "--locked", "--manifest-path", str(crate_dir / "Cargo.toml")],
+                                env=env, cwd=crate_dir, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            raise KitError(f"cargo fetch --locked failed (exit {result.returncode}):\n{result.stderr.strip()[-2000:]}")
 
     def notice(text, label):
         text = normalize_text(text)
@@ -1314,7 +1336,7 @@ def notices_bytes(plugin, channel, binaries, env, cwd):
             checksum = package.get("checksum", "")
             if not str(package.get("source", "")).startswith("registry+") or not SHA_RE.fullmatch(checksum):
                 raise KitError(f"{name} {version}: Cargo.lock records no crates.io source and checksum")
-            files = crate_files(name, version, checksum)
+            files = crate_files(name, version, checksum, fetch)
             manifest = {}
             for rel, data in files:
                 if rel == "Cargo.toml":
