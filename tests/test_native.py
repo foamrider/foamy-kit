@@ -58,9 +58,10 @@ def sync_tests(base):
     rust_sources = sorted(f"kit/{p.relative_to(KIT_ROOT / 'kit').as_posix()}"
                           for p in (KIT_ROOT / "kit/rust/foamy-helper/src").rglob("*.rs"))
     expected = sorted(["kit/FoamyNative.js", "kit/node-loader.cjs", "kit/qmldir", "kit/rust/release.toml",
+                       "kit/native/native.py", "kit/native/build-native.sh", ".github/workflows/verify-native.yml",
                        "kit/rust/foamy-helper/Cargo.toml", "rust-toolchain.toml", "tests/kit-check.sh"] + rust_sources)
     lock = foamykit.read_lock(plugin)
-    ok &= report("sync copies the FoamyNative tree (subdirectories, root rust-toolchain.toml)",
+    ok &= report("sync copies the FoamyNative tree (subdirectories, build tool, root rust-toolchain.toml and CI workflow)",
                  code == 0 and sorted(lock["files"]) == expected and lock["components"] == ["FoamyNative"],
                  out.strip() if code else f"{len(expected)} files")
     ok &= report("the kit crate's own Cargo.lock is not vendored", not (plugin / "kit/rust/foamy-helper/Cargo.lock").exists())
@@ -70,6 +71,17 @@ def sync_tests(base):
     ok &= report("Rust and TOML files are stamped on line 1 with their comment syntax",
                  lib[0].startswith("// foamy-kit ") and toolchain[0].startswith("# foamy-kit ")
                  and cargo[0].startswith("# foamy-kit ") and lib[1].startswith("//!"))
+    tool = (plugin / "kit/native/native.py").read_text().splitlines()
+    wrapper = (plugin / "kit/native/build-native.sh")
+    workflow = (plugin / ".github/workflows/verify-native.yml").read_text().splitlines()
+    ok &= report("the build tool keeps its shebang, the wrapper is executable, the workflow is stamped on line 1",
+                 tool[0].startswith("#!") and tool[1].startswith("# foamy-kit ") and wrapper.stat().st_mode & 0o111
+                 and wrapper.read_text().splitlines()[1].startswith("# foamy-kit ") and workflow[0].startswith("# foamy-kit "))
+    root_files = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
+    template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
+    ok &= report("the build tool's ROOT_FILES, components.json rootFiles and kit-check.sh agree",
+                 sorted(foamykit.ROOT_FILES) == root_files and all(f"$rel != {rel}" in template for rel in root_files),
+                 f"{root_files}")
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
     ok &= report("a leading #![attribute] is not taken for a shebang", attribute[0].startswith("// foamy-kit 0.5.0 "))
     short = foamykit.stamped("kit/x.rs", b"//! a\nfn f() {}\n", "0.5.0").decode().splitlines()
@@ -89,8 +101,8 @@ def sync_tests(base):
     ok &= report("--force restores the vendored crate", "limit.saturating_add(1)" in io_rs.read_text())
     code, out = sh(SYNC, plugin, "--components", "FoamyPrefs")
     leftovers = sorted(p.relative_to(plugin).as_posix() for p in (plugin / "kit").rglob("*"))
-    ok &= report("dropping FoamyNative removes kit/rust (no empty dirs) and rust-toolchain.toml",
-                 code == 0 and not (plugin / "rust-toolchain.toml").exists()
+    ok &= report("dropping FoamyNative removes kit/rust, kit/native, rust-toolchain.toml and .github (no empty dirs)",
+                 code == 0 and not (plugin / "rust-toolchain.toml").exists() and not (plugin / ".github").exists()
                  and leftovers == ["kit/FoamyPrefs.js", "kit/FoamyPrefsQueue.qml", "kit/node-loader.cjs", "kit/qmldir"], f"{leftovers}")
     own = fresh(base, "own-toolchain")
     (own / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
@@ -408,6 +420,24 @@ def rust_tests(base):
     ok &= report("a checkout at another path rebuilds byte-identical binaries", code == 0 and "verify OK" in out,
                  last(out))
     shutil.rmtree(elsewhere.parent.parent)
+    # The plugin on its own: a copy with no foamy-kit next to it, verified with
+    # its vendored tool from its root, the way the README and CI run it.
+    alone = base / "alone" / "foamy-native-demo"
+    shutil.copytree(plugin, alone)
+    out_dir = base / "alone-rebuilt"
+    code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", out_dir, env=env, cwd=alone)
+    kept = {arch: (out_dir / arch / BINARY).read_bytes() if (out_dir / arch / BINARY).is_file() else b"" for arch in foamykit.ARCHES}
+    ok &= report("the plugin's own kit/native/build-native.sh verifies it without foamy-kit; --out keeps the identical rebuild",
+                 code == 0 and "verify OK" in out
+                 and all(kept[arch] == (plugin / "bin" / arch / BINARY).read_bytes() for arch in kept)
+                 and all((out_dir / arch / BINARY).stat().st_mode & 0o111 for arch in kept), last(out))
+    code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", alone / "rebuilt", env=env, cwd=alone)
+    code2, out2 = sh("bash", "kit/native/build-native.sh", ".", "--out", out_dir, env=env, cwd=alone)
+    ok &= report("--out inside the plugin, or without --verify, is refused",
+                 code != 0 and "inside the plugin" in out and not (alone / "rebuilt").exists()
+                 and code2 != 0 and "--out goes with --verify" in out2, (out + out2).strip())
+    shutil.rmtree(alone.parent)
+    shutil.rmtree(out_dir)
     code, out = sh(BUILD, plugin, "--test", env=env)
     ok &= report("build-native.sh --test runs fmt, clippy and the crate's tests", code == 0 and "fmt, clippy and tests OK" in out,
                  last(out))
@@ -503,7 +533,7 @@ def racing_edit_test(plugin, base, env):
     shutil.copytree(plugin, racing)
     pin = (racing / "native/native.pin").read_bytes()
     binaries = {p: p.read_bytes() for p in (racing / "bin").rglob("*") if p.is_file()}
-    real = foamykit.build_native
+    real = foamykit.native.build_native
 
     def build_then_edit(plugin_dir, crate, binary, channel, target_dir):
         with open(plugin_dir / crate / "src/main.rs", "a") as stream:
@@ -512,12 +542,13 @@ def racing_edit_test(plugin, base, env):
 
     saved = dict(os.environ)
     os.environ.update(env or {})
-    foamykit.build_native = build_then_edit
+    foamykit.native.build_native = build_then_edit
     try:
-        codes = [foamykit.cmd_native(argparse.Namespace(plugin=str(racing), crate=None, bin=None, test=False, verify=verify))
+        codes = [foamykit.native.cmd_native(argparse.Namespace(plugin=str(racing), crate=None, bin=None, test=False,
+                                                               verify=verify, out=None))
                  for verify in (False, True)]
     finally:
-        foamykit.build_native = real
+        foamykit.native.build_native = real
         os.environ.clear()
         os.environ.update(saved)
     unchanged = (racing / "native/native.pin").read_bytes() == pin and all(p.read_bytes() == data for p, data in binaries.items())
@@ -547,14 +578,15 @@ def symlinked_bin_test(plugin, base, env):
         else:
             shutil.rmtree(work / "bin/x86_64")
             (work / "bin/x86_64").symlink_to(outside)
-        real = foamykit.build_native
-        foamykit.build_native = lambda *a: {arch: b"new " + arch.encode() for arch in ("x86_64", "aarch64")}
+        real = foamykit.native.build_native
+        foamykit.native.build_native = lambda *a: {arch: b"new " + arch.encode() for arch in ("x86_64", "aarch64")}
         saved = dict(os.environ)
         os.environ.update(env or {})
         try:
-            code = foamykit.cmd_native(argparse.Namespace(plugin=str(work), crate=None, bin=None, test=False, verify=False))
+            code = foamykit.native.cmd_native(argparse.Namespace(plugin=str(work), crate=None, bin=None, test=False,
+                                                                 verify=False, out=None))
         finally:
-            foamykit.build_native = real
+            foamykit.native.build_native = real
             os.environ.clear()
             os.environ.update(saved)
         written = sorted(p.relative_to(outside).as_posix() for p in outside.rglob("*")

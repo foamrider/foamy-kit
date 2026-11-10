@@ -19,7 +19,8 @@ declare -A listed=()
 while read -r hash rel; do
   [[ $hash =~ ^[0-9a-f]{64}$ ]] || continue
   if [[ $rel == /* || /$rel/ == */../* || /$rel/ == */./* || $rel == *//* || $rel == *\\* ]] ||
-     [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != rust-toolchain.toml ]]; then
+     [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != rust-toolchain.toml &&
+        $rel != .github/workflows/verify-native.yml ]]; then
     fail "foamy-kit.lock lists $rel, which is not a path foamy-kit owns"; continue
   fi
   listed[$rel]=1
@@ -85,7 +86,7 @@ native=0
 pins=()
 while IFS= read -r -d '' pin; do pins+=("$pin"); done < <(
   find "$root" -mindepth 2 -maxdepth 2 -name native.pin -type f ! -path "$root/.*" -print0 | LC_ALL=C sort -z)
-(( native == 0 || ${#pins[@]} > 0 )) || fail "FoamyNative is synced but no <crate>/native.pin exists (run foamy-kit tools/build-native.sh)"
+(( native == 0 || ${#pins[@]} > 0 )) || fail "FoamyNative is synced but no <crate>/native.pin exists (run kit/native/build-native.sh .)"
 native_bins=()
 if (( ${#pins[@]} > 0 )) && ! command -v file >/dev/null; then
   fail "file(1) is needed to check the native helper binaries"
@@ -112,7 +113,7 @@ for pin in "${pins[@]}"; do
     [[ $info == *"statically linked"* || $info == *"static-pie linked"* ]] || fail "$rel is not statically linked: $info"
   done
   [[ $(source_hash "$crate") == "$(value source)" ]] ||
-    fail "$binary is stale: $crate/, kit/rust, Cargo.toml, Cargo.lock or rust-toolchain.toml changed since it was built (run foamy-kit tools/build-native.sh)"
+    fail "$binary is stale: $crate/, kit/rust, Cargo.toml, Cargo.lock or rust-toolchain.toml changed since it was built (run kit/native/build-native.sh .)"
   native_bins+=("$binary")
 done
 

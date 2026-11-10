@@ -3,8 +3,8 @@
 The canonical source of the components every foamy Omarchy shell plugin shares
 (`foamy-audio`, `foamy-bolt`, … `foamy-weather`), plus the tools that keep
 them identical: `sync.sh`, `check.sh`, a design lint, an offscreen preview
-harness for screenshots, and `tools/build-native.sh` for plugins' bundled
-Rust helpers ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
+harness for screenshots, and a build tool for plugins' bundled Rust helpers
+that each plugin carries itself ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
 
 Plugins can't share files at runtime (each is a self-contained directory and
 `omarchy-plugin-validate` rejects symlinks), so the kit is **copied** into
@@ -40,7 +40,7 @@ edited in a plugin: change it here, then sync.
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
-| FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
+| FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
 
@@ -99,8 +99,12 @@ with bounds, protocol parsing) ships **one Rust multi-call binary**,
 `foamy-<plugin>-helper <subcommand> …`, committed as static musl executables
 for x86_64 and aarch64. Users install the plugin as a plain checkout and need
 no Rust; other CPUs get a clear "unavailable" state. The `FoamyNative`
-component brings everything the build needs; `tools/build-native.sh` builds
-reproducibly and `check.sh` / `tests/kit-check.sh` verify the result.
+component brings everything the build needs, including the build tool
+itself (`kit/native/build-native.sh`), so a plugin's binaries can be rebuilt
+and verified from the plugin's repository alone. The build is reproducible,
+`check.sh` / `tests/kit-check.sh` verify the result, and the plugin's
+`verify-native.yml` workflow rebuilds it on GitHub and attests it
+([Provenance](#provenance-ci-rebuild-and-attestation)).
 
 ### Layout in a plugin
 
@@ -110,13 +114,15 @@ Cargo.lock                  committed; every build uses --locked
 rust-toolchain.toml         kit (FoamyNative): toolchain 1.99.1, both musl targets, clippy, rustfmt
 native/Cargo.toml           package foamy-<plugin>-helper (template below)
 native/src/main.rs          the helper; its contract is the doc comment at the top
-native/native.pin           written by tools/build-native.sh; never edit
+native/native.pin           written by kit/native/build-native.sh; never edit
 bin/x86_64/foamy-<plugin>-helper    built, mode 0755, static-pie ELF
 bin/aarch64/foamy-<plugin>-helper   built, mode 0755, static ELF
 kit/FoamyNative.js          kit: command builder for QML
 kit/node-loader.cjs         kit: loads FoamyNative.js in node tests
 kit/rust/release.toml       kit: the release profile (passed to cargo with --config)
 kit/rust/foamy-helper/…     kit: the shared crate, a path dependency
+kit/native/build-native.sh  kit: the build tool (runs kit/native/native.py)
+.github/workflows/verify-native.yml   kit: CI rebuild, byte compare, attestation
 ```
 
 `Cargo.toml` at the plugin root, exactly (with `members = ["search"]` for a
@@ -166,23 +172,26 @@ and `<crate>/native.pin` remembers it.
 
 ### Recipe
 
-From the plugin's worktree, with `KIT` the foamy-kit checkout:
+From the plugin's worktree, with `KIT` the foamy-kit checkout (only `sync.sh`
+and `check.sh` need it; the build tool is the plugin's own copy):
 
 ```bash
 export CARGO_TARGET_DIR=~/.cache/foamy-native/foamy-<plugin>   # before ANY cargo command (see below)
-$KIT/sync.sh . --add FoamyNative          # kit/FoamyNative.js, kit/rust/…, rust-toolchain.toml, tests/kit-check.sh
+$KIT/sync.sh . --add FoamyNative          # kit/FoamyNative.js, kit/rust/…, kit/native/…, rust-toolchain.toml,
+                                          # .github/workflows/verify-native.yml, tests/kit-check.sh
 # write Cargo.toml (workspace), native/Cargo.toml, native/src/main.rs
 (cd native && cargo generate-lockfile)    # writes ./Cargo.lock (only that file)
-$KIT/tools/build-native.sh . --test       # cargo fmt --check, clippy --all-targets -D warnings, cargo test
-$KIT/tools/build-native.sh .              # builds both arches, installs bin/<arch>/…, writes native/native.pin
-$KIT/tools/build-native.sh . --verify     # clean rebuild in a fresh target dir, byte compare with bin/
+kit/native/build-native.sh . --test       # cargo fmt --check, clippy --all-targets -D warnings, cargo test
+kit/native/build-native.sh .              # builds both arches, installs bin/<arch>/…, writes native/native.pin
+kit/native/build-native.sh . --verify     # clean rebuild in a fresh target dir, byte compare with bin/
 bash tests/kit-check.sh                   # kit stamps + native pin, checksums, static ELF, staleness
 $KIT/check.sh .                           # the same from the kit, plus the design lint
 ```
 
-Commit `Cargo.toml`, `Cargo.lock`, `native/`, `bin/x86_64/…`, `bin/aarch64/…`
-and the synced kit files together, and add `/target/` to the plugin's
-`.gitignore`.
+`$KIT/tools/build-native.sh <plugin> …` is a shortcut that runs the plugin's
+copy. Commit `Cargo.toml`, `Cargo.lock`, `native/`, `bin/x86_64/…`,
+`bin/aarch64/…` and the synced kit files together, and add `/target/` to the
+plugin's `.gitignore`.
 
 Cargo hygiene:
 
@@ -220,7 +229,8 @@ kit sync that changed `foamy-helper`'s dependencies, `cargo update -p
 foamy-helper`. Never run cargo in `kit/rust/`, and never point
 `CARGO_TARGET_DIR` into the plugin.
 
-`build-native.sh` (`tools/foamykit.py native`):
+`kit/native/build-native.sh` (`kit/native/native.py`, standard library only;
+`check.sh` imports the same module for its native checks):
 
 - refuses to build when the kit files are edited or FoamyNative isn't synced,
   when the root workspace, `Cargo.lock` or the crate is missing, or a manifest
@@ -235,10 +245,13 @@ foamy-helper`. Never run cargo in `kit/rust/`, and never point
   `CARGO_TARGET_*` and wrappers are dropped;
 - installs each binary atomically (a temp file in `bin/<arch>/`, then a
   rename) and only when its bytes changed, then writes `native.pin`: crate,
-  binary, toolchain, kit version, the **source hash** and a sha256 per arch;
+  binary, toolchain, kit version (the plugin's `foamy-kit.lock` version, the
+  version of the tool that built it), the **source hash** and a sha256 per arch;
 - `--verify` rebuilds in a fresh target dir (removed afterwards) and fails
   unless both binaries are byte-identical to the committed ones and the pin
-  is current; `--test` runs fmt, clippy and tests in the same cache.
+  is current; `--verify --out DIR` also writes the rebuilt files to
+  `DIR/<arch>/<binary>` (outside the plugin), which is what CI attests;
+  `--test` runs fmt, clippy and tests in the same cache.
 
 The source hash covers the crate (without `native.pin` and `target/`),
 `kit/rust/`, and `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml` at the
@@ -248,6 +261,105 @@ leaves the Rust code alone keeps the binaries fresh. `check.sh` and
 missing, a symlink, not executable, has another checksum, is not a static
 64-bit ELF for its arch, or the sources changed since the build ("stale"),
 and when FoamyNative is synced without a `native.pin`.
+
+### Provenance: CI rebuild and attestation
+
+The Omarchy plugin marketplace reports committed ELF files as
+`bundled-executable-binary`, and a maintainer accepts that capability only
+with evidence they can check themselves that the exact committed bytes were
+built from the reviewed source (omacom/omarchy-plugin-marketplace#14501).
+`native.pin`, README steps and "I rebuilt it locally" are not enough; a
+public rebuild with a signed attestation at the exact commit is.
+
+`.github/workflows/verify-native.yml` (synced, stamped) provides it. On every
+push to `main` or `dev`, pull request and manual run, a GitHub-hosted runner
+checks out the commit, installs the toolchain `rust-toolchain.toml` pins,
+runs `tests/kit-check.sh`, `kit/native/build-native.sh . --test` and
+`--verify --out $RUNNER_TEMP/rebuilt`, writes a table of each binary's git
+blob and committed and rebuilt SHA-256 to the job summary, and uploads the
+rebuilt files. On pushes and manual runs (not pull requests) it then attests
+the rebuilt files with `actions/attest-build-provenance`. They are
+byte-identical to `bin/`, so the attestation covers the committed files:
+
+```sh
+gh attestation verify bin/x86_64/<binary> --repo foamrider/foamy-<plugin> \
+  --signer-workflow foamrider/foamy-<plugin>/.github/workflows/verify-native.yml \
+  --source-digest <commit> --deny-self-hosted-runners
+```
+
+Actions are pinned by commit SHA; update them in `kit/native/verify-native.yml`
+and sync. Everything the build reads is in the plugin at that commit, so the
+attestation's source commit covers the build tool as well.
+
+**Before filing or updating a marketplace Verify issue** for a plugin that
+ships a helper: the target commit is the `main` HEAD, and the workflow run
+for that push must be green. Put this in the issue:
+
+- the run link (`gh run list -w verify-native.yml -b main -L 1`);
+- a table of each `bin/<arch>/<binary>` with its git blob
+  (`git rev-parse <commit>:bin/x86_64/<binary>`) and SHA-256, as in the
+  run's summary;
+- the `gh attestation verify` commands above, with the commit;
+- the local rebuild from the README.
+
+**The plugin README's "Verifying the helper binaries"** section names the
+same three checks, all from the plugin's repository alone (no foamy-kit
+clone, no hard-coded kit commit):
+
+````markdown
+## Verifying the helper binaries
+
+`bin/x86_64/<binary>` and `bin/aarch64/<binary>` are compiled from the Rust
+source in this repository: `native/`, the shared crate in `kit/rust/`, the
+dependencies locked in `Cargo.lock` and the toolchain pinned in
+`rust-toolchain.toml`, with the build tool in `kit/native/`. The build is
+reproducible. `native/native.pin` records the toolchain, a hash of every
+build input (`source`) and the SHA-256 of each binary.
+
+**CI.** The [Verify native helpers](https://github.com/foamrider/foamy-<plugin>/actions/workflows/verify-native.yml)
+workflow rebuilds both binaries on a GitHub-hosted runner for every push,
+compares them byte for byte with `bin/`, and attests the rebuilt files. To
+check the committed files against that attestation (GitHub CLI):
+
+```sh
+gh attestation verify bin/x86_64/<binary> --repo foamrider/foamy-<plugin> \
+  --signer-workflow foamrider/foamy-<plugin>/.github/workflows/verify-native.yml \
+  --deny-self-hosted-runners
+gh attestation verify bin/aarch64/<binary> --repo foamrider/foamy-<plugin> \
+  --signer-workflow foamrider/foamy-<plugin>/.github/workflows/verify-native.yml \
+  --deny-self-hosted-runners
+```
+
+Add `--source-digest <commit>` to require a particular commit.
+
+**Yourself.** You need `rustup`, Python 3.11 or newer and `file`. From a
+checkout of this repository at the commit you want to check:
+
+```sh
+rustup toolchain install "$(awk '$1 == "toolchain" { print $2 }' native/native.pin)" \
+  --profile minimal --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+kit/native/build-native.sh . --verify
+```
+
+It builds both binaries from scratch in `~/.cache/foamy-native/` (nothing is
+written to the checkout), compares them byte for byte with `bin/`, checks
+that the kit files are unmodified and that `native.pin` matches the source,
+and ends with `verify OK (<binary>, <toolchain>, both arches reproducible)`.
+
+### Building the helper yourself
+
+To run binaries you built instead of the committed ones, build them in the
+installed plugin (`~/.config/omarchy/plugins/foamy.<plugin>`) with the same
+toolchain, then run `omarchy restart shell`:
+
+```sh
+cd ~/.config/omarchy/plugins/foamy.<plugin>
+kit/native/build-native.sh .
+```
+
+The build is reproducible, so `git status` shows no change when your
+binaries match the release, and `omarchy plugin update` still applies.
+````
 
 ### Launching from QML
 

@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.0 — 2026-11-10
+
+A plugin's helper binaries can now be rebuilt, verified and attested from the
+plugin's own repository. The marketplace accepts `bundled-executable-binary`
+only with independently checkable source-to-binary evidence at the exact
+commit (omacom/omarchy-plugin-marketplace#14501); README.md "Provenance"
+is the recipe.
+
+### Added
+- FoamyNative vendors the build tool: `kit/native/native.py` (the former
+  `tools/foamykit.py native`, standard library only) and its wrapper
+  `kit/native/build-native.sh`. Building, `--verify` and `--test` need only
+  the plugin, rustup and Python 3.11+; no foamy-kit clone, so plugin READMEs
+  no longer name a kit commit.
+- `--verify --out DIR`: also writes the rebuilt binaries to
+  `DIR/<arch>/<binary>` (refused inside the plugin).
+- FoamyNative syncs `.github/workflows/verify-native.yml`: on pushes,
+  pull requests and manual runs a GitHub-hosted runner runs kit-check,
+  `--test` and `--verify --out`, reports each binary's git blob and SHA-256,
+  uploads the rebuilt files, and (not on pull requests) attests them with
+  `actions/attest-build-provenance`, so `gh attestation verify bin/<arch>/<binary>`
+  passes for the committed files. Actions are pinned by commit SHA.
+- README.md: the Verify issue evidence and the plugin README's "Verifying the
+  helper binaries" section.
+
+### Changed
+- `tools/build-native.sh <plugin>` runs the plugin's own
+  `kit/native/build-native.sh`; sync first if the plugin has none.
+- `native.pin`'s `kit` is the plugin's `foamy-kit.lock` version (the vendored
+  tool's), and its header names `kit/native/build-native.sh .`. Pins change
+  on the next build; the binaries don't.
+- Sync stamps `.py` and `.yml` files with `#`, keeps a shebang on line 1, and
+  removes a dropped root file's empty directories (`.github/workflows`).
+- `tests/kit-check.sh` accepts `.github/workflows/verify-native.yml` in the
+  lock.
+
 ## 0.6.0 — 2026-11-08
 
 For foamy-lock's video wallpapers: a sandboxed, multithreaded ffmpeg

@@ -24,5 +24,5 @@
   "FoamyWheelScroll": {"files": ["FoamyWheelScroll.qml"], "deps": ["FoamyStyle", "FoamyMotion"]},
   "FoamyCursor": {"files": ["FoamyCursor.qml", "FoamyCursorSurface.qml"], "deps": ["FoamyStyle"]},
   "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []},
-  "FoamyNative": {"files": ["FoamyNative.js", "node-loader.cjs", "rust/release.toml", "rust/foamy-helper/Cargo.toml", "rust/foamy-helper/src/**/*.rs"], "rootFiles": {"rust-toolchain.toml": "rust/rust-toolchain.toml"}, "deps": [], "optIn": true}
+  "FoamyNative": {"files": ["FoamyNative.js", "node-loader.cjs", "native/native.py", "native/build-native.sh", "rust/release.toml", "rust/foamy-helper/Cargo.toml", "rust/foamy-helper/src/**/*.rs"], "rootFiles": {".github/workflows/verify-native.yml": "native/verify-native.yml", "rust-toolchain.toml": "rust/rust-toolchain.toml"}, "deps": [], "optIn": true}
 }

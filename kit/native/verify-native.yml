@@ -1,0 +1,99 @@
+# Rebuilds this plugin's native helper from source on a GitHub-hosted runner
+# and compares it byte for byte with the committed bin/<arch>/<binary>.
+#
+# Everything the build reads is in this repository at the checked-out
+# commit: the crate named in <crate>/native.pin, the shared crate in kit/rust,
+# Cargo.toml, Cargo.lock, the toolchain pinned in rust-toolchain.toml and the
+# build tool itself (kit/native/). Crates come from crates.io at the versions
+# and checksums Cargo.lock records.
+#
+# On pushes and manual runs the rebuilt files get a GitHub (Sigstore) build
+# provenance attestation. They are byte-identical to the committed files, so
+# the committed binaries can be checked against this workflow and commit:
+#
+#   gh attestation verify bin/x86_64/<binary> --repo <owner>/<repo> \
+#     --signer-workflow <owner>/<repo>/.github/workflows/verify-native.yml \
+#     --source-digest <commit> --deny-self-hosted-runners
+#
+# Pull request runs rebuild and compare, without attesting.
+name: Verify native helpers
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Rebuild and compare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out the commit under review
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Report the source under review
+        run: |
+          git log -1 --format='%H %s'
+          echo "Commit \`$(git rev-parse HEAD)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          channel=$(python3 -I -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$channel" --profile minimal --component clippy,rustfmt \
+            --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+          rustup run "$channel" rustc --version
+          python3 --version
+
+      - name: Check the kit files and the committed binaries
+        run: bash tests/kit-check.sh
+
+      - name: Format, lint and test the helper crate
+        run: bash kit/native/build-native.sh . --test
+
+      - name: Rebuild from source and compare with bin/
+        run: bash kit/native/build-native.sh . --verify --out "$RUNNER_TEMP/rebuilt"
+
+      - name: Report the binaries
+        if: always()
+        run: |
+          {
+            echo
+            echo "| File | Git blob | SHA-256 (committed) | SHA-256 (rebuilt here) |"
+            echo "| --- | --- | --- | --- |"
+            for pin in */native.pin; do
+              binary=$(awk '$1 == "binary" && NF == 2 { print $2; exit }' "$pin")
+              for arch in x86_64 aarch64; do
+                rel="bin/$arch/$binary"
+                rebuilt="$RUNNER_TEMP/rebuilt/$arch/$binary"
+                printf '| `%s` | `%s` | `%s` | `%s` |\n' "$rel" "$(git rev-parse "HEAD:$rel")" \
+                  "$(sha256sum < "$rel" | cut -d' ' -f1)" \
+                  "$(if [[ -f $rebuilt ]]; then sha256sum < "$rebuilt" | cut -d' ' -f1; else echo 'not built'; fi)"
+              done
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the rebuilt binaries
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-helpers
+          path: ${{ runner.temp }}/rebuilt
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Attest the rebuilt binaries
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/rebuilt/*/*
