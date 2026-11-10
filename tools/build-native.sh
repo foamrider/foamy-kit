@@ -1,10 +1,14 @@
 #!/bin/bash
-# Build a plugin's native helper for x86_64 and aarch64 (static musl), install
-# it atomically as bin/<arch>/<binary> and write <crate>/native.pin.
-#   tools/build-native.sh <plugin-dir> [--verify | --test] [--crate DIR] [--bin NAME]
-# --verify rebuilds in a fresh target dir and compares bytes with the committed
-# binaries; --test runs cargo fmt --check, clippy -D warnings and test. Cargo
-# output goes to ${FOAMY_NATIVE_CACHE:-~/.cache/foamy-native}/foamy-<plugin>,
-# never into the plugin. See README.md, "Native helpers".
+# Build a plugin's native helper with the plugin's own copy of the build tool
+# (kit/native/build-native.sh, synced by FoamyNative):
+#   tools/build-native.sh <plugin-dir> [--verify [--out DIR] | --test] [--crate DIR] [--bin NAME]
+# The plugin's copy is the one its README, CI and native.pin name, so this is
+# only a shortcut from the foamy-kit checkout. See README.md, "Native helpers".
 set -euo pipefail
-exec python3 -I "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/foamykit.py" native "$@"
+plugin=${1:?usage: tools/build-native.sh <plugin-dir> [--verify [--out DIR] | --test] [--crate DIR] [--bin NAME]}
+tool="$plugin/kit/native/build-native.sh"
+if [[ ! -f $tool || -L $tool ]]; then
+  echo "build-native: $plugin has no kit/native/build-native.sh; sync it first (sync.sh $plugin --add FoamyNative)" >&2
+  exit 1
+fi
+exec bash "$tool" "$@"
