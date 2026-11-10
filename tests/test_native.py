@@ -616,6 +616,7 @@ def notices_tests(plugin, base, env):
     ok &= report("--notices refuses stale binaries (it never pins notices to sources the binaries weren't built from)",
                  code != 0 and "is stale" in out and path.read_bytes() == saved, out.strip()[-300:])
     ok &= isc_notice_test(plugin, base, env)
+    ok &= std_notice_tests(plugin, base, env, text)
     return ok
 
 
@@ -735,6 +736,140 @@ def isc_notice_test(plugin, base, env):
     finally:
         native.linked_packages, native.lock_packages, native.cargo_home = real_linked, real_lock, real_home
         native.crate_files = real_files
+    return ok
+
+
+def std_notice_tests(plugin, base, env, text):
+    """The standard library's crates.io dependencies in the fixture's
+    notices: each at the version of the toolchain's library/Cargo.lock, with
+    its own texts (from the checksum-verified .crate where the toolchain's
+    notice file has no entry: addr2line, miniz_oxide, ...); generation fails
+    when a detected dependency can't be matched or has no text."""
+    native = foamykit.native
+    ok = True
+    rows = {line.split("`")[1]: line for line in text.split("### Toolchain code", 1)[1].splitlines()
+            if line.startswith("| `") and "a dependency of the standard library" in line}
+    locked = {name: version for name, version, _ in native.STD_LOCKS["1.99.1"]}
+    seen = native.elf_sources((plugin / "bin/x86_64" / BINARY).read_bytes())["std_deps"]
+    ok &= report("every standard library dependency the binary names is listed at its library/Cargo.lock version",
+                 seen and all(name in rows and f"| {version} |" in rows[name] and locked[name] == version for name, version in seen),
+                 f"{sorted(seen)}")
+    texts = {name: [p for p in text.split("\n### N") if f"standard library dependency {name} {locked[name]}: `" in p]
+             for name in ("addr2line", "miniz_oxide", "adler2", "object")}
+    ok &= report("addr2line, miniz_oxide, adler2 and object ship their own texts, from the verified crates.io archives",
+                 all(texts.values()) and all("notices from the crates.io archive, sha256 `" in rows.get(n, "") for n in texts)
+                 and any("Permission is hereby granted" in p for p in texts["addr2line"])
+                 and any("zlib" in p.lower() for p in texts["miniz_oxide"])
+                 and "has no entry for these standard library dependencies" not in text, f"{ {n: len(t) for n, t in texts.items()} }")
+    channel = native.toolchain_channel(plugin)
+    pin = foamykit.read_pin(plugin / "native/native.pin")
+    entry = {"crate": "native", "binary": BINARY, "source": pin["source"],
+             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}}
+    cargo = native.notices_env(plugin, "native", channel, base / "cache")
+    real_lock, real_files = native.std_lock, native.std_crate_files
+
+    def generate():
+        try:
+            native.notices_bytes(plugin, channel, [entry], cargo, plugin / "native")
+            return ""
+        except native.KitError as error:
+            return str(error)
+
+    detected = sorted(seen)[0] if seen else ("addr2line", "0.27.1")
+    try:
+        native.std_lock = lambda sysroot, ch: {n: ({"0.0.1": c} if n == detected[0] else {v: c})
+                                               for n, v, c in native.STD_LOCKS["1.99.1"]}
+        error = generate()
+        ok &= report(f"a detected standard library dependency without a matching locked version fails ({detected[0]})",
+                     f"the binaries contain {detected[0]} {detected[1]}" in error, error)
+        native.std_lock = lambda sysroot, ch: {n: {v: c} for n, v, c in native.STD_LOCKS["1.99.1"] if n != "miniz_oxide"}
+        error = generate()
+        ok &= report("a sysroot crate missing from the standard library's lock fails (no notice, no file)",
+                     "miniz_oxide is neither in the Rust repository nor in the standard library's Cargo.lock" in error, error)
+        native.std_lock = real_lock
+        native.std_crate_files = lambda n, v, c: [("Cargo.toml", b'[package]\nname = "x"\n')] if n == "addr2line" else real_files(n, v, c)
+        error = generate()
+        ok &= report("a standard library dependency with no notice text fails generation",
+                     "addr2line 0.27.1 has neither a license file nor a license" in error, error)
+    finally:
+        native.std_lock, native.std_crate_files = real_lock, real_files
+    saved = (plugin / "THIRD_PARTY_NOTICES.md").read_bytes()
+    ok &= report("the committed notices are untouched by the failed generations", saved == text.encode())
+    return ok
+
+
+def std_archive_tests(base):
+    """std_crate_files: the .crate with the standard library lock's checksum,
+    from cargo's cache, the foamy-native cache or crates.io (then cached);
+    a mismatching archive is refused wherever it comes from; offline without
+    a cached copy is an error. std_lock: rust-src's lock must agree with the
+    embedded table; no lock for a channel is an error. No cargo or network."""
+    native = foamykit.native
+    ok = True
+    home = base / "std-home"
+    (home / "registry/cache").mkdir(parents=True)
+    cache = base / "std-cache"
+    good = {"Cargo.toml": b'[package]\nname = "fake-addr2line"\nversion = "0.27.1"\nlicense = "Apache-2.0 OR MIT"\n',
+            "LICENSE-MIT": b"Copyright (c) 2016-2018 The gimli Developers\n"}
+    source = base / "std-source"
+    checksum = fake_crate(source, "fake-addr2line", "0.27.1", good)
+    data = (source / "registry/cache/index.crates.io-0000000000000000/fake-addr2line-0.27.1.crate").read_bytes()
+    downloads = []
+    real = (native.cargo_home, native.download_crate)
+    saved_env = dict(os.environ)
+    native.cargo_home = lambda: home
+    os.environ["FOAMY_NATIVE_CACHE"] = str(cache)
+    os.environ.pop("CARGO_NET_OFFLINE", None)
+
+    def attempt():
+        try:
+            return dict(native.license_files(native.std_crate_files("fake-addr2line", "0.27.1", checksum), {})), ""
+        except native.KitError as error:
+            return None, str(error)
+
+    try:
+        native.download_crate = lambda n, v: (downloads.append(v), data[:-8] + b"tampered")[1]
+        files, error = attempt()
+        cached = cache / "crates/fake-addr2line-0.27.1.crate"
+        ok &= report("a downloaded standard library archive that doesn't match the lock is refused, and not cached",
+                     files is None and "does not match the standard library's Cargo.lock checksum" in error
+                     and not cached.exists() and downloads == ["0.27.1"], error)
+        native.download_crate = lambda n, v: (downloads.append(v), data)[1]
+        files, error = attempt()
+        ok &= report("a matching download is used and cached", files == {"LICENSE-MIT": "Copyright (c) 2016-2018 The gimli Developers"}
+                     and cached.read_bytes() == data and len(downloads) == 2, error)
+        files, error = attempt()
+        ok &= report("the cached archive is reused (no second download)", files is not None and len(downloads) == 2, error)
+        cached.write_bytes(data[:-8] + b"tampered")
+        files, error = attempt()
+        ok &= report("a tampered cached archive is refused", files is None and "does not match" in error and len(downloads) == 2, error)
+        cached.unlink()
+        os.environ["CARGO_NET_OFFLINE"] = "true"
+        files, error = attempt()
+        ok &= report("offline without a cached archive fails (no download)", files is None and "CARGO_NET_OFFLINE" in error
+                     and len(downloads) == 2, error)
+        locked = native.std_lock(base / "no-sysroot", "1.99.1")
+        ok &= report("the embedded standard library lock for 1.99.1 pins addr2line and miniz_oxide",
+                     locked.get("addr2line") == {"0.27.1": "e567177890eb1617b1f774005b66b26b2377afd138a2ca37aae7d8f0c81429d4"}
+                     and "0.9.1" in locked.get("miniz_oxide", {}), f"{sorted(locked)}")
+        sysroot = base / "fake-sysroot"
+        lock = sysroot / "lib/rustlib/src/rust/library/Cargo.lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_text('version = 4\n[[package]]\nname = "addr2line"\nversion = "0.27.1"\n'
+                        'source = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "' + "0" * 64 + '"\n')
+        errors = []
+        for channel in ("1.99.1", "9.9.9"):
+            try:
+                native.std_lock(sysroot if channel == "1.99.1" else base / "no-sysroot", channel)
+                errors.append("")
+            except native.KitError as failure:
+                errors.append(str(failure))
+        ok &= report("rust-src's library/Cargo.lock must agree with the embedded table; no lock for a channel is an error",
+                     "disagrees with native.py's STD_LOCKS" in errors[0] and "install rust-src" in errors[1], f"{errors}")
+    finally:
+        native.cargo_home, native.download_crate = real
+        os.environ.clear()
+        os.environ.update(saved_env)
     return ok
 
 
@@ -949,6 +1084,7 @@ def main():
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-native-"))
     ok = sync_tests(base)
     ok &= crate_archive_tests(base)
+    ok &= std_archive_tests(base)
     if shutil.which("cargo") and shutil.which("rustup"):
         ok &= rust_tests(base)
     else:
