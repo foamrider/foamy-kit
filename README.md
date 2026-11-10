@@ -645,7 +645,9 @@ height, menu padding, plus the old fork as a negative control), runtime
 tests of i18n/motion/palette/prefs/cursor/leader election/IPC
 (English, Danish, Arabic), the 0.2 features (icons, tokens, dropdown binding,
 prefs queue inline and CLI with fake `omarchy`, IPC preference and peer
-calls, settings state, private D-Bus), a `qs ipc` argument probe, harness
+calls, settings state, private D-Bus), how a prefs-queue CLI save ends
+(`test_lifecycle.py`: exit, failed start, deadline, capped stderr, stopped,
+queue destroyed; and a peer call that can't start), a `qs ipc` argument probe, harness
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and screen-height popups
