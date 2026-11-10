@@ -499,6 +499,7 @@ def rust_tests(base):
 
     ok &= tamper_tests(plugin, base)
     ok &= racing_edit_test(plugin, base, env)
+    ok &= two_helpers_test(base, env)
     ok &= symlinked_bin_test(plugin, base, env)
 
     profiled = fresh(base, "profiled")
@@ -832,6 +833,76 @@ def racing_edit_test(plugin, base, env):
     shutil.rmtree(racing.parent)
     return report("build and --verify refuse when the sources change during the build (nothing installed)",
                   codes == [1, 1] and unchanged, f"{codes} unchanged={unchanged}")
+
+
+def two_helpers_test(base, env):
+    """Two pinned crates sharing a dependency that gets updated: both are
+    stale, and rebuilding them one after the other works in either order
+    (the other crate's old binary still names the old version, which must
+    not block the notices). A current build's paths are still checked.
+    Cargo and the builds are stubbed: the graph is `shared` 1.0.0, then 2.0.0."""
+    import argparse
+    native = foamykit.native
+    ok = True
+    home = base / "two-helpers-home"
+    sums = {v: fake_crate(home, "shared", v, {"Cargo.toml": f'[package]\nname = "shared"\nversion = "{v}"\nlicense = "MIT"\n'.encode(),
+                                               "LICENSE": f"shared {v}: Copyright 2024 Shared Authors\n".encode()})
+            for v in ("1.0.0", "2.0.0")}
+    state = {"graph": "1.0.0", "built": "1.0.0"}
+
+    def linked(plugin_dir, crate, triple, cargo_env_):
+        return {("shared", state["graph"]): None}
+
+    def lock(plugin_dir):
+        v = state["graph"]
+        return {("shared", v): {"name": "shared", "version": v, "checksum": sums[v],
+                                "source": "registry+https://github.com/rust-lang/crates.io-index"}}
+
+    def build(plugin_dir, crate, binary, channel, target_dir):
+        path = f"/cargo/registry/src/index.crates.io-0000000000000000/shared-{state['built']}/src/lib.rs"
+        return {arch: f"\x7fELF {binary} {arch} \0{path}\0".encode() for arch in foamykit.ARCHES}
+
+    def run(plugin_dir, crate, binary):
+        return native.cmd_native(argparse.Namespace(plugin=str(plugin_dir), crate=crate, bin=binary, test=False,
+                                                    verify=False, out=None, notices=False))
+
+    crates = {"native": BINARY, "second": "foamy-native-demo-second"}
+    real = (native.linked_packages, native.lock_packages, native.cargo_home, native.build_native)
+    saved = dict(os.environ)
+    os.environ.update(env or {})
+    native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = linked, lock, lambda: home, build
+    try:
+        for order in (["native", "second"], ["second", "native"]):
+            work = fresh(base, "two-helpers-" + order[0])
+            shutil.copytree(work / "native", work / "second")
+            manifest = work / "second/Cargo.toml"
+            manifest.write_text(manifest.read_text().replace(f'name = "{BINARY}"', 'name = "foamy-native-demo-second"'))
+            workspace = work / "Cargo.toml"
+            workspace.write_text(workspace.read_text().replace('members = ["native"]', 'members = ["native", "second"]'))
+            sh(SYNC, work, "--components", "FoamyNative")
+            state.update(graph="1.0.0", built="1.0.0")
+            first = [run(work, crate, binary) for crate, binary in crates.items()]
+            state.update(graph="2.0.0", built="2.0.0")
+            with open(work / "Cargo.lock", "a") as stream:
+                stream.write("\n# shared 2.0.0\n")
+            stale = all(native.native_source_hash(work, c) != foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            codes = [run(work, crate, crates[crate]) for crate in order]
+            notices = (work / "THIRD_PARTY_NOTICES.md").read_text()
+            fresh_pins = all(native.native_source_hash(work, c) == foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            ok &= report(f"two helpers sharing an updated dependency rebuild one after the other ({' then '.join(order)})",
+                         first == [0, 0] and stale and codes == [0, 0] and fresh_pins and "| shared | 2.0.0 |" in notices
+                         and "| shared | 1.0.0 |" not in notices and not native.notices_problems(work, native.native_pins(work)),
+                         f"initial {first}, stale {stale}, rebuilds {codes}")
+            state.update(built="1.0.0")
+            code = run(work, order[0], crates[order[0]])
+            ok &= report(f"a current build that embeds a crate the graph doesn't list is still refused ({order[0]})",
+                         code == 1 and "| shared | 2.0.0 |" in (work / "THIRD_PARTY_NOTICES.md").read_text(), f"code {code}")
+            shutil.rmtree(work)
+    finally:
+        native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = real
+        os.environ.clear()
+        os.environ.update(saved)
+    return ok
 
 
 def symlinked_bin_test(plugin, base, env):
