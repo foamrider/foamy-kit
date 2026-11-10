@@ -135,4 +135,53 @@ test("module name is a parameter (no hardcoded plugin id)", () => {
   assert.ok(!/foamy\.[a-z]/.test(source.replace(/\/\/.*$/gm, "")));
 });
 
+test("bounded() and killGroupCommand() argv", () => {
+  assert.deepStrictEqual(Array.from(Prefs.bounded(["omarchy", "bar", "set"], 20000)), ["timeout", "--signal=KILL", "20s", "omarchy", "bar", "set"]);
+  assert.deepStrictEqual(Array.from(Prefs.bounded(["x"], 1500)).slice(0, 3), ["timeout", "--signal=KILL", "1.5s"]);
+  assert.strictEqual(Prefs.bounded(["x"], 0)[2], "0.001s", "never 0 (timeout 0 means no limit)");
+  assert.strictEqual(Prefs.bounded(["x"], NaN)[2], "0.001s");
+  const array = Array.from(Prefs.saveCommand("foamy.x", "folders", [1]));
+  assert.deepStrictEqual(Array.from(Prefs.bounded(array, 20000)).slice(3), array, "the save argv is passed through untouched");
+  assert.deepStrictEqual(Array.from(Prefs.killGroupCommand(4321)), ["sh", "-c", 'kill -s KILL -- "-$1" 2>/dev/null; exit 0', "foamy-prefs", "4321"]);
+  for (const bad of [0, 1, -5, 2.5, "12; rm", null, undefined]) assert.strictEqual(Prefs.killGroupCommand(bad).length, 0, String(bad));
+});
+
+// Real processes: a child that ignores SIGTERM and writes after 1 s, behind
+// an `sh -c` wrapper (the array-save shape).
+const { spawn, spawnSync } = require("child_process");
+const os = require("os");
+const pause = (seconds) => spawnSync("sleep", [String(seconds)]);
+const lateWriter = (file) => ["sh", "-c", 'sh -c \'trap "" TERM; sleep 1; echo late > "$1"\' child "$1" & wait', "wrapper", file];
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "foamy-kit-prefs-"));
+
+test("killing only the wrapper leaves its child to write late (why bounded() exists)", () => {
+  const file = path.join(scratch, "unbounded");
+  const [cmd, ...args] = lateWriter(file);
+  spawnSync(cmd, args, { timeout: 200, killSignal: "SIGKILL", stdio: "ignore" });
+  pause(1.3);
+  assert.ok(fs.existsSync(file), "control: the orphaned child wrote");
+});
+
+test("bounded() kills the whole group at the deadline", () => {
+  const file = path.join(scratch, "bounded");
+  const [cmd, ...args] = Prefs.bounded(lateWriter(file), 200);
+  const result = spawnSync(cmd, args, { stdio: "ignore" });
+  assert.strictEqual(result.signal, "SIGKILL", "timeout kills itself with its group");
+  pause(1.3);
+  assert.ok(!fs.existsSync(file), "the child was killed with the wrapper");
+});
+
+test("killGroupCommand() kills a running bounded save's group", () => {
+  const file = path.join(scratch, "killed");
+  const [cmd, ...args] = Prefs.bounded(lateWriter(file), 30000);
+  const child = spawn(cmd, args, { stdio: "ignore" });
+  pause(0.2);
+  const [kcmd, ...kargs] = Prefs.killGroupCommand(child.pid);
+  assert.strictEqual(spawnSync(kcmd, kargs).status, 0);
+  pause(1.3);
+  assert.ok(!fs.existsSync(file), "no process of the group survived");
+  assert.strictEqual(spawnSync(kcmd, kargs).status, 0, "an empty group is fine");
+});
+fs.rmSync(scratch, { recursive: true, force: true });
+
 console.log(`PASS FoamyPrefs.js: ${passed} tests`);

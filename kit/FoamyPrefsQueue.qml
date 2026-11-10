@@ -21,9 +21,13 @@ import "FoamyPrefs.js" as Prefs
 //   is kept.
 // - A CLI save fails (rolled back, retryable) when its command exits non-zero,
 //   can't start (Quickshell then emits no exited(), only running -> false),
-//   is stopped, or runs past saveTimeoutMs (then it is killed). Every one of
-//   these ends in finish(), so `saving` always clears. At most
-//   stderrLimit characters of its stderr are kept for the log.
+//   is stopped, or runs past saveTimeoutMs. Every one of these ends in
+//   finish(), so `saving` always clears. At most stderrLimit characters of
+//   its stderr are kept for the log.
+// - A CLI save runs in its own process group (FoamyPrefs.bounded): at
+//   saveTimeoutMs the whole group is SIGKILLed, and so is what's left of it
+//   when the save is stopped by a signal or the queue is destroyed. The next
+//   save starts only after that, so a timed-out save can't write late.
 // - Each save merges over `effectiveSettings` (settings + values saved but
 //   not yet reflected back), so two quick saves never undo each other.
 // - A pending value is dropped once `settings` shows it, or after
@@ -56,6 +60,11 @@ QtObject {
   property var current: null
   property var pendingSince: ({})
   property string stderrHead: ""
+  property double startedAt: 0
+  // Kills the running save's process group (FoamyPrefs.killGroupCommand);
+  // [] when there is none. Kept ready for Component.onDestruction.
+  property var groupKill: []
+  property bool reaping: false
 
   signal saved(string key, var value)
   signal failed(string key, var value, string error)
@@ -72,8 +81,8 @@ QtObject {
     }
     error = ""
     lastFailed = null
-    // proc.running: a killed (timed-out) command that hasn't exited yet.
-    if (inFlight || waiting.length > 0 || proc.running) {
+    // proc.running / reaping: a stopped save whose processes aren't gone yet.
+    if (inFlight || waiting.length > 0 || proc.running || reaping) {
       var next = waiting.filter(function(item) { return item.key !== key })
       next.push({ key: key, value: value })
       waiting = next
@@ -134,8 +143,10 @@ QtObject {
     current = { key: key, value: value, hadPrevious: hadPrevious, previous: previous }
     inFlight = true
     stderrHead = ""
+    groupKill = []
+    startedAt = Date.now()
     deadline.restart()
-    proc.command = result.command
+    proc.command = Prefs.bounded(result.command, saveTimeoutMs)
     proc.running = true
     return true
   }
@@ -174,12 +185,23 @@ QtObject {
     Qt.callLater(advance)
   }
 
+  // SIGKILL the save's whole process group (before its leader is reaped, or
+  // while any member is left, its id can't belong to anyone else).
+  function killGroup() {
+    var command = groupKill
+    groupKill = []
+    if (command.length === 0) return
+    reaping = true
+    reaper.command = command
+    reaper.running = true
+  }
+
   function keepStderr(data) {
     if (stderrHead.length < stderrLimit) stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
   }
 
   function advance() {
-    if (inFlight || proc.running || waiting.length === 0) return
+    if (inFlight || proc.running || reaping || waiting.length === 0) return
     var next = waiting[0]
     waiting = waiting.slice(1)
     run(next.key, next.value)
@@ -198,23 +220,39 @@ QtObject {
     }
   }
 
+  // Backstop: `timeout` in the save's own group normally ends it at
+  // saveTimeoutMs. If it didn't, kill the group from here (SIGKILL:
+  // running = false only sends SIGTERM, which a stuck command may ignore).
   property Timer deadline: Timer {
-    interval: Math.max(1, queue.saveTimeoutMs)
+    interval: Math.max(1, queue.saveTimeoutMs) + 2000
     onTriggered: {
-      queue.finish(false, "no exit after " + interval + " ms")
-      // SIGKILL: running = false only sends SIGTERM, which a stuck command
-      // may ignore. Its exit (or nothing) comes later; advance() waits for it.
+      queue.killGroup()
       if (queue.proc.running) queue.proc.signal(9)
+      queue.finish(false, "no exit after " + queue.saveTimeoutMs + " ms")
     }
   }
 
-  // Destroyed mid-save (the panel went away): Quickshell kills the command
-  // and emits nothing, so just let go.
+  // Destroyed mid-save (the panel went away): Quickshell kills only the
+  // group leader and emits nothing, so kill the rest of the group (a
+  // detached kill, as the queue is going) and let go. No JS globals here.
   Component.onDestruction: {
     deadline.stop()
+    if (inFlight && groupKill.length > 0) {
+      reaper.command = groupKill
+      reaper.startDetached()
+    }
+    groupKill = []
     current = null
     inFlight = false
     waiting = []
+  }
+
+  property Process reaper: Process {
+    onRunningChanged: {
+      if (running) return
+      queue.reaping = false
+      Qt.callLater(queue.advance)
+    }
   }
 
   property Process proc: Process {
@@ -223,8 +261,14 @@ QtObject {
       splitMarker: ""
       onRead: function(data) { queue.keepStderr(data) }
     }
+    onStarted: queue.groupKill = Prefs.killGroupCommand(processId)
     onExited: function(code, status) {
-      queue.finish(code === 0 && status === 0, status === 0 ? "exit " + code : "stopped by signal " + code)
+      // timeout --signal=KILL kills its own group, itself included: signal 9.
+      var timedOut = status !== 0 && code === 9 && Date.now() - queue.startedAt >= queue.saveTimeoutMs
+      // Stopped by a signal: children that ignored it may still run.
+      if (status !== 0) queue.killGroup()
+      queue.finish(code === 0 && status === 0,
+                   timedOut ? "no exit after " + queue.saveTimeoutMs + " ms" : status === 0 ? "exit " + code : "stopped by signal " + code)
     }
     // After exited() this finds nothing in flight. Without exited() before it
     // (missing or non-executable command) the save never started.

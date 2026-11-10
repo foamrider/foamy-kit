@@ -6,17 +6,22 @@ import "plugin/kit"
 // How the kit's Process users end (tests/test_lifecycle.py; fake omarchy and
 // omarchy-shell on PATH, never the real ones). FoamyPrefsQueue's CLI save:
 // success, failure with rollback, a command that can't start, one that hangs
-// past the deadline, oversized stderr, a stopped command, the queue destroyed
-// mid-save, and a save that succeeds after each of them. FoamyPeerIpc: a CLI
-// call that can't start still calls done().
+// past the deadline, oversized stderr, a stopped command, an array save whose
+// omarchy-shell child outlives the deadline (it must be killed with the
+// wrapper, not write late over the next save), the queue destroyed mid-save
+// with such a child, and a save that succeeds after each of them.
+// FOAMY_MODE=peer (an unstartable omarchy-shell): a FoamyPeerIpc CLI call
+// that can't start still calls done().
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
   readonly property string calls: Quickshell.env("FOAMY_CALLS")
   readonly property string base: Quickshell.env("FOAMY_BASE")
+  readonly property bool peerMode: Quickshell.env("FOAMY_MODE") === "peer"
   property int checks: 0
   property int failures: 0
   property var events: []
+  property var inFlightAtFailure: null
 
   function check(ok, label) {
     checks++
@@ -25,9 +30,12 @@ ShellRoot {
   function eq(actual, expected, label) {
     check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
   }
-  function callLines() {
+  function callLines() { return lines(calls) }
+  // What the fake omarchy-shell's setBarWidget wrote, in order.
+  function writes() { return lines(base + "/writes.log") }
+  function lines(path) {
     var request = new XMLHttpRequest()
-    request.open("GET", "file://" + calls, false)
+    request.open("GET", "file://" + path, false)
     request.send(null)
     return String(request.responseText || "").split("\n").filter(function(line) { return line !== "" })
   }
@@ -37,7 +45,8 @@ ShellRoot {
 
   readonly property var fields: [
     { key: "a", type: "string", defaultValue: "" },
-    { key: "b", type: "string", defaultValue: "" }
+    { key: "b", type: "string", defaultValue: "" },
+    { key: "list", type: "array", maxItems: 3, defaultValue: [] }
   ]
   QtObject { id: cliBar; property var shell: null }
   FoamyPrefsQueue {
@@ -49,7 +58,10 @@ ShellRoot {
     saveTimeoutMs: 1500
     reflectTimeoutMs: 600000
     onSaved: function(key, value) { shell.events = shell.events.concat([["saved", key, value]]) }
-    onFailed: function(key, value, error) { shell.events = shell.events.concat([["failed", key, value, q.stderrHead.length]]) }
+    onFailed: function(key, value, error) {
+      shell.inFlightAtFailure = q.inFlight
+      shell.events = shell.events.concat([["failed", key, value, q.stderrHead.length]])
+    }
   }
   Component {
     id: doomedQueue
@@ -102,8 +114,17 @@ ShellRoot {
 
   Component.onCompleted: {
     defaultDirectory = q.proc.workingDirectory
-    // omarchy-shell here is a file whose interpreter doesn't exist: exec fails.
-    peer.call("foamy.absent", "status", [], function(ok, output) { shell.peerResult = { ok: ok, output: output } })
+    if (peerMode) {
+      // omarchy-shell here is a file whose interpreter doesn't exist: exec fails.
+      peer.call("foamy.absent", "status", [], function(ok, output) { shell.peerResult = { ok: ok, output: output } })
+      steps = [function() { waitFor("peer call", function() { return shell.peerResult !== null }, 3000) }, function() {
+        eq(peerResult, { ok: false, output: "" }, "FoamyPeerIpc: a call whose command can't start still calls done()")
+        eq(peer.running, 0, "and no longer counts as running")
+        next()
+      }]
+      Qt.callLater(next)
+      return
+    }
     steps = [
       // --- success --------------------------------------------------------------------
       function() {
@@ -160,7 +181,7 @@ ShellRoot {
       function() {
         check(since() >= 1400 && since() < 3000, "hang fails at the deadline (" + since() + " ms)")
         eq(events[0], ["failed", "a", "hang", "partial\n".length], "hang reports failure with the stderr so far")
-        check(!q.inFlight, "inFlight clears at the deadline")
+        check(shell.inFlightAtFailure === false, "inFlight clears at the deadline")
         eq(q.value("a"), "nostart", "hang rolls back")
         waitFor("save queued behind the hang", idle, 3000)
       },
@@ -206,26 +227,41 @@ ShellRoot {
         eq(q.value("a"), "final", "and shows")
         eq(q.error, "", "no error left")
 
-        // --- a queue destroyed mid-save (its panel closed) kills the command -----------
+        // --- array save: `sh -c` wrapper, omarchy-shell child stuck past the deadline ---
+        // The child ignores SIGTERM and writes after 3 s unless killed with the group.
+        events = []
+        q.save("list", ["slowlist"])
+        q.save("list", ["next"])   // waits behind it
+        waitFor("array save past the deadline, then the next one", function() { return events.length >= 2 && idle() }, 5000)
+      },
+      function() {
+        eq(events, [["failed", "list", ["slowlist"], 0], ["saved", "list", ["next"]]], "the stuck array save fails, the next one saves")
+        eq(writes(), [' ["next"]'], "only the next save wrote")
+        eq(q.value("list"), ["next"], "and shows")
+        waitFor("time for a surviving child to write", function() { return since() > 3500 }, 5000)
+      },
+      function() {
+        eq(writes(), [' ["next"]'], "the timed-out save's child never writes late over the next save")
+        alive.done = function(code) { shell.eq(code, 0, "no process of a timed-out save is left"); shell.next() }
+        alive.running = true
+      },
+      function() {
+        // --- a queue destroyed mid-save (its panel closed) kills the whole save ---------
         doomed = doomedQueue.createObject(shell)
-        doomed.save("a", "hang-doomed")
+        doomed.save("list", ["doomedlist"])
         doomed.save("b", "never")
-        waitFor("doomed save starts", function() { return ran("hang-doomed") }, 3000)
+        waitFor("doomed save starts", function() { return ran(["doomedlist"]) }, 3000)
       },
       function() {
         doomed.destroy()
         doomed = null
-        waitFor("destruction settles", function() { return Date.now() - started > 500 }, 2000)
+        waitFor("time for a surviving child to write", function() { return since() > 3500 }, 5000)
       },
       function() {
         check(!ran("never"), "a destroyed queue runs nothing more")
-        alive.done = function(code) { shell.eq(code, 0, "destroying the queue killed its command"); shell.next() }
+        check(writes().every(function(line) { return line.indexOf("doomedlist") < 0 }), "a destroyed queue's save child never writes")
+        alive.done = function(code) { shell.eq(code, 0, "destroying the queue killed its save's processes"); shell.next() }
         alive.running = true
-      },
-      function() {
-        eq(peerResult, { ok: false, output: "" }, "FoamyPeerIpc: a call whose command can't start still calls done()")
-        eq(peer.running, 0, "and no longer counts as running")
-        next()
       }
     ]
     Qt.callLater(next)
