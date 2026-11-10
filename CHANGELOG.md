@@ -19,9 +19,12 @@ is the recipe.
 - FoamyNative syncs `.github/workflows/verify-native.yml`: on pushes,
   pull requests and manual runs a GitHub-hosted runner runs kit-check,
   `--test` and `--verify --out`, reports each binary's git blob and SHA-256,
-  uploads the rebuilt files, and (not on pull requests) attests them with
-  `actions/attest-build-provenance`, so `gh attestation verify bin/<arch>/<binary>`
-  passes for the committed files. Actions are pinned by commit SHA.
+  uploads the rebuilt files. On pushes and manual runs a separate job on a
+  fresh runner (no build, the only one with `id-token: write`) requires each
+  rebuilt file to equal the committed git blob and `native.pin`, then attests
+  it with `actions/attest-build-provenance`, so `gh attestation verify
+  bin/<arch>/<binary>` passes for the committed files. Actions are pinned by
+  commit SHA.
 - README.md: the Verify issue evidence and the plugin README's "Verifying the
   helper binaries" section.
 

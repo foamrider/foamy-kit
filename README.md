@@ -277,9 +277,12 @@ checks out the commit, installs the toolchain `rust-toolchain.toml` pins,
 runs `tests/kit-check.sh`, `kit/native/build-native.sh . --test` and
 `--verify --out $RUNNER_TEMP/rebuilt`, writes a table of each binary's git
 blob and committed and rebuilt SHA-256 to the job summary, and uploads the
-rebuilt files. On pushes and manual runs (not pull requests) it then attests
-the rebuilt files with `actions/attest-build-provenance`. They are
-byte-identical to `bin/`, so the attestation covers the committed files:
+rebuilt files. On pushes and manual runs (not pull requests) a second job,
+on a fresh runner that never builds (so no build script or dependency can
+touch what it signs, and only it gets `id-token: write`), downloads them,
+requires each to equal the committed git blob and `native.pin`, and attests
+them with `actions/attest-build-provenance`. The attestation therefore
+covers the committed files:
 
 ```sh
 gh attestation verify bin/x86_64/<binary> --repo foamrider/foamy-<plugin> \
