@@ -10,6 +10,10 @@ Item {
   property string position: "top"
   property int thickness: 34
   property real anchorAlong: 0.78
+  // Ignored: the bar window always spans the screen (4.5). Kept so plugin
+  // tests written for 4.0's strip window (`fullScreenBar: host === "4.5"`)
+  // still load; drop it from them.
+  property bool fullScreenBar: true
   property color barColor: Qt.alpha(stripColor, 0.96)
   property color stripColor: "black"
   property color iconColor: "white"

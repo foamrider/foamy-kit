@@ -135,7 +135,7 @@
   `harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a
   caller still lists (so its 4.5 cases keep running), `--host both` renders
   4.5 into `<out>/4.5/`, and the preview shell, `ScreenSim` (its
-  `fullScreenBar` property is gone) and the kit tests drop the 4.0 strip bar
+  `fullScreenBar` property is now ignored, kept so tests that set it load) and the kit tests drop the 4.0 strip bar
   window. `--trio` renders Before on 4.5 only (`--before-host` and
   `trio(before_hosts=…)` are gone) and labels a clipped fork or a dev tree
   that won't render.
