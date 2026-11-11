@@ -22,6 +22,7 @@ Exit 0 and a PASS line, or 1 with the reason. An English-only plugin checks
 English alone. Plugin-specific UI under a language switch (foamy-notifications'
 cards) stays in the plugin's own test.
 """
+
 import argparse
 import json
 import shutil
@@ -127,14 +128,28 @@ def plan(cats):
     key = next((k for k, v in cats.get(primary, {}).items() if isinstance(v, str) and v and v != k and plain(k)), None)
     if key is None:
         key = next((k for k, v in cats["en"].items() if isinstance(v, str) and plain(k)), "")
+
     # A plural entry whose `one` forms hold no hole but %1, wherever it is translated.
     def usable(k):
         entries = [c[k] for c in cats.values() if k in c]
-        return all(isinstance(e, dict) and isinstance(e.get("one"), str) and "{" not in e["one"]
-                   and e["one"].replace("%1", "").find("%") < 0 for e in entries)
+        return all(
+            isinstance(e, dict)
+            and isinstance(e.get("one"), str)
+            and "{" not in e["one"]
+            and e["one"].replace("%1", "").find("%") < 0
+            for e in entries
+        )
+
     plural = next((k for k, v in cats["en"].items() if isinstance(v, dict) and usable(k)), "")
-    steps = [{"language": code, "text": expected_text(cats, code, key) if key else "",
-              "plural": expected_one(cats, code, plural) if plural else "", "rtl": code == "ar"} for code in languages]
+    steps = [
+        {
+            "language": code,
+            "text": expected_text(cats, code, key) if key else "",
+            "plural": expected_one(cats, code, plural) if plural else "",
+            "rtl": code == "ar",
+        }
+        for code in languages
+    ]
     return key, plural, steps
 
 
@@ -157,7 +172,9 @@ def run(plugin, timeout=90, quiet=False):
         r.env.update(FOAMY_I18N_STEPS=json.dumps(steps), FOAMY_I18N_KEY=key, FOAMY_I18N_PLURAL=plural)
         r.run(timeout=timeout)
         result = next((l.split("FOAMY RESULT ", 1)[1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
-        detail = f"{result}; {json.dumps(key, ensure_ascii=False)}" + (f", plural {json.dumps(plural, ensure_ascii=False)}" if plural else ", no plural entry")
+        detail = f"{result}; {json.dumps(key, ensure_ascii=False)}" + (
+            f", plural {json.dumps(plural, ensure_ascii=False)}" if plural else ", no plural entry"
+        )
         if not quiet:
             print(f"{'PASS' if r.ok else 'FAIL'} i18n runtime {plugin.name}: {detail}")
             if not r.ok:

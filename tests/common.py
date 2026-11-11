@@ -1,4 +1,5 @@
 """Shared helpers for foamy-kit tests."""
+
 import shutil
 import sys
 import tempfile
@@ -32,22 +33,23 @@ def read_png(path):
     """(width, height, pixel(x, y) -> (r, g, b, a)) for an 8-bit RGB/RGBA PNG (stdlib only)."""
     import struct
     import zlib
+
     data = Path(path).read_bytes()
     width, height = struct.unpack(">II", data[16:24])
     colour = data[25]
     channels = {6: 4, 2: 3}[colour]
     offset, chunks = 8, b""
     while offset < len(data):
-        length = struct.unpack(">I", data[offset:offset + 4])[0]
-        if data[offset + 4:offset + 8] == b"IDAT":
-            chunks += data[offset + 8:offset + 8 + length]
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        if data[offset + 4 : offset + 8] == b"IDAT":
+            chunks += data[offset + 8 : offset + 8 + length]
         offset += 12 + length
     raw = zlib.decompress(chunks)
     stride = width * channels
     rows, previous = [], bytearray(stride)
     for row in range(height):
         start = row * (stride + 1)
-        kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
         for i in range(stride):
             left = line[i - channels] if i >= channels else 0
             up = previous[i]
@@ -66,8 +68,9 @@ def read_png(path):
         previous = line
 
     def pixel(x, y):
-        values = rows[y][x * channels:(x + 1) * channels]
+        values = rows[y][x * channels : (x + 1) * channels]
         return tuple(values) + ((255,) if channels == 3 else ())
+
     return width, height, pixel
 
 
@@ -75,14 +78,23 @@ def run_shell(qml_name, host, plugin, tag, env=None, scale=1.0, timeout=60, keep
     """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
     shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
     <name>-<suffix>.png. Returns True when it passed."""
-    r = harness.Run(host, (KIT_ROOT / "tests/qml" / qml_name).read_text(), plugin=plugin, scale=scale,
-                    prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-")
+    r = harness.Run(
+        host,
+        (KIT_ROOT / "tests/qml" / qml_name).read_text(),
+        plugin=plugin,
+        scale=scale,
+        prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-",
+    )
     r.env.update(env or {})
     r.run(timeout=timeout)
     detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
     # A layout that never settles (an Image in a Layout without preferred size…).
     loops = [l for l in r.log.splitlines() if "polish() loop" in l]
-    ok = report(f"{Path(qml_name).stem.lower()} {tag}", r.ok and not loops, detail + (f"; {len(loops)} polish-loop warnings" if loops else ""))
+    ok = report(
+        f"{Path(qml_name).stem.lower()} {tag}",
+        r.ok and not loops,
+        detail + (f"; {len(loops)} polish-loop warnings" if loops else ""),
+    )
     if notes:
         for line in r.log.splitlines():
             if "FOAMY NOTE" in line:

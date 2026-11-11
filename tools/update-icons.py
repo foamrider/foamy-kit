@@ -11,6 +11,7 @@ inner elements (path, circle, rect, line, polyline, polygon, ellipse), and
 rewrites the `paths` table in kit/FoamyIcon.qml sorted by name. Record the
 Lucide version in the FoamyIcon header and CHANGELOG.md.
 """
+
 import argparse
 import json
 import re

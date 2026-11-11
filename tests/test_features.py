@@ -4,6 +4,7 @@ tokens, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue inline
 and CLI (fake omarchy / omarchy-shell on PATH, never the real ones), IPC
 prefer/others/call, FoamyIpcPreference, FoamyPeerIpc, FoamySettingsState and
 the private D-Bus session."""
+
 import os
 import shutil
 import sys
@@ -47,12 +48,24 @@ def run(host):
     for i in range(50):
         shutil.copyfile(plugin / "preview/artwork.png", covers / f"cover-{i}.png")
     shell = (KIT_ROOT / "tests/qml/Features.qml").read_text()
-    r = harness.Run(host, shell, plugin=plugin, extra={"FileViewProbe.qml": PROBE}, prefix=f"foamy-kit-features-{host}-",
-                    fakebin={"omarchy": FAKE_OMARCHY, "omarchy-shell": FAKE_OMARCHY_SHELL})
+    r = harness.Run(
+        host,
+        shell,
+        plugin=plugin,
+        extra={"FileViewProbe.qml": PROBE},
+        prefix=f"foamy-kit-features-{host}-",
+        fakebin={"omarchy": FAKE_OMARCHY, "omarchy-shell": FAKE_OMARCHY_SHELL},
+    )
     calls = r.base / "calls.log"
     calls.write_text("")
-    r.env.update({"FOAMY_CALLS": str(calls), "FOAMY_BASE": str(r.base),
-                  "FOAMY_LIVE_BUS": os.environ.get("DBUS_SESSION_BUS_ADDRESS", ""), "QML_XHR_ALLOW_FILE_READ": "1"})
+    r.env.update(
+        {
+            "FOAMY_CALLS": str(calls),
+            "FOAMY_BASE": str(r.base),
+            "FOAMY_LIVE_BUS": os.environ.get("DBUS_SESSION_BUS_ADDRESS", ""),
+            "QML_XHR_ALLOW_FILE_READ": "1",
+        }
+    )
     r.run(timeout=60)
     detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
     ok = report(f"features {host}", r.ok, detail)

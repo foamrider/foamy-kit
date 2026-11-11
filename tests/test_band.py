@@ -3,6 +3,7 @@
 geometry inside a real FoamyPopup card, and pixels of the captured card
 (rounded transparent corners, tinted band vs body, hairline edge, glow on the
 trailing side, clipped picture)."""
+
 import json
 import shutil
 import sys
@@ -22,8 +23,13 @@ def distance(a, b):
 
 def run(host, theme, rtl, plugin, out_dir):
     tag = f"{host}/{theme}/{'rtl' if rtl else 'ltr'}"
-    r = harness.Run(host, (KIT_ROOT / "tests/qml/Band.qml").read_text(), plugin=plugin, theme=theme,
-                    prefix=f"foamy-kit-band-{host}-")
+    r = harness.Run(
+        host,
+        (KIT_ROOT / "tests/qml/Band.qml").read_text(),
+        plugin=plugin,
+        theme=theme,
+        prefix=f"foamy-kit-band-{host}-",
+    )
     r.env.update({"FOAMY_RTL": "1" if rtl else "0", "FOAMY_TAG": tag})
     r.run(timeout=40)
     ok = r.ok
@@ -41,8 +47,14 @@ def run(host, theme, rtl, plugin, out_dir):
     r.cleanup()
     ow, oh, opx = read_png(only)
     only_checks = [
-        ("band-only card: bottom corners stay rounded (transparent)", opx(1, oh - 2)[3] < 40 and opx(ow - 2, oh - 2)[3] < 40),
-        ("band-only card: band reaches the bottom border", opx(ow // 2, oh - 3)[3] == 255 and distance(opx(ow // 2, oh - 3), opx(ow // 2, oh // 2)) < 40),
+        (
+            "band-only card: bottom corners stay rounded (transparent)",
+            opx(1, oh - 2)[3] < 40 and opx(ow - 2, oh - 2)[3] < 40,
+        ),
+        (
+            "band-only card: band reaches the bottom border",
+            opx(ow // 2, oh - 3)[3] == 255 and distance(opx(ow // 2, oh - 3), opx(ow // 2, oh // 2)) < 40,
+        ),
     ]
     width, height, px = read_png(png)
     band_mid = px(width // 2, info["height"] // 2)
@@ -50,11 +62,15 @@ def run(host, theme, rtl, plugin, out_dir):
     checks = [
         ("top corners are rounded (transparent outside the radius)", px(1, 1)[3] < 40 and px(width - 2, 1)[3] < 40),
         ("band is tinted against the body", distance(band_mid, body) >= 6),
-        ("dark theme: band lighter than the body" if theme == "dark" else "light theme: band tinted, not lighter",
-         luminance(band_mid) > luminance(body) if theme == "dark" else distance(band_mid, body) >= 6),
+        (
+            "dark theme: band lighter than the body" if theme == "dark" else "light theme: band tinted, not lighter",
+            luminance(band_mid) > luminance(body) if theme == "dark" else distance(band_mid, body) >= 6,
+        ),
         ("hairline edge into the body", distance(px(width // 2, info["height"]), body) >= 3),
-        ("glow on the trailing top side (more tint there)",
-         (distance(px(width - 30, 6), body) > distance(px(30, 6), body)) != rtl),
+        (
+            "glow on the trailing top side (more tint there)",
+            (distance(px(width - 30, 6), body) > distance(px(30, 6), body)) != rtl,
+        ),
         ("picture band is clipped to the card too", px(width // 2, info["pictureY"] + 20)[3] == 255),
     ]
     ok = report(f"band {tag}", True, detail)
@@ -68,8 +84,12 @@ def main():
     out_dir = KIT_ROOT / "tests/out/band"
     out_dir.mkdir(parents=True, exist_ok=True)
     plugin = synced_demo()
-    results = [run(host, theme, rtl, plugin, out_dir)
-               for host in harness.available_hosts(what="band") for theme in ("dark", "light") for rtl in (False, True)]
+    results = [
+        run(host, theme, rtl, plugin, out_dir)
+        for host in harness.available_hosts(what="band")
+        for theme in ("dark", "light")
+        for rtl in (False, True)
+    ]
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

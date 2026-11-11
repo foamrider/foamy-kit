@@ -3,6 +3,7 @@
 FoamyPalette, FoamyStyle, FoamyPrefs, FoamyCursor, FoamyShared leader
 election across three bar instances, and FoamyIpc over both the IpcRegistry
 socket path and `qs ipc`."""
+
 import json
 import shutil
 import subprocess
@@ -23,7 +24,9 @@ def qs_ipc(run, *call):
         time.sleep(0.1)
     else:
         return None
-    result = subprocess.run(["qs", "ipc", "-i", ids[0], "call", *call], env=run.env, capture_output=True, text=True, timeout=10)
+    result = subprocess.run(
+        ["qs", "ipc", "-i", ids[0], "call", *call], env=run.env, capture_output=True, text=True, timeout=10
+    )
     return result.stdout.strip() if result.returncode == 0 else None
 
 

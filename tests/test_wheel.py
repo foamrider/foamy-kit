@@ -3,6 +3,7 @@
 scale 1.0 and 1.25: why settings pages moved only a few px per notch (Qt's
 Flickable loses most of a high-resolution notch; printed as NOTE lines) and
 FoamyWheelScroll / FoamySettingsPage / ensureVisible / FoamyInfoNote."""
+
 import shutil
 import sys
 from pathlib import Path
@@ -14,8 +15,11 @@ from common import harness, run_shell, synced_demo  # noqa: E402
 def main():
     harness.install_signal_cleanup()
     plugin = synced_demo()
-    results = [run_shell("Wheel.qml", host, plugin, f"{host}@{scale}", scale=scale, notes=True)
-               for host in harness.available_hosts(what="wheel") for scale in (1.0, 1.25)]
+    results = [
+        run_shell("Wheel.qml", host, plugin, f"{host}@{scale}", scale=scale, notes=True)
+        for host in harness.available_hosts(what="wheel")
+        for scale in (1.0, 1.25)
+    ]
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

@@ -5,6 +5,7 @@ clears `saving`, rolls back and stays retryable, and its stderr is capped;
 a timed-out or abandoned array save's omarchy-shell child is killed with it
 and never writes late; a FoamyPeerIpc call that can't start still calls
 done(). Fake omarchy and omarchy-shell on PATH, never the real ones."""
+
 import shutil
 import sys
 from pathlib import Path
@@ -46,7 +47,9 @@ def launch(host, plugin, mode, fakebin):
     r = harness.Run(host, shell, plugin=plugin, prefix=f"foamy-kit-lifecycle-{mode}-{host}-", fakebin=fakebin)
     calls = r.base / "calls.log"
     calls.write_text("")
-    r.env.update({"FOAMY_CALLS": str(calls), "FOAMY_BASE": str(r.base), "FOAMY_MODE": mode, "QML_XHR_ALLOW_FILE_READ": "1"})
+    r.env.update(
+        {"FOAMY_CALLS": str(calls), "FOAMY_BASE": str(r.base), "FOAMY_MODE": mode, "QML_XHR_ALLOW_FILE_READ": "1"}
+    )
     r.run(timeout=90)
     detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
     ok = report(f"lifecycle {mode} {host}", r.ok, detail)
@@ -60,12 +63,20 @@ def run(host):
     r, ok = launch(host, plugin, "queue", {"omarchy": FAKE_OMARCHY, "omarchy-shell": FAKE_OMARCHY_SHELL})
     # The warning names the cause and carries at most stderrLimit characters.
     warnings = [l for l in r.log.splitlines() if "foamy-kit: saving" in l]
-    causes = ["(exit 1): fake failure", "(the command couldn't start)", "saving a failed (no exit after 1500 ms): partial",
-              "(exit 1): eeee", "(stopped by signal 15)", "saving list failed (no exit after 1500 ms)"]
+    causes = [
+        "(exit 1): fake failure",
+        "(the command couldn't start)",
+        "saving a failed (no exit after 1500 ms): partial",
+        "(exit 1): eeee",
+        "(stopped by signal 15)",
+        "saving list failed (no exit after 1500 ms)",
+    ]
     missing = [c for c in causes if not any(c in w for w in warnings)]
     ok &= report(f"lifecycle queue {host}: failure causes logged", not missing, f"missing {missing}" if missing else "")
     longest = max((len(w) for w in warnings), default=0)
-    ok &= report(f"lifecycle queue {host}: logged stderr is bounded", 4096 < longest < 4096 + 200, f"longest line {longest}")
+    ok &= report(
+        f"lifecycle queue {host}: logged stderr is bounded", 4096 < longest < 4096 + 200, f"longest line {longest}"
+    )
     r.cleanup()
     r, peer_ok = launch(host, plugin, "peer", {"omarchy": FAKE_OMARCHY, "omarchy-shell": UNSTARTABLE})
     r.cleanup()

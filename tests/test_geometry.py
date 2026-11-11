@@ -2,6 +2,7 @@
 """FoamyPopup/FoamyPopupCard placement on 4.5 (full-screen bar window), all
 four bar positions, plus a negative control: the old forked 4.0 popup
 misplaces on the 4.5 full-screen window."""
+
 import re
 import shutil
 import sys
@@ -21,7 +22,9 @@ def run(host, out_dir):
         # The fork predates Commons qualification; qualify it so only its
         # geometry is under test.
         fork = harness.transform_keyboard_panel(FORK.read_text())
-        fork = re.sub(r"(?<![\w.])Color\.", "Commons.Color.", fork).replace("import qs.Commons\n", "import qs.Commons\nimport qs.Commons as Commons\n", 1)
+        fork = re.sub(r"(?<![\w.])Color\.", "Commons.Color.", fork).replace(
+            "import qs.Commons\n", "import qs.Commons\nimport qs.Commons as Commons\n", 1
+        )
         extra["fork/ForkedPopup.qml"] = fork
     shell = (KIT_ROOT / "tests/qml/Geometry.qml").read_text()
     r = harness.Run(host, shell, plugin=plugin, extra=extra, prefix=f"foamy-kit-geometry-{host}-")

@@ -46,6 +46,7 @@ runs' directories (`/tmp/foamy-kit-preview-*`): concurrent renders by other
 agents live there. Stale dirs of dead runs: `python3 preview/harness.py --gc`
 removes only those whose owner PID is gone and that no process still uses.
 """
+
 import atexit
 import ctypes
 import json
@@ -67,6 +68,7 @@ def _load_hostenv():
     imported earlier must not stand in for it."""
     import importlib.util
     import sys
+
     spec = importlib.util.spec_from_file_location("foamy_kit_hostenv", PREVIEW / "hostenv.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["foamy_kit_hostenv"] = module
@@ -80,12 +82,21 @@ hostenv = _load_hostenv()
 # and available_hosts() prints a SKIP line for it, so a plugin test that still
 # lists 4.0 keeps running its 4.5 cases. FOAMY_HOST_40 is ignored.
 KNOWN_HOSTS = ("4.5",)
-RETIRED_HOSTS = {"4.0": "Omarchy 4.0 is no longer supported (foamy-kit 0.9.0 tests 4.5 only; FOAMY_HOST_40 is ignored); "
-                        "drop the 4.0 case"}
+RETIRED_HOSTS = {
+    "4.0": "Omarchy 4.0 is no longer supported (foamy-kit 0.9.0 tests 4.5 only; FOAMY_HOST_40 is ignored); "
+    "drop the 4.0 case"
+}
 HOSTS = {"4.5": Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")}
 SCREEN = (1920, 1080)
-FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration",
-                   "Cannot assign", "Unable to assign", "Non-existent attached object", "SAVE FAILED")
+FAILURE_MARKERS = (
+    "ReferenceError",
+    "TypeError",
+    "Failed to load configuration",
+    "Cannot assign",
+    "Unable to assign",
+    "Non-existent attached object",
+    "SAVE FAILED",
+)
 
 
 _LIVE = set()
@@ -125,8 +136,10 @@ def _stop_all():
 
 def install_signal_cleanup():
     """Turn SIGTERM/SIGHUP into SystemExit so finally blocks and atexit run."""
+
     def handler(signum, frame):
         raise SystemExit(128 + signum)
+
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, handler)
 
@@ -211,7 +224,7 @@ def _code_only(line):
             continue
         if ch in "\"'`":
             quote = ch
-        elif ch == "/" and line[i + 1:i + 2] == "/":
+        elif ch == "/" and line[i + 1 : i + 2] == "/":
             break
         else:
             out.append(ch)
@@ -286,8 +299,20 @@ def build_ui(host, dest):
 
 
 class Run:
-    def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-",
-                 bus="private", fakebin=None, scale=1.0, system_bus="none"):
+    def __init__(
+        self,
+        host,
+        shell_qml,
+        plugin=None,
+        theme="dark",
+        language=None,
+        extra=None,
+        prefix="foamy-kit-run-",
+        bus="private",
+        fakebin=None,
+        scale=1.0,
+        system_bus="none",
+    ):
         self.host_name = host
         # Display scale (the screen's device pixel ratio): 1.25 renders what a
         # 125 % output shows, at 1.25x the pixels.
@@ -375,46 +400,84 @@ class Run:
         # The offscreen platform ignores a screen "dpr"; QT_SCALE_FACTOR gives
         # windows the scale (and grabs device pixels). The screen is sized so
         # its logical size stays SCREEN.
-        screens.write_text(json.dumps({"screens": [{"name": "FOAMY-1", "x": 0, "y": 0,
-                                                    "width": round(SCREEN[0] * self.scale), "height": round(SCREEN[1] * self.scale),
-                                                    "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
-        env = {key: value for key, value in os.environ.items()
-               if key not in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY", "QT_QPA_PLATFORM",
-                              "QT_QPA_PLATFORMTHEME", "QT_STYLE_OVERRIDE", "QML_IMPORT_PATH", "QML2_IMPORT_PATH",
-                              "LC_ALL", "LANGUAGE", "OMARCHY_PATH", "XDG_CURRENT_DESKTOP", "QT_SCALE_FACTOR",
-                              "QT_SCREEN_SCALE_FACTORS", "QT_AUTO_SCREEN_SCALE_FACTOR", "QT_ENABLE_HIGHDPI_SCALING")
-               and (not key.startswith("XDG_") or key in ("XDG_DATA_DIRS", "XDG_CONFIG_DIRS"))}
-        env.update({
-            "HOME": str(home),
-            "XDG_CONFIG_HOME": str(home / ".config"),
-            "XDG_STATE_HOME": str(state),
-            "XDG_CACHE_HOME": str(home / ".cache"),
-            "XDG_DATA_HOME": str(home / ".local/share"),
-            "XDG_RUNTIME_DIR": str(runtime),
-            "QT_QPA_PLATFORM": f"offscreen:configfile={screens}",
-            "QT_QUICK_BACKEND": "software",
-            "QT_QPA_PLATFORMTHEME": "basic",
-            "LANG": "en_US.UTF-8",
-            "OMARCHY_PATH": str(omarchy),
-            "OMARCHY_LANGUAGE_FILE": str(language_file),
-            "FOAMY_OUT": str(self.out),
-            "FOAMY_HOST": self.host_name,
-            "FOAMY_SCALE": str(self.scale),
-            **({"QT_SCALE_FACTOR": str(self.scale)} if self.scale != 1.0 else {}),
-            # A dead address until start() brings up the private bus.
-            "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
-        })
-        env.update({
-            "PATH": self._isolated_path(),
-            # No live audio server: dead sockets, lookups in the private runtime dir.
-            "PULSE_SERVER": f"unix:{self.base}/no-pulse",
-            "PIPEWIRE_REMOTE": f"{self.base}/no-pipewire",
-            "PIPEWIRE_RUNTIME_DIR": str(runtime),
-            "PULSE_RUNTIME_PATH": str(runtime / "pulse"),
-            # Not the machine's system bus (NetworkManager, logind…) unless asked.
-            "DBUS_SYSTEM_BUS_ADDRESS": (self.system_bus if self.system_bus.startswith("unix:")
-                                        else f"unix:path={self.base}/no-system-bus"),
-        })
+        screens.write_text(
+            json.dumps(
+                {
+                    "screens": [
+                        {
+                            "name": "FOAMY-1",
+                            "x": 0,
+                            "y": 0,
+                            "width": round(SCREEN[0] * self.scale),
+                            "height": round(SCREEN[1] * self.scale),
+                            "logicalDpi": 96,
+                            "logicalBaseDpi": 96,
+                            "dpr": 1,
+                        }
+                    ]
+                }
+            )
+        )
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if key
+            not in (
+                "WAYLAND_DISPLAY",
+                "HYPRLAND_INSTANCE_SIGNATURE",
+                "DISPLAY",
+                "QT_QPA_PLATFORM",
+                "QT_QPA_PLATFORMTHEME",
+                "QT_STYLE_OVERRIDE",
+                "QML_IMPORT_PATH",
+                "QML2_IMPORT_PATH",
+                "LC_ALL",
+                "LANGUAGE",
+                "OMARCHY_PATH",
+                "XDG_CURRENT_DESKTOP",
+                "QT_SCALE_FACTOR",
+                "QT_SCREEN_SCALE_FACTORS",
+                "QT_AUTO_SCREEN_SCALE_FACTOR",
+                "QT_ENABLE_HIGHDPI_SCALING",
+            )
+            and (not key.startswith("XDG_") or key in ("XDG_DATA_DIRS", "XDG_CONFIG_DIRS"))
+        }
+        env.update(
+            {
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(home / ".config"),
+                "XDG_STATE_HOME": str(state),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+                "XDG_DATA_HOME": str(home / ".local/share"),
+                "XDG_RUNTIME_DIR": str(runtime),
+                "QT_QPA_PLATFORM": f"offscreen:configfile={screens}",
+                "QT_QUICK_BACKEND": "software",
+                "QT_QPA_PLATFORMTHEME": "basic",
+                "LANG": "en_US.UTF-8",
+                "OMARCHY_PATH": str(omarchy),
+                "OMARCHY_LANGUAGE_FILE": str(language_file),
+                "FOAMY_OUT": str(self.out),
+                "FOAMY_HOST": self.host_name,
+                "FOAMY_SCALE": str(self.scale),
+                **({"QT_SCALE_FACTOR": str(self.scale)} if self.scale != 1.0 else {}),
+                # A dead address until start() brings up the private bus.
+                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
+            }
+        )
+        env.update(
+            {
+                "PATH": self._isolated_path(),
+                # No live audio server: dead sockets, lookups in the private runtime dir.
+                "PULSE_SERVER": f"unix:{self.base}/no-pulse",
+                "PIPEWIRE_REMOTE": f"{self.base}/no-pipewire",
+                "PIPEWIRE_RUNTIME_DIR": str(runtime),
+                "PULSE_RUNTIME_PATH": str(runtime / "pulse"),
+                # Not the machine's system bus (NetworkManager, logind…) unless asked.
+                "DBUS_SYSTEM_BUS_ADDRESS": (
+                    self.system_bus if self.system_bus.startswith("unix:") else f"unix:path={self.base}/no-system-bus"
+                ),
+            }
+        )
         library_path = hostenv.library_path()
         if library_path:
             env["LD_LIBRARY_PATH"] = library_path
@@ -447,9 +510,13 @@ class Run:
         daemon = shutil.which("dbus-daemon")
         if not daemon:
             return None  # stays on the dead address
-        process = subprocess.Popen([daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   start_new_session=True, preexec_fn=_die_with_parent)
+        process = subprocess.Popen(
+            [daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            preexec_fn=_die_with_parent,
+        )
         variable = "DBUS_SESSION_BUS_ADDRESS" if kind == "session" else "DBUS_SYSTEM_BUS_ADDRESS"
         for _ in range(100):
             if socket.exists():
@@ -472,8 +539,14 @@ class Run:
         if self.system_bus == "private":
             self.system_bus_process = self._start_bus("system")
         self._log_file = (self.base / "qs.log").open("w")
-        self.process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=self._log_file,
-                                        stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=_die_with_parent)
+        self.process = subprocess.Popen(
+            ["qs", "-p", str(self.root), "--no-color"],
+            env=self.env,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            preexec_fn=_die_with_parent,
+        )
         STARTED.extend(p.pid for p in (self.process, self.bus_process, self.system_bus_process) if p is not None)
         return self
 
@@ -502,8 +575,11 @@ class Run:
     def wait_for_log(self, text, timeout=20):
         """Wait (while qs runs) until its log shows `text`; True when it did."""
         log = self.base / "qs.log"
-        return wait_for(lambda: text in log.read_text(errors="replace") if log.exists() else False, timeout,
-                        stop=lambda: self.process is None or self.process.poll() is not None)
+        return wait_for(
+            lambda: text in log.read_text(errors="replace") if log.exists() else False,
+            timeout,
+            stop=lambda: self.process is None or self.process.poll() is not None,
+        )
 
     def run(self, timeout=40, done="FOAMY DONE"):
         self.start()
@@ -511,7 +587,11 @@ class Run:
             self.wait(timeout)
         finally:
             self.stop()
-        self.ok = done in self.log and not any(marker in self.log for marker in FAILURE_MARKERS) and "FOAMY FAIL" not in self.log
+        self.ok = (
+            done in self.log
+            and not any(marker in self.log for marker in FAILURE_MARKERS)
+            and "FOAMY FAIL" not in self.log
+        )
         return self
 
     def __enter__(self):
@@ -523,8 +603,11 @@ class Run:
         return False
 
     def failures(self):
-        return [line for line in self.log.splitlines()
-                if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)]
+        return [
+            line
+            for line in self.log.splitlines()
+            if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)
+        ]
 
     def cleanup(self):
         """Remove this run's own temp dir (and nothing else)."""
@@ -567,6 +650,7 @@ def gc(tmp=None, dry_run=False):
 
 if __name__ == "__main__":
     import sys
+
     if sys.argv[1:2] == ["--gc"]:
         for path in gc(dry_run="--dry-run" in sys.argv):
             print(f"removed {path}")

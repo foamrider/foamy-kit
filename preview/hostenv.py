@@ -22,6 +22,7 @@ OMARCHY_TEST_ROOT (a tree with shell/ and default/) selects another one;
 FOAMY_HOST_45 or OMARCHY_SHELL_PATH (a shell/ directory) select its parent.
 Standard library only.
 """
+
 import os
 import shutil
 from pathlib import Path
@@ -81,11 +82,13 @@ def isolate(env, base):
         env["LD_LIBRARY_PATH"] = libraries
     else:
         env.pop("LD_LIBRARY_PATH", None)
-    env.update({
-        "PULSE_SERVER": f"unix:{base}/no-pulse",
-        "PIPEWIRE_REMOTE": f"{base}/no-pipewire",
-        "DBUS_SYSTEM_BUS_ADDRESS": f"unix:path={base}/no-system-bus",
-    })
+    env.update(
+        {
+            "PULSE_SERVER": f"unix:{base}/no-pulse",
+            "PIPEWIRE_REMOTE": f"{base}/no-pipewire",
+            "DBUS_SYSTEM_BUS_ADDRESS": f"unix:path={base}/no-system-bus",
+        }
+    )
     for name in ("PULSE_RUNTIME_PATH", "PIPEWIRE_RUNTIME_DIR", "PULSE_COOKIE"):
         env.pop(name, None)
     return env
@@ -126,15 +129,20 @@ def make(base, app, env=None, stubs=None, names=()):
     log = base / CALLS_LOG
     found = {n for b in host_bins() if os.path.isdir(b) for n in os.listdir(b) if n.startswith("omarchy-")}
     commands = {name: logging_stub(log) for name in found | set(names) | {"omarchy-shell"}}
-    commands["omarchy-shell"] = (f'#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "{log}"\n'
-                                 f'[ "$1" = -q ] && shift\nexec qs ipc -n -p "{app}" call "$@"\n')
+    commands["omarchy-shell"] = (
+        f'#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "{log}"\n[ "$1" = -q ] && shift\nexec qs ipc -n -p "{app}" call "$@"\n'
+    )
     commands.update(stubs or {})
     stub_dir = write_commands(base / "stub-bin", commands)
     write_commands(tree / "bin", commands)
     source = env if env is not None else os.environ
     path = [str(stub_dir)] + isolated_path(source.get("PATH", "/usr/bin:/bin")).split(":")
-    return {"OMARCHY_PATH": str(tree), "OMARCHY_SHELL_PATH": str(tree / "shell"), "PATH": ":".join(p for p in path if p),
-            "LD_LIBRARY_PATH": library_path(source.get("LD_LIBRARY_PATH", ""))}
+    return {
+        "OMARCHY_PATH": str(tree),
+        "OMARCHY_SHELL_PATH": str(tree / "shell"),
+        "PATH": ":".join(p for p in path if p),
+        "LD_LIBRARY_PATH": library_path(source.get("LD_LIBRARY_PATH", "")),
+    }
 
 
 def calls(base):
@@ -151,7 +159,9 @@ def check(env, *outputs):
     assert not any(os.path.realpath(p) in bins for p in env["PATH"].split(":") if p), env["PATH"]
     if env.get("OMARCHY_PATH"):
         tree = Path(env["OMARCHY_PATH"])
-        assert os.path.realpath(tree / "bin").startswith(os.path.realpath(tree.parent)), "OMARCHY_PATH/bin must be the stub directory"
+        assert os.path.realpath(tree / "bin").startswith(os.path.realpath(tree.parent)), (
+            "OMARCHY_PATH/bin must be the stub directory"
+        )
     named = bins | {str(root() / "bin"), INSTALLED_BIN}
     for text in outputs:
         assert not any(b + "/" in str(text) for b in named), "a host script ran"

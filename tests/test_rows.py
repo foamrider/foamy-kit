@@ -5,6 +5,7 @@ and compact FoamyDropdowns share a row height and a trailing edge; the
 compact dropdown's width, cap, elision and open list; a section title with
 an (i) keeps the plain title's gap to its description. Card screenshots:
 tests/out/rows/ (FOAMY_ROWS_OUT overrides)."""
+
 import os
 import shutil
 import sys
@@ -23,9 +24,19 @@ def main():
         for rtl in (False, True):
             for scale in (1.0, 1.25):
                 direction = "rtl" if rtl else "ltr"
-                results.append(run_shell("Rows.qml", host, plugin, f"{host}/{direction}@{scale}",
-                                         {"FOAMY_RTL": "1" if rtl else "0"}, scale=scale, keep_pngs_to=out,
-                                         suffix=f"{host}-{direction}-{scale}", notes=True))
+                results.append(
+                    run_shell(
+                        "Rows.qml",
+                        host,
+                        plugin,
+                        f"{host}/{direction}@{scale}",
+                        {"FOAMY_RTL": "1" if rtl else "0"},
+                        scale=scale,
+                        keep_pngs_to=out,
+                        suffix=f"{host}-{direction}-{scale}",
+                        notes=True,
+                    )
+                )
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

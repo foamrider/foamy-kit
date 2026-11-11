@@ -2,6 +2,7 @@
 """FoamyScheduleDay (tests/qml/Schedule.qml) on 4.5: default and injected
 label component, the day switch, committing, rejecting and restoring the time
 fields. FoamySchedule.js itself: tests/schedule.test.cjs."""
+
 import shutil
 import sys
 from pathlib import Path

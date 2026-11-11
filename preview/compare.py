@@ -15,6 +15,7 @@ opaque one are different pictures.
 Exit status: 0 identical, 1 different (or sizes differ, or a file is
 missing on one side), 2 unreadable input. Standard library only.
 """
+
 import argparse
 import struct
 import sys
@@ -34,16 +35,16 @@ def read_png(path):
     channels = {0: 1, 2: 3, 4: 2, 6: 4}[colour]
     offset, chunks = 8, b""
     while offset < len(data):
-        length = struct.unpack(">I", data[offset:offset + 4])[0]
-        if data[offset + 4:offset + 8] == b"IDAT":
-            chunks += data[offset + 8:offset + 8 + length]
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        if data[offset + 4 : offset + 8] == b"IDAT":
+            chunks += data[offset + 8 : offset + 8 + length]
         offset += 12 + length
     raw = zlib.decompress(chunks)
     stride = width * channels
     rows, previous = [], bytearray(stride)
     for row in range(height):
         start = row * (stride + 1)
-        kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
         for i in range(stride):
             left = line[i - channels] if i >= channels else 0
             up = previous[i]
@@ -61,7 +62,7 @@ def read_png(path):
         previous = line
         pixels = []
         for x in range(width):
-            v = line[x * channels:(x + 1) * channels]
+            v = line[x * channels : (x + 1) * channels]
             if channels == 1:
                 pixels.append((v[0], v[0], v[0], 255))
             elif channels == 2:
@@ -107,8 +108,14 @@ def main(argv=None):
     if a.is_dir() != b.is_dir():
         print("compare two files or two directories", file=sys.stderr)
         return 2
-    pairs = [(a, b)] if not a.is_dir() else [
-        (a / name, b / name) for name in sorted({p.name for p in a.glob("*.png")} | {p.name for p in b.glob("*.png")})]
+    pairs = (
+        [(a, b)]
+        if not a.is_dir()
+        else [
+            (a / name, b / name)
+            for name in sorted({p.name for p in a.glob("*.png")} | {p.name for p in b.glob("*.png")})
+        ]
+    )
     status = 0
     for left, right in pairs:
         if not left.exists() or not right.exists():

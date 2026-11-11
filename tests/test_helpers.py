@@ -4,6 +4,7 @@
 Run.wait_for_log, and preview/hostenv.py (isolate, make with an
 omarchy-shell that reaches only the test's own shell, calls, check,
 fake_helper_plugin)."""
+
 import os
 import shutil
 import subprocess
@@ -83,16 +84,22 @@ def main():
     run = harness.Run("4.5", WAIT, prefix="foamy-kit-wait-")
     run.env["FOAMY_LABELLED"] = "1"
     run.run(timeout=30)
-    ok &= report("a labelled waitFor that times out fails the run",
-                 not run.ok and "FOAMY FAIL the labelled step: not true after 100 ms" in run.log and "FOAMY DONE" in run.log,
-                 "; ".join(run.failures()))
+    ok &= report(
+        "a labelled waitFor that times out fails the run",
+        not run.ok and "FOAMY FAIL the labelled step: not true after 100 ms" in run.log and "FOAMY DONE" in run.log,
+        "; ".join(run.failures()),
+    )
     run.cleanup()
 
     # harness.wait_for.
     start = time.monotonic()
     value = harness.wait_for(lambda: time.monotonic() - start > 0.2 and "ready", timeout=5)
     waited = time.monotonic() - start
-    ok &= report("wait_for returns the condition's value once it holds", value == "ready" and 0.2 <= waited < 2, f"{value} {waited:.2f}s")
+    ok &= report(
+        "wait_for returns the condition's value once it holds",
+        value == "ready" and 0.2 <= waited < 2,
+        f"{value} {waited:.2f}s",
+    )
     start = time.monotonic()
     value = harness.wait_for(lambda: False, timeout=0.3)
     ok &= report("wait_for gives None after its timeout", value is None and 0.3 <= time.monotonic() - start < 2)
@@ -106,14 +113,29 @@ def main():
     try:
         appdir = base / "app"
         os.environ.update({"APPDIR": str(appdir), "OMARCHY_PATH": "/usr/share/omarchy"})
-        env = hostenv.isolate({"PATH": f"{appdir}/usr/bin:/usr/share/omarchy/bin:/usr/bin", "LD_LIBRARY_PATH": f"{appdir}/usr/lib",
-                               "PULSE_SERVER": "unix:/run/user/1000/pulse/native", "PIPEWIRE_RUNTIME_DIR": "/run/user/1000"}, base)
-        ok &= report("isolate() drops host bins and $APPDIR, names no audio server or system bus",
-                     env["PATH"] == "/usr/bin" and "LD_LIBRARY_PATH" not in env and env["PULSE_SERVER"] == f"unix:{base}/no-pulse"
-                     and env["PIPEWIRE_REMOTE"] == f"{base}/no-pipewire" and "PIPEWIRE_RUNTIME_DIR" not in env
-                     and env["DBUS_SYSTEM_BUS_ADDRESS"] == f"unix:path={base}/no-system-bus", str(env))
-        ok &= report("library_path() keeps entries outside $APPDIR",
-                     hostenv.library_path(f"{appdir}/usr/lib:{appdir}x/lib:/opt/lib") == f"{appdir}x/lib:/opt/lib")
+        env = hostenv.isolate(
+            {
+                "PATH": f"{appdir}/usr/bin:/usr/share/omarchy/bin:/usr/bin",
+                "LD_LIBRARY_PATH": f"{appdir}/usr/lib",
+                "PULSE_SERVER": "unix:/run/user/1000/pulse/native",
+                "PIPEWIRE_RUNTIME_DIR": "/run/user/1000",
+            },
+            base,
+        )
+        ok &= report(
+            "isolate() drops host bins and $APPDIR, names no audio server or system bus",
+            env["PATH"] == "/usr/bin"
+            and "LD_LIBRARY_PATH" not in env
+            and env["PULSE_SERVER"] == f"unix:{base}/no-pulse"
+            and env["PIPEWIRE_REMOTE"] == f"{base}/no-pipewire"
+            and "PIPEWIRE_RUNTIME_DIR" not in env
+            and env["DBUS_SYSTEM_BUS_ADDRESS"] == f"unix:path={base}/no-system-bus",
+            str(env),
+        )
+        ok &= report(
+            "library_path() keeps entries outside $APPDIR",
+            hostenv.library_path(f"{appdir}/usr/lib:{appdir}x/lib:/opt/lib") == f"{appdir}x/lib:/opt/lib",
+        )
     finally:
         os.environ.clear()
         os.environ.update(saved)
@@ -124,24 +146,43 @@ def main():
         run.start()
         up = run.wait_for_log("FOAMY UP", timeout=20)
         ok &= report("Run.wait_for_log sees the shell's line", up)
-        overrides = hostenv.make(base / "host", run.root, env=run.env, stubs={"omarchy-extra": hostenv.logging_stub(base / "extra.log")},
-                                 names=("omarchy-test-only",))
+        overrides = hostenv.make(
+            base / "host",
+            run.root,
+            env=run.env,
+            stubs={"omarchy-extra": hostenv.logging_stub(base / "extra.log")},
+            names=("omarchy-test-only",),
+        )
         env = {**run.env, **overrides}
         stub_dir = Path(overrides["PATH"].split(":")[0])
-        ok &= report("make(): a private OMARCHY_PATH whose bin/ and PATH stubs come first",
-                     overrides["OMARCHY_PATH"] == str(base / "host/omarchy-host")
-                     and (Path(overrides["OMARCHY_PATH"]) / "shell/Commons").is_dir()
-                     and (Path(overrides["OMARCHY_PATH"]) / "bin/omarchy-test-only").is_file()
-                     and {"omarchy-shell", "omarchy-test-only", "omarchy-extra", "omarchy-plugin-validate"} <= set(os.listdir(stub_dir)),
-                     overrides["PATH"].split(":")[0])
-        answer = subprocess.run(["omarchy-shell", "foamy.helpers", "ping", "kit"], env=env, capture_output=True, text=True, timeout=20)
-        ok &= report("the omarchy-shell stub reaches the test's own shell only", answer.stdout.strip() == "pong kit",
-                     (answer.stdout + answer.stderr).strip()[:200])
-        plain = subprocess.run(["omarchy-plugin-validate", "/nowhere"], env=env, capture_output=True, text=True, timeout=10)
+        ok &= report(
+            "make(): a private OMARCHY_PATH whose bin/ and PATH stubs come first",
+            overrides["OMARCHY_PATH"] == str(base / "host/omarchy-host")
+            and (Path(overrides["OMARCHY_PATH"]) / "shell/Commons").is_dir()
+            and (Path(overrides["OMARCHY_PATH"]) / "bin/omarchy-test-only").is_file()
+            and {"omarchy-shell", "omarchy-test-only", "omarchy-extra", "omarchy-plugin-validate"}
+            <= set(os.listdir(stub_dir)),
+            overrides["PATH"].split(":")[0],
+        )
+        answer = subprocess.run(
+            ["omarchy-shell", "foamy.helpers", "ping", "kit"], env=env, capture_output=True, text=True, timeout=20
+        )
+        ok &= report(
+            "the omarchy-shell stub reaches the test's own shell only",
+            answer.stdout.strip() == "pong kit",
+            (answer.stdout + answer.stderr).strip()[:200],
+        )
+        plain = subprocess.run(
+            ["omarchy-plugin-validate", "/nowhere"], env=env, capture_output=True, text=True, timeout=10
+        )
         logged = hostenv.calls(base / "host")
-        ok &= report("other stubs log and succeed; calls() lists them",
-                     plain.returncode == 0 and any(l.endswith("omarchy-shell foamy.helpers ping kit") for l in logged)
-                     and any(l.endswith("omarchy-plugin-validate /nowhere") for l in logged), str(logged))
+        ok &= report(
+            "other stubs log and succeed; calls() lists them",
+            plain.returncode == 0
+            and any(l.endswith("omarchy-shell foamy.helpers ping kit") for l in logged)
+            and any(l.endswith("omarchy-plugin-validate /nowhere") for l in logged),
+            str(logged),
+        )
         try:
             hostenv.check(env, answer.stdout, *logged)
             checked = True
@@ -149,8 +190,10 @@ def main():
             checked = False
         ok &= report("check() passes for the stubbed environment", checked)
         failures = 0
-        for bad_env, outputs in (({**env, "PATH": "/usr/share/omarchy/bin:" + env["PATH"]}, ()),
-                                 (env, ("ran /usr/share/omarchy/bin/omarchy-shell",))):
+        for bad_env, outputs in (
+            ({**env, "PATH": "/usr/share/omarchy/bin:" + env["PATH"]}, ()),
+            (env, ("ran /usr/share/omarchy/bin/omarchy-shell",)),
+        ):
             try:
                 hostenv.check(bad_env, *outputs)
             except AssertionError:
@@ -164,13 +207,30 @@ def main():
     shutil.copytree(FIXTURES / "demo-plugin", demo)
     (demo / ".git").mkdir()
     (demo / "tests").mkdir(exist_ok=True)
-    plugin = hostenv.fake_helper_plugin(demo, base / "fake-plugin", "foamy-demo-helper", "#!/bin/sh\necho fake \"$@\"\n")
-    launched = subprocess.run(["bash", "-c", 'exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"', "foamy-native", str(plugin), "foamy-demo-helper", "status"],
-                              capture_output=True, text=True, timeout=10)
-    ok &= report("fake_helper_plugin(): the copy's bundled helper is the script, for both arches",
-                 launched.stdout.strip() == "fake status" and all(os.access(plugin / "bin" / a / "foamy-demo-helper", os.X_OK) for a in hostenv.ARCHES)
-                 and (plugin / "manifest.json").is_file() and not (plugin / ".git").exists() and not (plugin / "tests").exists(),
-                 launched.stdout + launched.stderr)
+    plugin = hostenv.fake_helper_plugin(demo, base / "fake-plugin", "foamy-demo-helper", '#!/bin/sh\necho fake "$@"\n')
+    launched = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"',
+            "foamy-native",
+            str(plugin),
+            "foamy-demo-helper",
+            "status",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    ok &= report(
+        "fake_helper_plugin(): the copy's bundled helper is the script, for both arches",
+        launched.stdout.strip() == "fake status"
+        and all(os.access(plugin / "bin" / a / "foamy-demo-helper", os.X_OK) for a in hostenv.ARCHES)
+        and (plugin / "manifest.json").is_file()
+        and not (plugin / ".git").exists()
+        and not (plugin / "tests").exists(),
+        launched.stdout + launched.stderr,
+    )
     shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1
 

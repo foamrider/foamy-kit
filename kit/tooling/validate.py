@@ -35,6 +35,7 @@ In a plugin, every file foamy-kit.lock lists and everything under kit/ is
 kit-owned: no check here reformats or lints it (foamy-kit checks its own).
 Standard library only; Python 3.11 or newer.
 """
+
 import argparse
 import collections
 import fnmatch
@@ -60,10 +61,18 @@ SHFMT_FLAGS = ["-i", "2", "-ci", "-bn"]
 # Studio's categories don't apply (no .ui.qml files). --ignore-settings keeps
 # a stray .qmllint.ini from changing what this command checks.
 QMLLINT_FLAGS = ["--ignore-settings", "--unused-imports", "error"] + [
-    item for name in ("FunctionsNotSupportedInQmlUi", "ImperativeCodeNotEditableInVisualDesigner",
-                      "InvalidIdeInVisualDesigner", "ReferenceToParentItemNotSupportedByVisualDesigner",
-                      "TranslationFunctionMismatch", "UnsupportedRootTypeInQmlUi", "UnsupportedTypeInQmlUi")
-    for item in (f"--QtDesignStudio.{name}", "disable")]
+    item
+    for name in (
+        "FunctionsNotSupportedInQmlUi",
+        "ImperativeCodeNotEditableInVisualDesigner",
+        "InvalidIdeInVisualDesigner",
+        "ReferenceToParentItemNotSupportedByVisualDesigner",
+        "TranslationFunctionMismatch",
+        "UnsupportedRootTypeInQmlUi",
+        "UnsupportedTypeInQmlUi",
+    )
+    for item in (f"--QtDesignStudio.{name}", "disable")
+]
 VULTURE_CONFIDENCE = "60"  # every Vulture finding: unused functions, classes, attributes and imports
 # Tools in mise.toml: key -> the executable it provides.
 BINARIES = {
@@ -87,6 +96,7 @@ class Skip(Exception):
 
 
 # ------------------------------------------------------------------ the repo
+
 
 class Repo:
     def __init__(self, root, args):
@@ -122,8 +132,12 @@ class Repo:
 
     def _files(self):
         try:
-            out = subprocess.run(["git", "-C", str(self.root), "ls-files", "-z", "-co", "--exclude-standard"],
-                                 capture_output=True, timeout=60, check=True).stdout
+            out = subprocess.run(
+                ["git", "-C", str(self.root), "ls-files", "-z", "-co", "--exclude-standard"],
+                capture_output=True,
+                timeout=60,
+                check=True,
+            ).stdout
             names = sorted({n for n in out.decode().split("\0") if n})
         except (OSError, subprocess.SubprocessError):
             names = sorted(p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file())
@@ -167,6 +181,7 @@ class Repo:
 
     def _pins(self):
         import tomllib
+
         path = self.root / "mise.toml"
         if not path.is_file():
             raise Failure("mise.toml is missing (foamy-kit sync.sh writes it)")
@@ -191,8 +206,10 @@ class Repo:
         result = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=60)
         found = (result.stdout + result.stderr).strip()
         if not re.search(rf"(?<![\d.]){re.escape(version)}(?![\d.])", found):
-            raise Failure(f"{path} is {found.splitlines()[0] if found else 'unknown'}, mise.toml pins {name} {version}; "
-                          "run `mise install` here")
+            raise Failure(
+                f"{path} is {found.splitlines()[0] if found else 'unknown'}, mise.toml pins {name} {version}; "
+                "run `mise install` here"
+            )
         self._tools[name] = path
         return path
 
@@ -235,7 +252,11 @@ def foamy_kit(repo):
     if repo.kit_mode:
         return repo.root
     for candidate in (os.environ.get("FOAMY_KIT"), DEFAULT_KIT, repo.root.parent / "foamy-kit"):
-        if candidate and (Path(candidate) / "check.sh").is_file() and (Path(candidate) / "kit/components.json").is_file():
+        if (
+            candidate
+            and (Path(candidate) / "check.sh").is_file()
+            and (Path(candidate) / "kit/components.json").is_file()
+        ):
             return Path(candidate).resolve()
     return None
 
@@ -281,7 +302,7 @@ def split_measure(entry):
     match = MEASURE.search(entry.split(" | ")[0])
     if not match:
         return entry, None
-    return entry[:match.start()] + f"(> {match.group(2)})" + entry[match.end():], int(match.group(1))
+    return entry[: match.start()] + f"(> {match.group(2)})" + entry[match.end() :], int(match.group(1))
 
 
 def compare(check, entries, repo):
@@ -297,9 +318,11 @@ def compare(check, entries, repo):
             measures[key] = max(measures.get(key, 0), value)
     if repo.args.update_baseline is not None and check in repo.update:
         old = baseline(path)[0]
-        lines = [f"# {check} findings accepted when the check was adopted. tests/validate.sh fails on any",
-                 "# finding not listed here. Regenerate with `tests/validate.sh --update-baseline " + check + "`",
-                 "# only to drop fixed entries or after reviewing every added one; never to pass a check."]
+        lines = [
+            f"# {check} findings accepted when the check was adopted. tests/validate.sh fails on any",
+            "# finding not listed here. Regenerate with `tests/validate.sh --update-baseline " + check + "`",
+            "# only to drop fixed entries or after reviewing every added one; never to pass a check.",
+        ]
         for key in sorted(current.elements()):
             lines.append(key if key not in measures else f"{key} [{measures[key]}]")
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -308,20 +331,30 @@ def compare(check, entries, repo):
         elif path.exists():
             path.unlink()
         added, removed = sum((current - old).values()), sum((old - current).values())
-        print(f"    wrote {path.relative_to(repo.root)}: {sum(current.values())} entries ({added} added, {removed} removed)"
-              if current else f"    no findings; {path.relative_to(repo.root)} removed" if old else "    no findings")
+        print(
+            f"    wrote {path.relative_to(repo.root)}: {sum(current.values())} entries ({added} added, {removed} removed)"
+            if current
+            else f"    no findings; {path.relative_to(repo.root)} removed"
+            if old
+            else "    no findings"
+        )
         return
     old, old_measures = baseline(path)
     new = current - old
-    grew = [f"{key} (now {measures[key]}, baseline {old_measures[key]})" for key in measures
-            if key in old and key in old_measures and measures[key] > old_measures[key]]
+    grew = [
+        f"{key} (now {measures[key]}, baseline {old_measures[key]})"
+        for key in measures
+        if key in old and key in old_measures and measures[key] > old_measures[key]
+    ]
     fixed = sum((old - current).values())
     known = sum(current.values()) - sum(new.values())
     if known:
         print(f"    {known} baselined finding(s) in {path.relative_to(repo.root)}")
     if fixed:
-        print(f"    {fixed} baseline entr{'y is' if fixed == 1 else 'ies are'} fixed; shrink the baseline: "
-              f"tests/validate.sh --update-baseline {check}")
+        print(
+            f"    {fixed} baseline entr{'y is' if fixed == 1 else 'ies are'} fixed; shrink the baseline: "
+            f"tests/validate.sh --update-baseline {check}"
+        )
     problems = [f"new: {key}" for key in sorted(new.elements())] + [f"grew: {key}" for key in grew]
     if problems:
         show("\n".join(problems))
@@ -335,7 +368,7 @@ def baseline(path):
             if not line.strip() or line.startswith("#"):
                 continue
             match = re.search(r" \[(\d+)\]$", line)
-            key = line[:match.start()] if match else line
+            key = line[: match.start()] if match else line
             counter[key] += 1
             if match:
                 measures[key] = int(match.group(1))
@@ -343,6 +376,7 @@ def baseline(path):
 
 
 # ------------------------------------------------------------------ checks
+
 
 def check_kit(repo):
     if repo.kit_mode:
@@ -380,7 +414,9 @@ def check_design_lint(repo):
 
 
 def host_shell():
-    shell = Path(os.environ.get("FOAMY_HOST_45") or (Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell"))
+    shell = Path(
+        os.environ.get("FOAMY_HOST_45") or (Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell")
+    )
     return shell if (shell / "Commons").is_dir() else None
 
 
@@ -411,7 +447,17 @@ def check_qmllint(repo):
             # foamy-kit's kit/qmldir is generated at sync: lint a copy that has it.
             cwd = Path(tmp) / "repo"
             stage_kit(repo, cwd)
-        cmd = [qmllint, *QMLLINT_FLAGS, "-I", str(imports), "-I", str(QT_BIN.parent / "qml"), "--json", str(report), *files]
+        cmd = [
+            qmllint,
+            *QMLLINT_FLAGS,
+            "-I",
+            str(imports),
+            "-I",
+            str(QT_BIN.parent / "qml"),
+            "--json",
+            str(report),
+            *files,
+        ]
         result = subprocess.run(cmd, cwd=cwd, env=repo.env(), capture_output=True, text=True, timeout=900)
         try:
             data = json.loads(report.read_text())
@@ -423,8 +469,16 @@ def check_qmllint(repo):
         rel = os.path.relpath(item["filename"], cwd) if os.path.isabs(item["filename"]) else item["filename"]
         for warning in item.get("warnings", []):
             if warning.get("type") in ("warning", "error", "critical"):
-                entries.append(finding(rel, warning.get("id") or warning.get("type"), warning.get("message", ""),
-                                       repo, warning.get("line"), base=cwd))
+                entries.append(
+                    finding(
+                        rel,
+                        warning.get("id") or warning.get("type"),
+                        warning.get("message", ""),
+                        repo,
+                        warning.get("line"),
+                        base=cwd,
+                    )
+                )
     print(f"    {qmllint} {version_of([qmllint, '--version'])}: {len(files)} files, {len(entries)} findings")
     compare("qmllint", entries, repo)
 
@@ -463,12 +517,15 @@ def check_qmlformat(repo):
             continue
         if result.stdout != (repo.root / rel).read_text():
             differ.append(rel)
-            diff = subprocess.run(["diff", "-u", rel, "-"], input=result.stdout, cwd=repo.root, capture_output=True, text=True)
+            diff = subprocess.run(
+                ["diff", "-u", rel, "-"], input=result.stdout, cwd=repo.root, capture_output=True, text=True
+            )
             show(diff.stdout, limit=40)
     print(f"    {qmlformat} {version_of([qmlformat, '--version'])}: {len(files)} files")
     if differ:
-        raise Failure(f"{len(differ)} file(s) differ; format them in their own commit: "
-                      f"{qmlformat} -s .qmlformat.ini -i <file>")
+        raise Failure(
+            f"{len(differ)} file(s) differ; format them in their own commit: {qmlformat} -s .qmlformat.ini -i <file>"
+        )
 
 
 def check_oxlint(repo):
@@ -482,7 +539,9 @@ def check_oxlint(repo):
     local = repo.root / LINT_DIR / "oxlintrc.json"
     if local.is_file():
         if "../../.oxlintrc.json" not in local.read_text():
-            raise Failure(f'{LINT_DIR}/oxlintrc.json must extend the kit\'s config: "extends": ["../../.oxlintrc.json"]')
+            raise Failure(
+                f'{LINT_DIR}/oxlintrc.json must extend the kit\'s config: "extends": ["../../.oxlintrc.json"]'
+            )
         config = f"{LINT_DIR}/oxlintrc.json"
     # QML-loaded JavaScript starts with QML directives (`.pragma library`,
     # `.import "x.js" as X`) that are not JavaScript. Lint a copy in which they
@@ -497,8 +556,14 @@ def check_oxlint(repo):
                 text, count = re.subn(r"(?m)^(\s*\.(?:pragma|import)\b)", r"//\1", text)
                 directives += count
             target.write_text(text)
-        result = subprocess.run([oxlint, "-c", config, "-f", "json", *files], cwd=tmp, env=repo.env(),
-                                capture_output=True, text=True, timeout=300)
+        result = subprocess.run(
+            [oxlint, "-c", config, "-f", "json", *files],
+            cwd=tmp,
+            env=repo.env(),
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
     try:
         start = result.stdout.index("{")
         data = json.loads(result.stdout[start:])
@@ -515,8 +580,10 @@ def check_oxlint(repo):
             api += 1  # QML calls it: the file's API, which Oxlint can't see used
             continue
         entries.append(finding(rel, code, message, repo, line))
-    print(f"    oxlint {repo.pins['oxlint']}: {len(files)} files ({directives} QML directive line(s) read as comments; "
-          f"{len(loaded)} QML-loaded, {api} top-level function(s) there taken as QML API), {len(entries)} findings")
+    print(
+        f"    oxlint {repo.pins['oxlint']}: {len(files)} files ({directives} QML directive line(s) read as comments; "
+        f"{len(loaded)} QML-loaded, {api} top-level function(s) there taken as QML API), {len(entries)} findings"
+    )
     compare("oxlint", entries, repo)
 
 
@@ -570,8 +637,16 @@ def check_ruff(repo):
     except ValueError:
         show(result.stdout + result.stderr)
         raise Failure("ruff check produced no JSON report") from None
-    entries = [finding(os.path.relpath(item["filename"], repo.root), item.get("code") or "syntax", item["message"], repo,
-                       (item.get("location") or {}).get("row")) for item in data]
+    entries = [
+        finding(
+            os.path.relpath(item["filename"], repo.root),
+            item.get("code") or "syntax",
+            item["message"],
+            repo,
+            (item.get("location") or {}).get("row"),
+        )
+        for item in data
+    ]
     print(f"    ruff {repo.pins['ruff']} ({config}): {len(files)} files, {len(entries)} findings")
     compare("ruff", entries, repo)
 
@@ -584,7 +659,9 @@ def check_ruff_format(repo):
     result = run([ruff, "format", "--config", ruff_config(repo), "--check", "--diff", "--no-cache", *files], repo)
     if result.returncode != 0:
         show(result.stdout + result.stderr, limit=60)
-        raise Failure(f"files differ; format them in their own commit: ruff format --config {ruff_config(repo)} <files>")
+        raise Failure(
+            f"files differ; format them in their own commit: ruff format --config {ruff_config(repo)} <files>"
+        )
     print(f"    ruff format {repo.pins['ruff']}: {len(files)} files formatted")
 
 
@@ -606,8 +683,10 @@ def check_vulture(repo):
         match = re.match(r"(.+?):(\d+): (.+?) \(\d+% confidence", line)
         if match:
             entries.append(finding(match.group(1), "vulture", match.group(3), repo, match.group(2)))
-    print(f"    vulture {repo.pins['vulture']}: {len(files)} files, {len(ignores)} reviewed entry point name(s), "
-          f"{len(entries)} findings")
+    print(
+        f"    vulture {repo.pins['vulture']}: {len(files)} files, {len(ignores)} reviewed entry point name(s), "
+        f"{len(entries)} findings"
+    )
     compare("vulture", entries, repo)
 
 
@@ -628,8 +707,10 @@ def check_shellcheck(repo):
     except ValueError:
         show(result.stdout + result.stderr)
         raise Failure("shellcheck produced no JSON report") from None
-    entries = [finding(item["file"], f"SC{item['code']}", item["message"], repo, item.get("line"))
-               for item in data.get("comments", [])]
+    entries = [
+        finding(item["file"], f"SC{item['code']}", item["message"], repo, item.get("line"))
+        for item in data.get("comments", [])
+    ]
     print(f"    bash -n and shellcheck {repo.pins['shellcheck']}: {len(files)} scripts, {len(entries)} findings")
     if syntax:
         raise Failure("bash -n: syntax errors in " + ", ".join(syntax))
@@ -654,8 +735,11 @@ def check_native(repo):
         raise Skip("no native helper")
     if repo.args.fast:
         raise Skip("--fast")
-    if repo.args.ci and "FoamyNative" in (repo.root / LOCK_NAME).read_text() and \
-            (repo.root / ".github/workflows/verify-native.yml").is_file():
+    if (
+        repo.args.ci
+        and "FoamyNative" in (repo.root / LOCK_NAME).read_text()
+        and (repo.root / ".github/workflows/verify-native.yml").is_file()
+    ):
         raise Skip("--ci: verify-native.yml runs build-native.sh --test for every crate")
     if not shutil.which("rustup"):
         raise Failure("rustup not found (build-native.sh --test needs the toolchain in rust-toolchain.toml)")
@@ -674,8 +758,10 @@ def check_suite(repo):
     if repo.args.update_baseline is not None:
         raise Skip("--update-baseline")
     if not (repo.root / SUITE).is_file():
-        raise Failure(f"{SUITE} is missing: the repository's own tests (node, Python, offscreen runtime) run "
-                      "from it; create it (see foamy-kit README, Tooling)")
+        raise Failure(
+            f"{SUITE} is missing: the repository's own tests (node, Python, offscreen runtime) run "
+            "from it; create it (see foamy-kit README, Tooling)"
+        )
     repo.tool("node")  # the suite's node tests run on the pinned node
     flags = (["--ci"] if repo.args.ci else []) + (["--fast"] if repo.args.fast else [])
     print(f"    bash {SUITE} {' '.join(flags)}".rstrip(), flush=True)
@@ -695,13 +781,21 @@ def version_of(cmd):
 CHECKS = [
     ("kit-check", check_kit, "bash tests/kit-check.sh: the stamped kit files are unedited"),
     ("plugin-validate", check_plugin_validate, "omarchy-plugin-validate <plugin> (host)"),
-    ("design-lint", check_design_lint, "foamy-kit check.sh <plugin>: kit files, versions and the design lint (FOAMY_KIT)"),
+    (
+        "design-lint",
+        check_design_lint,
+        "foamy-kit check.sh <plugin>: kit files, versions and the design lint (FOAMY_KIT)",
+    ),
     ("qmllint", check_qmllint, "Qt 6 qmllint with the Quickshell and Omarchy shell imports; baseline (host)"),
     ("qmlformat", check_qmlformat, "Qt 6 qmlformat with .qmlformat.ini, compared with each file (host)"),
     ("oxlint", check_oxlint, "Oxlint over all JavaScript, QML directives read as comments; baseline"),
     ("ruff", check_ruff, "ruff check (ruff.toml, or .ruff.toml extending it); baseline"),
     ("ruff-format", check_ruff_format, "ruff format --check"),
-    ("vulture", check_vulture, f"Vulture --min-confidence {VULTURE_CONFIDENCE}, tests/lint/vulture-ignore.txt; baseline"),
+    (
+        "vulture",
+        check_vulture,
+        f"Vulture --min-confidence {VULTURE_CONFIDENCE}, tests/lint/vulture-ignore.txt; baseline",
+    ),
     ("shellcheck", check_shellcheck, "bash -n and ShellCheck on the repository's shell scripts; baseline"),
     ("shfmt", check_shfmt, "shfmt " + " ".join(SHFMT_FLAGS) + " -d"),
     ("native", check_native, "kit/native/build-native.sh . --test for each crate with a native.pin"),
@@ -727,9 +821,15 @@ def main(argv=None):
     parser.add_argument("--fast", action="store_true", help="skip the native helper tests; pass --fast to the suite")
     parser.add_argument("--only", help="comma-separated checks to run")
     parser.add_argument("--skip", help="comma-separated checks not to run")
-    parser.add_argument("--update-baseline", nargs="?", const="", metavar="CHECKS",
-                        help="rewrite tests/lint/<check>-baseline.txt from the current findings ("
-                             + ", ".join(BASELINED) + "; default all), then review the diff")
+    parser.add_argument(
+        "--update-baseline",
+        nargs="?",
+        const="",
+        metavar="CHECKS",
+        help="rewrite tests/lint/<check>-baseline.txt from the current findings ("
+        + ", ".join(BASELINED)
+        + "; default all), then review the diff",
+    )
     parser.add_argument("--list", action="store_true", help="list the checks")
     args = parser.parse_args(argv)
     all_names = [name for name, _, _ in CHECKS]

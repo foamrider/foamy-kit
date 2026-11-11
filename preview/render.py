@@ -22,6 +22,7 @@ fails with a message, and `--host both` renders 4.5 into <out>/4.5/ as before.
 
 Nothing touches ~/.config, the live session or its D-Bus: see preview/harness.py.
 """
+
 import argparse
 import io
 import os
@@ -37,8 +38,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import harness  # noqa: E402
 
 
-def render(plugin, host, out, preview=None, states=None, theme="dark", language=None, position="top", rounding=6, keep=False,
-           timeout=120, bus="private", lenient=False, scale=1.0):
+def render(
+    plugin,
+    host,
+    out,
+    preview=None,
+    states=None,
+    theme="dark",
+    language=None,
+    position="top",
+    rounding=6,
+    keep=False,
+    timeout=120,
+    bus="private",
+    lenient=False,
+    scale=1.0,
+):
     plugin = Path(plugin).resolve()
     preview = Path(preview).resolve() if preview else plugin / "preview/Preview.qml"
     if not preview.is_file():
@@ -47,10 +62,22 @@ def render(plugin, host, out, preview=None, states=None, theme="dark", language=
         relative = preview.relative_to(plugin)
     except ValueError:
         raise SystemExit("the preview file must live inside the plugin directory")
-    shell = (Path(__file__).resolve().parent / "PreviewShell.qml.in").read_text().replace("@PREVIEW@", relative.as_posix())
-    run = harness.Run(host, shell, plugin=plugin, theme=theme, language=language, prefix=f"foamy-kit-preview-{host}-",
-                      bus=bus, scale=scale)
-    run.env.update({"FOAMY_POSITION": position, "FOAMY_ROUNDING": str(rounding), "FOAMY_STATES": ",".join(states or [])})
+    shell = (
+        (Path(__file__).resolve().parent / "PreviewShell.qml.in").read_text().replace("@PREVIEW@", relative.as_posix())
+    )
+    run = harness.Run(
+        host,
+        shell,
+        plugin=plugin,
+        theme=theme,
+        language=language,
+        prefix=f"foamy-kit-preview-{host}-",
+        bus=bus,
+        scale=scale,
+    )
+    run.env.update(
+        {"FOAMY_POSITION": position, "FOAMY_ROUNDING": str(rounding), "FOAMY_STATES": ",".join(states or [])}
+    )
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     shots = []
@@ -61,11 +88,13 @@ def render(plugin, host, out, preview=None, states=None, theme="dark", language=
                 path = Path(line.split("FOAMY SHOT ", 1)[1].split()[0])
                 target = out / path.name
                 shutil.copyfile(path, target)
-                shots.append((target, line.split("FOAMY SHOT ", 1)[1][len(str(path)):].strip()))
+                shots.append((target, line.split("FOAMY SHOT ", 1)[1][len(str(path)) :].strip()))
         (out / "render.log").write_text(run.log)
         if lenient and not run.ok and shots and "FOAMY DONE" in run.log and "FOAMY FAIL" not in run.log:
-            print(f"note: {host} render finished with {len(run.failures())} QML error line(s) (old code); see {out / 'render.log'}",
-                  file=sys.stderr)
+            print(
+                f"note: {host} render finished with {len(run.failures())} QML error line(s) (old code); see {out / 'render.log'}",
+                file=sys.stderr,
+            )
             return shots
         if not run.ok:
             print("\n".join(run.failures() or run.log.splitlines()[-40:]), file=sys.stderr)
@@ -85,8 +114,9 @@ def dev_copy(plugin, ref, before_preview):
     into a temp dir and make it renderable offscreen. Returns the copy, or
     None when the ref doesn't exist."""
     try:
-        data = subprocess.run(["git", "-C", str(plugin), "archive", "--format=tar", ref],
-                              capture_output=True, check=True, timeout=60).stdout
+        data = subprocess.run(
+            ["git", "-C", str(plugin), "archive", "--format=tar", ref], capture_output=True, check=True, timeout=60
+        ).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
     base = Path(tempfile.mkdtemp(prefix=f"foamy-kit-dev-{os.getpid()}-"))
@@ -98,7 +128,7 @@ def dev_copy(plugin, ref, before_preview):
         (copy / "preview").mkdir(exist_ok=True)
         shutil.copyfile(before_preview, copy / "preview/Before.qml")
     if not (copy / "kit").exists() and (plugin / "kit").is_dir():
-        shutil.copytree(plugin / "kit", copy / "kit")       # helpers for the Before preview
+        shutil.copytree(plugin / "kit", copy / "kit")  # helpers for the Before preview
     for qml in copy.rglob("*.qml"):
         text = qml.read_text(errors="replace")
         original = text
@@ -142,11 +172,14 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
         if copy is None:
             before_label = f"Before ({dev_ref}: not found)"
         else:
-            preview = copy / ("preview/Before.qml" if (copy / "preview/Before.qml").is_file() else "preview/Preview.qml")
+            preview = copy / (
+                "preview/Before.qml" if (copy / "preview/Before.qml").is_file() else "preview/Preview.qml"
+            )
             if not preview.is_file():
                 before_label = "Before (dev: no preview/Before.qml)"
-            elif shots := render(copy, "4.5", work / "before", preview=preview, states=states, theme=theme,
-                                 timeout=timeout, lenient=True):
+            elif shots := render(
+                copy, "4.5", work / "before", preview=preview, states=states, theme=theme, timeout=timeout, lenient=True
+            ):
                 for path, _ in shots:
                     if not path.name.endswith("-screen.png"):
                         target = out / f"{path.stem}-before.png"
@@ -154,8 +187,11 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
                         before[path.stem] = target
                 # A pre-kit fork on the 4.5 full-screen bar window gets a 120 px
                 # card at the wrong edge (the bug the kit fixed): say so.
-                clipped = [info for _, info in shots if re.search(r"\bavail (\d+)", info)
-                           and int(re.search(r"\bavail (\d+)", info).group(1)) <= 120]
+                clipped = [
+                    info
+                    for _, info in shots
+                    if re.search(r"\bavail (\d+)", info) and int(re.search(r"\bavail (\d+)", info).group(1)) <= 120
+                ]
                 before_label = "Before (dev, 4.5 host; popup fork clipped)" if clipped else "Before (dev, 4.5 host)"
             else:
                 print("before: dev did not render on 4.5", file=sys.stderr)
@@ -169,11 +205,16 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
     views += [v for v in before if v not in views]
     prefix = url_prefix.rstrip("/") + "/" if url_prefix else ""
     cell = lambda files, view, alt: f"![{alt}]({prefix}{files[view].name})" if view in files else "—"
-    lines = ["| View | " + " | ".join([before_label] + [f"After {h}" for h in after_hosts]) + " |",
-             "|---" * (2 + len(after_hosts)) + "|"]
+    lines = [
+        "| View | " + " | ".join([before_label] + [f"After {h}" for h in after_hosts]) + " |",
+        "|---" * (2 + len(after_hosts)) + "|",
+    ]
     for view in views:
-        lines.append(f"| {view} | {cell(before, view, view + ' before')} | "
-                     + " | ".join(cell(after[h], view, f"{view} after {h}") for h in after_hosts) + " |")
+        lines.append(
+            f"| {view} | {cell(before, view, view + ' before')} | "
+            + " | ".join(cell(after[h], view, f"{view} after {h}") for h in after_hosts)
+            + " |"
+        )
     (out / "trio.md").write_text("\n".join(lines) + "\n")
     return lines, before_label
 
@@ -181,8 +222,12 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("plugin")
-    parser.add_argument("--host", default="4.5", choices=["4.5", "4.0", "both"],
-                        help="4.5 (the only supported host); both = 4.5 into <out>/4.5/; 4.0 is retired")
+    parser.add_argument(
+        "--host",
+        default="4.5",
+        choices=["4.5", "4.0", "both"],
+        help="4.5 (the only supported host); both = 4.5 into <out>/4.5/; 4.0 is retired",
+    )
     parser.add_argument("--out", default=None, help="output directory (default /tmp/foamy-preview-<plugin>)")
     parser.add_argument("--preview", default=None)
     parser.add_argument("--states", default="", help="comma-separated subset of previewStates")
@@ -190,25 +235,43 @@ def main():
     parser.add_argument("--language", default=None, help="language code (4.5 only)")
     parser.add_argument("--position", default="top", choices=["top", "bottom", "left", "right"])
     parser.add_argument("--rounding", type=int, default=6, help="Hyprland decoration:rounding to simulate")
-    parser.add_argument("--scale", type=float, default=1.0,
-                        help="display scale to simulate (screen device pixel ratio, e.g. 1.25); PNGs are in device pixels")
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="display scale to simulate (screen device pixel ratio, e.g. 1.25); PNGs are in device pixels",
+    )
     parser.add_argument("--keep", action="store_true", help="keep the temporary shell root")
     parser.add_argument("--timeout", type=int, default=120, help="seconds before the render is killed")
-    parser.add_argument("--bus", default="private", choices=["private", "none"],
-                        help="session D-Bus: a private daemon (default) or none; never the desktop's")
-    parser.add_argument("--trio", action="store_true",
-                        help="Before (dev) / After (4.5) per view, plus trio.md")
+    parser.add_argument(
+        "--bus",
+        default="private",
+        choices=["private", "none"],
+        help="session D-Bus: a private daemon (default) or none; never the desktop's",
+    )
+    parser.add_argument("--trio", action="store_true", help="Before (dev) / After (4.5) per view, plus trio.md")
     parser.add_argument("--dev-ref", default="origin/dev", help="git ref for Before (default origin/dev)")
-    parser.add_argument("--before-preview", default=None,
-                        help="preview for the dev tree (default <plugin>/preview/Before.qml, else dev's preview/Preview.qml)")
+    parser.add_argument(
+        "--before-preview",
+        default=None,
+        help="preview for the dev tree (default <plugin>/preview/Before.qml, else dev's preview/Preview.qml)",
+    )
     parser.add_argument("--url-prefix", default="", help="image URL prefix for trio.md (e.g. the pr-assets raw URL)")
     args = parser.parse_args()
     harness.install_signal_cleanup()
     if args.trio:
         plugin = Path(args.plugin).resolve()
         out = Path(args.out or f"/tmp/foamy-trio-{plugin.name}")
-        lines, label = trio(plugin, out, args.dev_ref, args.before_preview,
-                            [s for s in args.states.split(",") if s] or None, args.theme, args.url_prefix, args.timeout)
+        lines, label = trio(
+            plugin,
+            out,
+            args.dev_ref,
+            args.before_preview,
+            [s for s in args.states.split(",") if s] or None,
+            args.theme,
+            args.url_prefix,
+            args.timeout,
+        )
         print("\n".join(lines))
         print(f"\nPNGs and trio.md in {out}")
         return 0
@@ -220,8 +283,21 @@ def main():
     status = 0
     for host in hosts:
         target = out / host if args.host == "both" else out
-        shots = render(plugin, host, target, args.preview, [s for s in args.states.split(",") if s], args.theme,
-                       args.language, args.position, args.rounding, args.keep, args.timeout, args.bus, scale=args.scale)
+        shots = render(
+            plugin,
+            host,
+            target,
+            args.preview,
+            [s for s in args.states.split(",") if s],
+            args.theme,
+            args.language,
+            args.position,
+            args.rounding,
+            args.keep,
+            args.timeout,
+            args.bus,
+            scale=args.scale,
+        )
         if shots is None:
             status = 1
             continue
