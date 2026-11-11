@@ -1,0 +1,4 @@
+# Paths tests/validate.sh does not lint or format, each with its reason.
+tests/fixtures/*    # test inputs: sync, check and native tests use their exact content
+tests/lint-cases/*  # design lint cases: deliberate violations at fixed line numbers
+tests/qml/*  qmllint  # harness scenes: their imports ("harness", "plugin/kit") exist only in the harness's staged copy
