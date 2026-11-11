@@ -545,7 +545,8 @@ pub fn which(name: &str) -> Option<PathBuf> {
 pub struct Bwrap {
     program: PathBuf,
     args: Vec<OsString>,
-    fds: Vec<(RawFd, Arc<OwnedFd>)>,
+    /// Number, duplicate, rewind before exec (`--seccomp`).
+    fds: Vec<(RawFd, Arc<OwnedFd>, bool)>,
     /// `errno` of a duplicate that could not be made.
     broken: Option<i32>,
 }
@@ -589,9 +590,15 @@ impl Bwrap {
         self
     }
 
-    fn with_fd(mut self, option: &str, fd: BorrowedFd<'_>, rest: Option<&OsStr>) -> Bwrap {
+    fn with_fd(
+        mut self,
+        option: &str,
+        fd: BorrowedFd<'_>,
+        rest: Option<&OsStr>,
+        rewind: bool,
+    ) -> Bwrap {
         match fd.try_clone_to_owned() {
-            Ok(owned) => self.fds.push((fd.as_raw_fd(), Arc::new(owned))),
+            Ok(owned) => self.fds.push((fd.as_raw_fd(), Arc::new(owned), rewind)),
             Err(error) => {
                 let code = error.raw_os_error().unwrap_or(libc::EMFILE);
                 self.broken.get_or_insert(code);
@@ -623,12 +630,12 @@ impl Bwrap {
 
     /// `--ro-bind-fd <fd> <dest>`: an open directory, bound read-only.
     pub fn ro_bind_fd(self, fd: impl AsFd, dest: impl AsRef<OsStr>) -> Bwrap {
-        self.with_fd("--ro-bind-fd", fd.as_fd(), Some(dest.as_ref()))
+        self.with_fd("--ro-bind-fd", fd.as_fd(), Some(dest.as_ref()), false)
     }
 
     /// `--bind-fd <fd> <dest>`: an open directory, bound writable.
     pub fn bind_fd(self, fd: impl AsFd, dest: impl AsRef<OsStr>) -> Bwrap {
-        self.with_fd("--bind-fd", fd.as_fd(), Some(dest.as_ref()))
+        self.with_fd("--bind-fd", fd.as_fd(), Some(dest.as_ref()), false)
     }
 
     /// `--dev <dest>`: a fresh minimal `/dev`.
@@ -722,9 +729,14 @@ impl Bwrap {
     }
 
     /// `--seccomp <fd>`: bubblewrap installs the filter in `fd` (see
-    /// [`BpfFilter::memfd`]) just before executing the command.
+    /// [`BpfFilter::memfd`]) just before executing the command. Bubblewrap
+    /// reads it from the fd's offset, which every copy shares, so each run
+    /// seeks it back to the start before exec: the same filter and builder
+    /// serve any number of runs ([`works`](Self::works) and then the real
+    /// one), one after the other. Runs that overlap in time (a
+    /// [`crate::child::Pipeline`]'s two stages) need a memfd each.
     pub fn seccomp(self, fd: impl AsFd) -> Bwrap {
-        self.with_fd("--seccomp", fd.as_fd(), None)
+        self.with_fd("--seccomp", fd.as_fd(), None, true)
     }
 
     /// `--`: the end of the options (github_status's prefix ends with it).
@@ -758,8 +770,8 @@ impl Bwrap {
         S: AsRef<OsStr>,
     {
         let mut bounded = Bounded::new(&self.program).args(&self.args).args(command);
-        for (number, fd) in &self.fds {
-            bounded = bounded.inherit_shared(*number, Arc::clone(fd));
+        for (number, fd, rewind) in &self.fds {
+            bounded = bounded.inherit_shared(*number, Arc::clone(fd), *rewind);
         }
         if let Some(code) = self.broken {
             bounded = bounded.fail_spawn(io::Error::from_raw_os_error(code));

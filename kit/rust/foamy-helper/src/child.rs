@@ -108,6 +108,9 @@ enum Input {
 struct Inherited {
     number: RawFd,
     fd: Arc<OwnedFd>,
+    /// Seek it to its start just before exec (a seccomp filter that
+    /// bubblewrap reads from the shared offset).
+    rewind: bool,
 }
 
 /// A command with bounds; build it, then [`run`](Bounded::run) it.
@@ -280,14 +283,20 @@ impl Bounded {
     pub fn inherit_fd(self, fd: impl AsFd) -> Bounded {
         let fd = fd.as_fd();
         match fd.try_clone_to_owned() {
-            Ok(owned) => self.inherit_shared(fd.as_raw_fd(), Arc::new(owned)),
+            Ok(owned) => self.inherit_shared(fd.as_raw_fd(), Arc::new(owned), false),
             Err(error) => self.fail_spawn(error),
         }
     }
 
-    /// [`inherit_fd`](Self::inherit_fd) with a duplicate made already.
-    pub(crate) fn inherit_shared(mut self, number: RawFd, fd: Arc<OwnedFd>) -> Bounded {
-        self.inherit.push(Inherited { number, fd });
+    /// [`inherit_fd`](Self::inherit_fd) with a duplicate made already;
+    /// `rewind`: seek it to its start in the child, just before exec.
+    pub(crate) fn inherit_shared(
+        mut self,
+        number: RawFd,
+        fd: Arc<OwnedFd>,
+        rewind: bool,
+    ) -> Bounded {
+        self.inherit.push(Inherited { number, fd, rewind });
         self
     }
 
@@ -354,14 +363,15 @@ impl Bounded {
         // standard streams.
         let floor = inherit.iter().map(|fd| fd.number).max().unwrap_or(0) + 1;
         let mut placed = Vec::with_capacity(inherit.len());
-        for Inherited { number, fd } in &inherit {
+        for Inherited { number, fd, rewind } in &inherit {
             if *number < 3 {
                 return Err(io::Error::new(
                     ErrorKind::InvalidInput,
                     "fds 0-2 are the child's standard streams",
                 ));
             }
-            placed.push((*number, rustix::io::fcntl_dupfd_cloexec(&**fd, floor)?));
+            let copy = rustix::io::fcntl_dupfd_cloexec(&**fd, floor)?;
+            placed.push((*number, copy, *rewind));
         }
         let feed = match (stdin, input) {
             (Stdin::Pipe, _) => {
@@ -389,7 +399,7 @@ impl Bounded {
         let parent = die_with_parent.then(getpid);
         // SAFETY: the closure runs in the forked child before exec. It only
         // makes system calls through rustix (setsid, prctl, getppid,
-        // getrlimit, setrlimit, getpriority, setpriority) and libc
+        // getrlimit, setrlimit, getpriority, setpriority, lseek) and libc
         // (syscall for ioprio_set, dup2), and builds io::Errors from raw OS
         // codes, so it neither allocates nor takes locks; `limits` and
         // `placed` are moved in and only read. The hooks are the crate's
@@ -397,12 +407,20 @@ impl Bounded {
         unsafe {
             command.pre_exec(move || {
                 crate::process::child_setup(session, parent, &limits, priority)?;
-                for (number, fd) in &placed {
+                for (number, fd, rewind) in &placed {
                     // SAFETY: dup2 takes two integers; `fd` is open (owned
                     // by the closure) and `number` is replaced in the child
                     // only. The copy at `number` has no close-on-exec flag.
                     if dup2(fd.as_raw_fd(), *number) < 0 {
                         return Err(io::Error::last_os_error());
+                    }
+                    // The offset is shared with every copy: an earlier run
+                    // left it at the end. A pipe has none to reset.
+                    if *rewind {
+                        match rustix::fs::seek(fd, rustix::fs::SeekFrom::Start(0)) {
+                            Ok(_) | Err(Errno::SPIPE) => {}
+                            Err(error) => return Err(error.into()),
+                        }
                     }
                 }
                 for hook in &hooks.0 {

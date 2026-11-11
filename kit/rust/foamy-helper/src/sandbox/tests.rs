@@ -181,6 +181,29 @@ fn bwrap_keeps_its_own_copy_of_the_fds_it_names() {
 }
 
 #[test]
+fn a_seccomp_memfd_serves_more_than_one_run() {
+    // bubblewrap reads the filter from the shared offset: after one run it
+    // was at the end, and the next run (`works()` and then the real one,
+    // say) read nothing ("Invalid seccomp data").
+    let dir = crate::fs::tests::TempDir::new("bwrap-rewind");
+    let filter = BpfFilter::threaded_decoder().unwrap();
+    let memfd = filter.memfd().unwrap();
+    let sandbox = fake_bwrap(&dir.0).seccomp(&memfd);
+    for run in 0..2 {
+        let output = sandbox.bounded(["--", "true"]).run().unwrap();
+        assert!(output.success(), "{output:?}");
+        assert_eq!(output.stdout, filter.to_bytes(), "run {run}");
+    }
+    // Another builder with the same memfd too.
+    let output = fake_bwrap(&dir.0)
+        .seccomp(&memfd)
+        .bounded(["--", "true"])
+        .run()
+        .unwrap();
+    assert_eq!(output.stdout, filter.to_bytes());
+}
+
+#[test]
 fn seccomp_in_the_child_denies_processes_and_namespaces() {
     let filter = BpfFilter::decoder().unwrap();
     let run = |script: &str| {
@@ -470,7 +493,14 @@ fn bwrap_runs_with_the_seccomp_filter_and_inherited_fds() {
     };
     let ok = run("exec /usr/bin/true");
     assert!(ok.success(), "{ok:?}");
+    // The same filter memfd again: bubblewrap must read all of it (it
+    // used to find the offset at the end and refuse to start), and the
+    // shell then fails to fork under it.
     let spawn = run("/usr/bin/true && echo spawned; exit 0");
+    assert!(
+        String::from_utf8_lossy(&spawn.stderr).contains("fork: Operation not permitted"),
+        "{spawn:?}"
+    );
     assert!(
         spawn.stdout.is_empty(),
         "the decoder can't start processes: {spawn:?}"

@@ -51,6 +51,13 @@
   are unchanged (`&OwnedFd` still works). Inheriting fd 0-2 is now
   `InvalidInput` (it used to be a silent no-op), and a duplicate that can't
   be made (`EMFILE`) fails the run.
+- `sandbox::Bwrap::seccomp`: the filter memfd is sought back to its start
+  in the child before every exec. Bubblewrap reads it from the offset all
+  copies share, so a second run with the same memfd or builder (`works()`
+  and then the real run) found it at the end and failed closed with a
+  misleading "requires a kernel configured with CONFIG_SECCOMP". Runs that
+  overlap in time still need a memfd each. The live bubblewrap test now
+  checks its second run really ran under the filter.
 - `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
   longer panics on `Instant` overflow; it means no deadline of its own.
 - `favicon` (foamy-notifications, foamy-notification-center): a host's
