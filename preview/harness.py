@@ -15,12 +15,25 @@ The environment drops WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and
 DISPLAY, points HOME and every XDG_* directory into the root, and uses the
 offscreen platform with a 1920x1080 screen and the software renderer, so
 nothing reaches the live session. OMARCHY_PATH points at a stub holding only
-the host's i18n catalogs (data); no host script or binary is ever run.
+the host's i18n catalogs (data); no host script or binary is ever run:
+
+- Omarchy's bin directories (/usr/share/omarchy/bin, the host's ../bin, the
+  caller's $OMARCHY_PATH/bin) are dropped from PATH, and every other
+  `omarchy` / `omarchy-*` command still on PATH (a wrapper in ~/.local/bin)
+  is shadowed by a stub that logs the call to $FOAMY_OUT/host-commands.log
+  (Run.host_commands()) and exits 127. `fakebin` stand-ins come first.
+- An AppImage's bundled libraries and binaries ($APPDIR, e.g. an editor's
+  libnotify) are dropped from LD_LIBRARY_PATH and PATH.
+- No audio server is reachable: PULSE_SERVER and PIPEWIRE_REMOTE name dead
+  sockets, and the server lookup paths are the private runtime dir.
 
 D-Bus: by default each run gets a private dbus-daemon (no service
 activation), so MPRIS players, notifications and other session services of
 the live desktop are invisible; bus="none" points the session bus at a dead
-socket instead.
+socket instead. The system bus (NetworkManager, logind, UPower, BlueZ…) is a
+dead address by default; system_bus="private" starts a second private daemon
+for a test that registers fake system services (its address is
+Run.system_bus_address), and an explicit "unix:path=…" address uses that bus.
 
 Processes: qs (and the private bus) run in their own process group with a
 parent-death signal, so they die with the Python process even when it is
@@ -117,6 +130,20 @@ def processes_under(path):
         if needle in cmdline:
             found.append(int(entry.name))
     return found
+
+
+def _in_appdir(path):
+    """True for a path inside the running AppImage ($APPDIR)."""
+    appdir = (os.environ.get("APPDIR") or "").rstrip("/")
+    return bool(appdir) and (path == appdir or path.startswith(appdir + "/"))
+
+
+# Shadows a host command left on PATH: logged, refused like a missing one.
+HOST_STUB = """#!/bin/sh
+printf '%s\\n' "${0##*/} $*" >> "$FOAMY_OUT/host-commands.log"
+echo "foamy-kit harness: ${0##*/} is a host command; give the test a fakebin stand-in" >&2
+exit 127
+"""
 
 
 def host_variable(name):
@@ -251,14 +278,18 @@ def build_ui(host, dest):
 
 class Run:
     def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-",
-                 bus="private", fakebin=None, scale=1.0):
+                 bus="private", fakebin=None, scale=1.0, system_bus="none"):
         self.host_name = host
         # Display scale (the screen's device pixel ratio): 1.25 renders what a
         # 125 % output shows, at 1.25x the pixels.
         self.scale = float(scale or 1.0)
         self.bus = bus
+        if system_bus not in ("none", "private") and not str(system_bus).startswith("unix:"):
+            raise ValueError(f"system_bus must be 'none', 'private' or a unix: address, not {system_bus!r}")
+        self.system_bus = system_bus
         self.process = None
         self.bus_process = None
+        self.system_bus_process = None
         self.log = ""
         self.ok = False
         self.host = host_dir(host)
@@ -289,7 +320,39 @@ class Run:
             for name, text in fakebin.items():
                 (bin_dir / name).write_text(text)
                 (bin_dir / name).chmod(0o755)
-            self.env["PATH"] = f"{bin_dir}:{self.env.get('PATH', '/usr/bin:/bin')}"
+            self.env["PATH"] = f"{bin_dir}:{self.env['PATH']}"
+
+    def host_bins(self):
+        """Omarchy's bin directories (real paths) that never reach a run's PATH."""
+        bins = {"/usr/share/omarchy/bin", str(self.host.parent / "bin")}
+        if os.environ.get("OMARCHY_PATH"):
+            bins.add(str(Path(os.environ["OMARCHY_PATH"]) / "bin"))
+        return {os.path.realpath(b) for b in bins}
+
+    def _isolated_path(self):
+        """The caller's PATH without Omarchy's and an AppImage's bin
+        directories, behind a directory of stubs for every omarchy command
+        left on it."""
+        bins = self.host_bins()
+        kept = [p for p in os.environ.get("PATH", "/usr/bin:/bin").split(":")
+                if p and os.path.realpath(p) not in bins and not _in_appdir(p)]
+        blocked = self.base / "host-bin"
+        blocked.mkdir()
+        names = set()
+        for folder in kept:
+            try:
+                names |= {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
+            except OSError:
+                continue
+        for name in sorted(names):
+            (blocked / name).write_text(HOST_STUB)
+            (blocked / name).chmod(0o755)
+        return ":".join([str(blocked)] + kept)
+
+    def host_commands(self):
+        """Host commands the run tried (and the stubs refused), one line each."""
+        log = self.out / "host-commands.log"
+        return log.read_text(errors="replace").splitlines() if log.exists() else []
 
     def _environment(self, theme, language):
         home = self.base / "home"
@@ -341,18 +404,37 @@ class Run:
             # A dead address until start() brings up the private bus.
             "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
         })
-        env.pop("DBUS_SYSTEM_BUS_ADDRESS", None)
+        env.update({
+            "PATH": self._isolated_path(),
+            # No live audio server: dead sockets, lookups in the private runtime dir.
+            "PULSE_SERVER": f"unix:{self.base}/no-pulse",
+            "PIPEWIRE_REMOTE": f"{self.base}/no-pipewire",
+            "PIPEWIRE_RUNTIME_DIR": str(runtime),
+            "PULSE_RUNTIME_PATH": str(runtime / "pulse"),
+            # Not the machine's system bus (NetworkManager, logind…) unless asked.
+            "DBUS_SYSTEM_BUS_ADDRESS": (self.system_bus if self.system_bus.startswith("unix:")
+                                        else f"unix:path={self.base}/no-system-bus"),
+        })
+        library_path = ":".join(p for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p and not _in_appdir(p))
+        if library_path:
+            env["LD_LIBRARY_PATH"] = library_path
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+        env.pop("PULSE_COOKIE", None)
         if self.plugin:
             env["FOAMY_PLUGIN_URL"] = self.plugin.as_uri()
         return env
 
-    def _start_bus(self):
-        config = self.base / "bus.conf"
-        socket = self.base / "bus"
+    def _start_bus(self, kind="session"):
+        """A private dbus-daemon (`kind` session or system); its process, or
+        None when dbus-daemon is missing (the address stays dead)."""
+        name = "bus" if kind == "session" else "system-bus"
+        config = self.base / f"{name}.conf"
+        socket = self.base / name
         config.write_text(f"""<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
-  <type>session</type>
+  <type>{kind}</type>
   <listen>unix:path={socket}</listen>
   <auth>EXTERNAL</auth>
   <policy context="default">
@@ -364,25 +446,34 @@ class Run:
 """)
         daemon = shutil.which("dbus-daemon")
         if not daemon:
-            return  # stays on the dead address
-        self.bus_process = subprocess.Popen([daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            start_new_session=True, preexec_fn=_die_with_parent)
+            return None  # stays on the dead address
+        process = subprocess.Popen([daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   start_new_session=True, preexec_fn=_die_with_parent)
+        variable = "DBUS_SESSION_BUS_ADDRESS" if kind == "session" else "DBUS_SYSTEM_BUS_ADDRESS"
         for _ in range(100):
             if socket.exists():
-                self.env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={socket}"
-                return
+                self.env[variable] = f"unix:path={socket}"
+                break
             time.sleep(0.02)
+        return process
+
+    @property
+    def system_bus_address(self):
+        """The system bus address the run's processes see."""
+        return self.env["DBUS_SYSTEM_BUS_ADDRESS"]
 
     def start(self):
         """Start qs (and the private bus). Pair with stop()."""
         _LIVE.add(self)
         if self.bus == "private":
-            self._start_bus()
+            self.bus_process = self._start_bus()
+        if self.system_bus == "private":
+            self.system_bus_process = self._start_bus("system")
         self._log_file = (self.base / "qs.log").open("w")
         self.process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=self._log_file,
                                         stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=_die_with_parent)
-        STARTED.extend(p.pid for p in (self.process, self.bus_process) if p is not None)
+        STARTED.extend(p.pid for p in (self.process, self.bus_process, self.system_bus_process) if p is not None)
         return self
 
     def stop(self):
@@ -391,7 +482,8 @@ class Run:
             _kill_group(self.process, signal.SIGTERM)
         _kill_group(self.process)
         _kill_group(self.bus_process)
-        self.process = self.bus_process = None
+        _kill_group(self.system_bus_process)
+        self.process = self.bus_process = self.system_bus_process = None
         log_file = getattr(self, "_log_file", None)
         if log_file and not log_file.closed:
             log_file.close()

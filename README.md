@@ -667,6 +667,25 @@ screen, like the real 4.5 bar. Each run gets a
 private D-Bus session (no service activation: the desktop's MPRIS players
 and notifications are invisible), and `qs` dies with the render, even when
 the render itself is killed; the temp dir is removed (`--keep` keeps it).
+
+What a run's processes (qs, the plugin's `Process`es, the host QML) can
+reach is isolated by default (0.9.0):
+
+- **No host commands.** Omarchy's bin directories (`/usr/share/omarchy/bin`,
+  the host's `../bin`, the caller's `$OMARCHY_PATH/bin`) leave `PATH`, and
+  any other `omarchy`/`omarchy-*` still on it (`/usr/bin`, a wrapper in
+  `~/.local/bin`) is shadowed by a stub that exits 127 and logs the call to
+  `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`). `Run(…,
+  fakebin={"omarchy": script})` stand-ins come first.
+- **No AppImage libraries.** Entries under `$APPDIR` (an editor's bundled
+  libnotify) leave `LD_LIBRARY_PATH` and `PATH`.
+- **No audio server.** `PULSE_SERVER` and `PIPEWIRE_REMOTE` name dead
+  sockets; the lookup dirs are the private runtime dir.
+- **No system bus.** `DBUS_SYSTEM_BUS_ADDRESS` is a dead address, so
+  NetworkManager, logind, UPower and BlueZ are out of reach. A test that
+  needs one opts in: `Run(…, system_bus="private")` starts a second private
+  daemon (`Run.system_bus_address`) for its fake services, and
+  `system_bus="unix:path=…"` uses a bus the test runs itself.
 The plugin is loaded over `file://`, like the shell loads it, so plugin
 subdirectories need no qmldir.
 

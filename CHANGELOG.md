@@ -16,6 +16,26 @@
   `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
   missing or stale. foamy-kit has its own `AGENTS.md`.
 
+### Changed
+- `preview/harness.py` isolates every run by default (render.py and every
+  plugin runtime test that uses `harness.Run`). Reviews found runtime tests
+  running the real host tools (`omarchy-audio-*`, `pactl`, `omarchy bar
+  set`) and reaching the machine's system bus (foamy-train's test called the
+  real Entur API through NetworkManager's online state). Now Omarchy's bin
+  directories and an AppImage's `$APPDIR` entries leave `PATH`, every other
+  `omarchy`/`omarchy-*` on `PATH` is a stub that exits 127 and logs to
+  `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`), `$APPDIR` entries
+  leave `LD_LIBRARY_PATH`, `PULSE_SERVER`/`PIPEWIRE_REMOTE` name dead
+  sockets, and `DBUS_SYSTEM_BUS_ADDRESS` is a dead address. The private
+  session bus is unchanged. `Run(…, system_bus="private")` gives a test its
+  own system bus (`Run.system_bus_address`); `system_bus="unix:path=…"`
+  uses one the test provides. `tests/test_isolation.py` checks each from
+  inside qs.
+
+  After syncing: a plugin test whose QML runs a host command now gets exit
+  127 and a `host-commands.log` line; give it a `fakebin` stand-in.
+  Plugin-local `isolate()`/`library_path()` copies are redundant.
+
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit
   components lose their 4.0 branches: `FoamyI18n` uses the shell's
