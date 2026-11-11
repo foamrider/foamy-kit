@@ -80,7 +80,7 @@ def sync_tests(base):
     root_files = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
     template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
     ok &= report("the build tool's ROOT_FILES, components.json rootFiles and kit-check.sh agree",
-                 sorted(foamykit.ROOT_FILES) == root_files and all(f"$rel != {rel}" in template for rel in root_files),
+                 sorted(foamykit.native.ROOT_FILES) == root_files and all(f"$rel != {rel}" in template for rel in root_files),
                  f"{root_files}")
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
     ok &= report("a leading #![attribute] is not taken for a shebang", attribute[0].startswith("// foamy-kit 0.5.0 "))
@@ -331,13 +331,13 @@ def tamper_tests(plugin, base):
     x86.write_bytes(dynamic)
     pin_sha(f"bin/x86_64/{BINARY}", dynamic)
     passed, detail = both("dynamically linked")
-    elf = foamykit.elf_problem(dynamic, "x86_64") or ""
+    elf = foamykit.native.elf_problem(dynamic, "x86_64") or ""
     ok &= report("a dynamically linked binary fails", passed and "dynamically linked" in elf, detail[:300])
     restore()
     arm.write_bytes(saved[x86])
     pin_sha(f"bin/aarch64/{BINARY}", saved[x86])
     passed, detail = both("is not a 64-bit aarch64")
-    ok &= report("a binary for the wrong arch fails", passed and "ELF machine 62" in (foamykit.elf_problem(saved[x86], "aarch64") or ""), detail[:300])
+    ok &= report("a binary for the wrong arch fails", passed and "ELF machine 62" in (foamykit.native.elf_problem(saved[x86], "aarch64") or ""), detail[:300])
     restore()
     arm.unlink()
     arm.symlink_to(x86)
@@ -417,14 +417,14 @@ def rust_tests(base):
                  added == ["THIRD_PARTY_NOTICES.md", f"bin/aarch64/{BINARY}", f"bin/x86_64/{BINARY}", "native/native.pin"]
                  and not changed and (cache / "foamy-native-demo").is_dir(), f"added {added}, changed {changed}")
     ok &= notices_tests(plugin, base, env)
-    sizes = {arch: (plugin / "bin" / arch / BINARY).stat().st_size for arch in foamykit.ARCHES}
-    modes = {arch: (plugin / "bin" / arch / BINARY).stat().st_mode & 0o777 for arch in foamykit.ARCHES}
+    sizes = {arch: (plugin / "bin" / arch / BINARY).stat().st_size for arch in foamykit.native.ARCHES}
+    modes = {arch: (plugin / "bin" / arch / BINARY).stat().st_mode & 0o777 for arch in foamykit.native.ARCHES}
     print(f"    binary sizes: x86_64 {sizes['x86_64']} bytes, aarch64 {sizes['aarch64']} bytes")
     ok &= report("binaries are mode 0755 and under 2 MB", all(m == 0o755 for m in modes.values()) and max(sizes.values()) < 2 << 20)
-    pin = foamykit.read_pin(plugin / "native/native.pin")
+    pin = foamykit.native.read_pin(plugin / "native/native.pin")
     ok &= report("native.pin records crate, binary, toolchain, kit version, source hash and both checksums",
                  pin.get("crate") == "native" and pin.get("binary") == BINARY and pin.get("toolchain") == CHANNEL
-                 and pin.get("kit") == foamykit.kit_version() and pin.get("source") == foamykit.native_source_hash(plugin, "native")
+                 and pin.get("kit") == foamykit.kit_version() and pin.get("source") == foamykit.native.native_source_hash(plugin, "native")
                  and sorted(pin["files"]) == [f"bin/aarch64/{BINARY}", f"bin/x86_64/{BINARY}"])
     code, out = kit_check(plugin)
     ok &= report("generated tests/kit-check.sh passes with the native binaries (clean environment)",
@@ -454,7 +454,7 @@ def rust_tests(base):
     shutil.copytree(plugin, alone)
     out_dir = base / "alone-rebuilt"
     code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", out_dir, env=env, cwd=alone)
-    kept = {arch: (out_dir / arch / BINARY).read_bytes() if (out_dir / arch / BINARY).is_file() else b"" for arch in foamykit.ARCHES}
+    kept = {arch: (out_dir / arch / BINARY).read_bytes() if (out_dir / arch / BINARY).is_file() else b"" for arch in foamykit.native.ARCHES}
     ok &= report("the plugin's own kit/native/build-native.sh verifies it without foamy-kit; --out keeps the identical rebuild",
                  code == 0 and "verify OK" in out
                  and all(kept[arch] == (plugin / "bin" / arch / BINARY).read_bytes() for arch in kept)
@@ -469,7 +469,7 @@ def rust_tests(base):
     linked_out = base / "linked-out"
     linked_out.mkdir()
     (linked_out / "x86_64").symlink_to(alone / "bin/x86_64")
-    saved = {arch: (alone / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}
+    saved = {arch: (alone / "bin" / arch / BINARY).read_bytes() for arch in foamykit.native.ARCHES}
     (alone / "bin/x86_64" / BINARY).write_bytes(b"tampered")
     code, out = sh("bash", "kit/native/build-native.sh", ".", "--verify", "--out", linked_out, env=env, cwd=alone)
     ok &= report("--verify --out refuses a symlinked arch dir and still reports the tampered binary",
@@ -550,7 +550,7 @@ def rust_tests(base):
     workspace.write_text(workspace.read_text().replace('members = ["native"]', 'members = ["search"]'))
     sh(SYNC, menu, "--components", "FoamyNative")
     code, out = sh(BUILD, menu, "--crate", "search", "--bin", "foamy-native-demo-search", env=env)
-    pin = foamykit.read_pin(menu / "search/native.pin")
+    pin = foamykit.native.read_pin(menu / "search/native.pin")
     code2, out2 = sh(BUILD, menu, env=env)
     code3, out3 = kit_check(menu)
     ok &= report("a configured crate dir and binary name (search/, foamy-…-search) are kept in native.pin",
@@ -591,7 +591,7 @@ def notices_tests(plugin, base, env):
     ok &= report("the first-party crates, the standard library, musl and LLVM are covered",
                  "`kit/rust/foamy-helper/` (foamy-kit, vendored)" in text and foamykit.native.KIT_LICENSE.strip() in text
                  and "| Rust standard library (" in text and "Copyright © 2005-2020 Rich Felker, et al." in text
-                 and "src/llvm-project" in text and f"- `native/native.pin`: source `{foamykit.read_pin(plugin / 'native/native.pin')['source']}`" in text)
+                 and "src/llvm-project" in text and f"- `native/native.pin`: source `{foamykit.native.read_pin(plugin / 'native/native.pin')['source']}`" in text)
     code, out = sh(BUILD, plugin, "--notices", env=env)
     ok &= report("--notices regenerates the same bytes", code == 0 and "up to date" in out and path.read_text() == text, last(out))
 
@@ -697,9 +697,9 @@ def isc_notice_test(plugin, base, env):
 
     fake_home = [False]
     channel = native.toolchain_channel(plugin)
-    pin = foamykit.read_pin(plugin / "native/native.pin")
+    pin = foamykit.native.read_pin(plugin / "native/native.pin")
     entry = {"crate": "native", "binary": BINARY, "source": pin["source"],
-             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}}
+             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.native.ARCHES}}
     cargo = native.notices_env(plugin, "native", channel, base / "cache")
     native.linked_packages, native.lock_packages, native.cargo_home = linked, lock, cargo_home
     try:
@@ -770,9 +770,9 @@ def std_notice_tests(plugin, base, env, text):
                  and any("zlib" in p.lower() for p in texts["miniz_oxide"])
                  and "has no entry for these standard library dependencies" not in text, f"{ {n: len(t) for n, t in texts.items()} }")
     channel = native.toolchain_channel(plugin)
-    pin = foamykit.read_pin(plugin / "native/native.pin")
+    pin = foamykit.native.read_pin(plugin / "native/native.pin")
     entry = {"crate": "native", "binary": BINARY, "source": pin["source"],
-             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.ARCHES}}
+             "files": {arch: (plugin / "bin" / arch / BINARY).read_bytes() for arch in foamykit.native.ARCHES}}
     cargo = native.notices_env(plugin, "native", channel, base / "cache")
     real_lock, real_files = native.std_lock, native.std_crate_files
 
@@ -1003,7 +1003,7 @@ def two_helpers_test(base, env):
 
     def build(plugin_dir, crate, binary, channel, target_dir):
         path = f"/cargo/registry/src/index.crates.io-0000000000000000/shared-{state['built']}/src/lib.rs"
-        return {arch: f"\x7fELF {binary} {arch} \0{path}\0".encode() for arch in foamykit.ARCHES}
+        return {arch: f"\x7fELF {binary} {arch} \0{path}\0".encode() for arch in foamykit.native.ARCHES}
 
     def run(plugin_dir, crate, binary):
         return native.cmd_native(argparse.Namespace(plugin=str(plugin_dir), crate=crate, bin=binary, test=False,
@@ -1028,10 +1028,10 @@ def two_helpers_test(base, env):
             state.update(graph="2.0.0", built="2.0.0")
             with open(work / "Cargo.lock", "a") as stream:
                 stream.write("\n# shared 2.0.0\n")
-            stale = all(native.native_source_hash(work, c) != foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            stale = all(native.native_source_hash(work, c) != foamykit.native.read_pin(work / c / "native.pin")["source"] for c in crates)
             codes = [run(work, crate, crates[crate]) for crate in order]
             notices = (work / "THIRD_PARTY_NOTICES.md").read_text()
-            fresh_pins = all(native.native_source_hash(work, c) == foamykit.read_pin(work / c / "native.pin")["source"] for c in crates)
+            fresh_pins = all(native.native_source_hash(work, c) == foamykit.native.read_pin(work / c / "native.pin")["source"] for c in crates)
             ok &= report(f"two helpers sharing an updated dependency rebuild one after the other ({' then '.join(order)})",
                          first == [0, 0] and stale and codes == [0, 0] and fresh_pins and "| shared | 2.0.0 |" in notices
                          and "| shared | 1.0.0 |" not in notices and not native.notices_problems(work, native.native_pins(work)),

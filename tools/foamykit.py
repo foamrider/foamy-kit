@@ -12,11 +12,9 @@ import os
 import re
 import shutil
 import stat
-import struct
 import subprocess
 import sys
 import tempfile
-import tomllib
 from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
@@ -35,9 +33,7 @@ def _load_native():
 
 
 native = _load_native()
-from foamy_native import (  # noqa: E402
-    ARCHES, NATIVE_COMPONENT, PIN_NAME, ROOT_FILES, TOOLCHAIN_FILE, KitError, build_native, cmd_native, elf_problem,
-    native_pins, native_source_hash, read_pin, unstamped, verify_native)
+from foamy_native import KitError, verify_native  # noqa: E402
 STAMP_TAIL = "— do not edit; change foamy-kit and run sync"
 STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 LOCK_NAME = "foamy-kit.lock"
