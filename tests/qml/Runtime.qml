@@ -8,6 +8,7 @@ import "plugin" as Demo
 import "plugin/kit"
 import "plugin/kit/FoamyPrefs.js" as Prefs
 import "plugin/kit/FoamyIpcResolver.js" as IpcResolver
+import "plugin/kit/FoamyText.js" as FoamyText
 
 // Runtime checks for FoamyI18n, FoamyMotion, FoamyPalette, FoamyStyle,
 // FoamyPrefs, FoamyCursor, FoamyShared/FoamyMember and FoamyIpc, and the
@@ -93,6 +94,11 @@ ShellRoot {
     }
     eq(FoamyI18n.t("%1 and {name}", ["%2{name}"]), "%2{name} and {name}", "values substitute once (user text stays literal)")
     eq(FoamyI18n.t("Hello {name}", { name: "$&" }), "Hello $&", "replacement patterns stay literal")
+
+    // --- FoamyText (the node tests' cases, in Qt's JavaScript engine) ---------------
+    eq(FoamyText.cap("ab\ud83d\ude00cd", 1, 3), "ab\u2026", "cap never splits a surrogate pair")
+    eq(FoamyText.cap("a\u2028b\r\nc", 2, 5), "a\nb\u2026", "cap counts every Qt line break")
+    eq(FoamyText.tooltip("x".repeat(500)).length, FoamyText.TOOLTIP_CHARS, "tooltip caps a long line")
 
     // --- FoamyMotion ------------------------------------------------------------
     eq(FoamyMotion.duration(180), 180, "duration passes through with motion on")

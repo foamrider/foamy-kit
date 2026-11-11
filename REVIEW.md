@@ -253,6 +253,14 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
   menus and host-owned renderers too: Qt AutoText can interpret markup and
   image references even when the main label is safe. If a sink requires
   markup, escape for that sink and bound the text before rendering.
+- Plain text alone does not bound a host tooltip's size: the bar's tooltip
+  window is sized to its text, with no width, wrap or line limit. Cap
+  app-controlled text in lines and characters, with a visible "…", before
+  `bar.showTooltip` (`FoamyText.tooltip()`).
+- A line-mode `SplitParser` or a `StdioCollector` is not a memory bound:
+  Quickshell buffers the whole line or stream before QML sees it, and a
+  chunk-mode parser can split a UTF-8 character. Bound the producer instead
+  (a fixed `head -c` wrapper, or a helper that reads with a limit).
 - Validate URL schemes, origins and redirects for the intended operation.
   Do not forward credentials across origins. Bound delivered and decompressed
   bytes and decoded image dimensions; a remote `Image.source` or an inline

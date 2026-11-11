@@ -24,6 +24,19 @@
   (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
   own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
   helpers for plugins".
+- `FoamyText` (`kit/FoamyText.js`, a new component): `cap(text, maxLines,
+  maxChars)` and `tooltip(text)` (6 lines of 100 characters) bound text for
+  a sink with no size limit of its own. The host bar tooltip is a PlainText
+  label sized to its text (no width, wrap or line limit), so a long or
+  many-line app-controlled title made a window as large as the text (foamy-tray
+  review; Omarchy's own tray has the same issue). Cut lines and dropped lines
+  end in a visible "…"; characters are code points, so a surrogate pair is
+  never split; `\r\n`, `\r`, U+2028 and U+2029 count as line breaks. Node
+  tests in `tests/text.test.cjs`, engine parity in `tests/qml/Runtime.qml`.
+  After syncing, pass app-controlled text through `FoamyText.tooltip()` at
+  every `bar.showTooltip` call.
+- REVIEW.md section 5: plain text alone doesn't bound a host tooltip's size,
+  and a line-mode `SplitParser` or a `StdioCollector` is not a memory bound.
 
 ### Changed
 - `preview/harness.py` isolates every run by default (render.py and every
