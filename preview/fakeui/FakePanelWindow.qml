@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 
 // Offscreen stand-in for Quickshell's PanelWindow, used only by the preview
 // and test harness (offscreen Qt has no layer-shell backend). The host's

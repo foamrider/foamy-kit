@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Ui
 
 // A simulated 1920x1080 screen: wallpaper, the bar strip on `position`, a
 // few widget icons, and the overlay that FakePanelWindow surfaces draw into.

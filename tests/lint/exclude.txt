@@ -2,3 +2,5 @@
 tests/fixtures/*    # test inputs: sync, check and native tests use their exact content
 tests/lint-cases/*  # design lint cases: deliberate violations at fixed line numbers
 tests/qml/*  qmllint  # harness scenes: their imports ("harness", "plugin/kit") exist only in the harness's staged copy
+preview/qml/*  qmllint  # harness scenes: the harness stages a qs.Ui with preview/fakeui's types (FakeDisplay) that qmllint can't see
+preview/fakeui/*  qmllint  # copied into the harness's staged qs.Ui; their imports resolve only there

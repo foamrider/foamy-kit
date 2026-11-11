@@ -193,13 +193,3 @@ kit/SafeTextField.qml: block-scope-var-declaration: var declaration in block sco
 kit/SafeTextField.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 kit/SafeTextField.qml: missing-property: Member "controlPaddingX" not found on type "QObject" | leftPadding: Style.spacing.controlPaddingX + Border.left(_borderSpec)
 kit/SafeTextField.qml: missing-property: Member "controlPaddingX" not found on type "QObject" | rightPadding: Style.spacing.controlPaddingX + Border.right(_borderSpec)
-preview/fakeui/FakeDisplay.qml: import: Type FakeDisplay not declared as singleton in qmldir but using pragma Singleton
-preview/fakeui/FakePanelWindow.qml: missing-property: Member "overlay" not found on type "FakeDisplay" | parent: FakeDisplay.overlay
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | Component.onCompleted: FakeDisplay.overlay = overlay
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | color: Qt.alpha(root.iconColor, 0.55)
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | x: root.vertical ? (root.thickness - width) / 2 : root.width * along
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | x: root.vertical ? (root.thickness - width) / 2 : root.width * along
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | x: root.vertical ? (root.thickness - width) / 2 : root.width * along
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | y: root.vertical ? root.height * along : (root.thickness - height) / 2
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | y: root.vertical ? root.height * along : (root.thickness - height) / 2
-preview/qml/ScreenSim.qml: unqualified: Unqualified access | y: root.vertical ? root.height * along : (root.thickness - height) / 2
