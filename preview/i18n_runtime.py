@@ -139,7 +139,7 @@ def plan(cats):
 
 
 def run(plugin, timeout=90, quiet=False):
-    """True when the plugin's catalogs pass; prints PASS/FAIL."""
+    """True when the plugin's catalogs pass; prints PASS/FAIL unless `quiet`."""
     plugin = Path(plugin).resolve()
     if not (plugin / "kit/FoamyI18n.qml").is_file():
         raise SystemExit(f"{plugin}: no kit/FoamyI18n.qml (sync the kit first)")
@@ -158,9 +158,10 @@ def run(plugin, timeout=90, quiet=False):
         r.run(timeout=timeout)
         result = next((l.split("FOAMY RESULT ", 1)[1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
         detail = f"{result}; {json.dumps(key, ensure_ascii=False)}" + (f", plural {json.dumps(plural, ensure_ascii=False)}" if plural else ", no plural entry")
-        print(f"{'PASS' if r.ok else 'FAIL'} i18n runtime {plugin.name}: {detail}")
-        if not r.ok and not quiet:
-            print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        if not quiet:
+            print(f"{'PASS' if r.ok else 'FAIL'} i18n runtime {plugin.name}: {detail}")
+            if not r.ok:
+                print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
         r.cleanup()
         return r.ok
     finally:
