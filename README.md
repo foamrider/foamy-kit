@@ -183,7 +183,10 @@ non-ignored files.
   finding through.
 - `tests/lint/exclude.txt`: `<glob> [checks]  # reason` lines for paths a check
   must not read, such as test inputs whose exact text is the test, or
-  harness scenes whose imports exist only in the harness's staged copy.
+  harness scenes whose imports exist only in the harness's staged copy
+  (`tests/qml/*  qmllint  # …`). The harness replaces `qs.Ui` with a staged
+  copy that adds preview stand-ins, so qmllint's verdict on a harness file's
+  imports is not evidence.
 - `tests/lint/vulture-ignore.txt`: `<name>  # reason` lines for dynamic entry
   points Vulture can't see (atexit or signal handlers, names called by
   string).

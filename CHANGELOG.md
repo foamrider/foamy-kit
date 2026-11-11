@@ -56,8 +56,8 @@
 - foamy-kit's own Python, QML and shell scripts are formatted with ruff
   format, qmlformat and shfmt (separate commits, no behaviour change);
   qmlformat-displaced end-of-line comments sit above their statement. The
-  six unused QML imports qmllint found are gone (FoamyAction, FoamyPopup,
-  FoamyPopupCard, FoamyStyle, two preview files), as are native.py's unused
+  four unused QML imports qmllint found in kit components are gone
+  (FoamyAction, FoamyPopup, FoamyPopupCard, FoamyStyle), as are native.py's unused
   `WORKFLOW` and foamykit.py's unused `verify_file`. Plugins get the
   reformatted kit files on their next sync; their stamped copies change,
   nothing else does.
