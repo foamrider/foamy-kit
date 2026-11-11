@@ -39,5 +39,5 @@ run python3 -I test_wheel.py
 run python3 -I test_preview.py
 run python3 -I test_trio.py
 echo
-if (( status == 0 )); then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
+if ((status == 0)); then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
 exit $status

@@ -15,7 +15,10 @@ if [[ ${1:-} == -m ]]; then
   message=${2:?-m needs a message}
   shift 2
 fi
-[[ $# == 3 ]] || { echo "usage: $0 [-m message] <plugin-repo> <png-dir> <subdir>" >&2; exit 2; }
+[[ $# == 3 ]] || {
+  echo "usage: $0 [-m message] <plugin-repo> <png-dir> <subdir>" >&2
+  exit 2
+}
 
 repo=$(git -C "$1" rev-parse --show-toplevel)
 png_dir=$(cd "$2" && pwd)
@@ -23,10 +26,16 @@ subdir=${3%/}
 branch=pr-assets
 
 [[ -n $subdir && $subdir != /* && $subdir != *..* && $subdir =~ ^[A-Za-z0-9._/-]+$ ]] \
-  || { echo "subdir must be a relative path of letters, digits, . _ - /: $subdir" >&2; exit 2; }
+  || {
+    echo "subdir must be a relative path of letters, digits, . _ - /: $subdir" >&2
+    exit 2
+  }
 shopt -s nullglob
 pngs=("$png_dir"/*.png)
-(( ${#pngs[@]} > 0 )) || { echo "no PNGs in $png_dir" >&2; exit 1; }
+((${#pngs[@]} > 0)) || {
+  echo "no PNGs in $png_dir" >&2
+  exit 1
+}
 
 worktree=$(mktemp -d "${TMPDIR:-/tmp}/foamy-pr-assets.XXXXXX")
 cleanup() {

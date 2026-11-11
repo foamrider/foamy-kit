@@ -2,7 +2,7 @@
 set -euo pipefail
 
 case ${1:-} in
-  clipboard|primary)
+  clipboard | primary)
     # Keep the watchdog separate: it still bounds the pipeline if Quickshell
     # kills this wrapper during reload/destruction. Kill the whole read-only
     # pipeline at its deadline, including a producer that ignores TERM.
@@ -12,7 +12,7 @@ case ${1:-} in
     wait "$clipboard_job" 2>/dev/null
     ;;
   _read)
-    [[ $# == 2 && ( $2 == clipboard || $2 == primary ) ]] || exit 2
+    [[ $# == 2 && ($2 == clipboard || $2 == primary) ]] || exit 2
     options=(--no-newline --type text)
     [[ $2 != primary ]] || options+=(--primary)
     # Read one extra byte to reject oversized input instead of silently truncating it.
