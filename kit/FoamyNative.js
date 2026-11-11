@@ -10,6 +10,12 @@
 //     }
 //   }
 //
+// `timeout` signals only the helper's own process group; the children a
+// foamy-helper helper starts lead groups of their own. A helper run under
+// such a wrapper calls foamy_helper::process::set_run_budget with less (25 s
+// for the 30 s above) first thing in main: then it ends every child itself
+// and still prints its reply before the wrapper kills it.
+//
 // command() runs the helper through `bash -c 'exec -- …'`: bash picks the
 // directory from its builtin $HOSTTYPE (x86_64, aarch64) and replaces itself
 // with the helper, so no extra process stays around. A missing binary or an

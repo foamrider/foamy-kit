@@ -15,8 +15,26 @@
   sync refuses a symlink, non-UTF-8 file or broken markers, even with
   `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
   missing or stale. foamy-kit has its own `AGENTS.md`.
+- `process::set_run_budget(budget)` and `process::run_deadline()`: one
+  deadline for a helper's whole run. Every `Bounded` child and `Pipeline`
+  started afterwards ends by then (each with the shorter of its own timeout
+  and the time left); one that would start later is not started and reports
+  `timed_out` (status `SIGKILL`, no output). Without a call nothing changes.
+  A helper the QML side wraps in `timeout` (FoamyNative.js's example: 30 s)
+  sets a budget below it first thing in `main`, as foamy-power did locally:
+  `timeout` signals only the helper's own process group, so children whose
+  own deadlines added up to more than the wrapper outlived it, grandchildren
+  included, and the widget got no reply. Documented in FoamyNative.js,
+  `json::run` and the README.
+
+### Changed
+- `foamy-helper` is 0.1.2 (new public API). A plugin that syncs 0.9.0 runs
+  `cargo update -p foamy-helper` (in `native/`, or its crate dir) and
+  rebuilds; no call site changes.
 
 ### Fixed
+- `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
+  longer panics on `Instant` overflow; it means no deadline of its own.
 - `favicon` (foamy-notifications, foamy-notification-center): a host's
   icon is now the one its root page (`https://<host>/`) maps to, else the
   one most of its pages map to; size closeness to 32 px and recency only

@@ -549,7 +549,7 @@ fn main() -> ExitCode {
 | `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`, 0600, owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700), `try_runtime_lock` |
 | `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default; `stdin_fd` (standard input straight from an open file, still seekable), `nice`, `io_idle`; `pipe_into` → `Pipeline` (one child's standard output into another's input, moved with `splice` and counted: `run`, `run_with_progress`, `PipelineOutput`; see [Two-stage jobs](#two-stage-jobs)) |
 | `net` | `DeadlineStream` (wraps a `TcpStream`/`UnixStream`; re-arms the socket timeout to the time left before every read and write, so rustls, an HTTP parser or `read_to_end` on top is bounded as a whole; `DeadlineExceeded`, `is_deadline`), `set_deadline` for long-lived connections |
-| `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask` |
+| `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask`, `set_run_budget`/`run_deadline` (one deadline for the whole run: every `Bounded` child and `Pipeline` ends by then, none starts after it) |
 | `favicon` (feature) | `run` (browser-favicon.py's whole stdin/stdout contract), `resolve`, `lookup`, `Dirs`, `valid_png`, `valid_hostname`, `browser_roots`: favicons from local Chromium-family caches, never a web request; SQLite read by a built-in read-only reader (SQLite's `SHARED` lock on the live file, in-memory snapshot when the browser holds it, WAL frames, structural check) |
 | `sandbox` (feature) | `BpfFilter` (seccomp-BPF via `seccompiler`: `decoder()` is artwork.py's filter, `threaded_decoder()` the same for a decoder that runs threads; `to_bytes`, `memfd` for `bwrap --seccomp`; `Bounded::seccomp`), `ExecOnly` (Landlock: only the given files may execute, applied in `pre_exec`; `probe` = github_status's setpriv probe and fallback; `Bounded::exec_only`, `apply_to(&mut Command)`), `Bwrap` (bubblewrap argv builder, `readonly_host`, fd options, `bounded`, `works`), `elf_interpreter`, `which` |
 | `tls` (feature) | `provider` (Graviola, the one crypto provider for every helper), `system_roots`/`system_roots_der` (system CA store, loaded once), `client_config` (WebPKI, TLS 1.2+1.3), `cpu_supported`/`ensure_supported`/`UNSUPPORTED` (Graviola needs AES/PCLMUL, SSSE3, AVX, AVX2, BMI1/BMI2 and ADX on x86_64, NEON/AES/PMULL/SHA-2 on aarch64: check before a handshake, report instead of aborting; `UNSUPPORTED` is an i18n catalog key, translate it verbatim). With ureq: `default-features = false, features = ["rustls-no-provider"]` and `unversioned_rustls_crypto_provider(tls::provider())` |
@@ -565,7 +565,12 @@ depend on the build machine's C compiler). qemu-user has neither seccomp nor Lan
 reports them unsupported there (fail closed), so test sandboxing on x86_64. Rules for helper code: std threads and blocking I/O, keep
 running the same system tools with the same argv, carry every bound of the
 code being replaced over on purpose, and use `json::run` (or `serve`) so every
-failure still prints JSON. `tests/fixtures/native-plugin` is a complete
+failure still prints JSON. A helper the QML side wraps in `timeout` (as in
+the FoamyNative.js example) calls `process::set_run_budget` with less than
+the wrapper's time first thing in `main`: `timeout` signals only the
+helper's own process group, not the groups its children lead, so children
+whose own timeouts add up to more would outlive it and no reply would be
+printed. `tests/fixtures/native-plugin` is a complete
 reference plugin (its `native/src/main.rs` documents a contract the way a
 plugin helper does).
 

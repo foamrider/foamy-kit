@@ -170,6 +170,10 @@ fn reply_for<T: Serialize>(
 /// standard error), so a helper bug never ends in `SIGABRT` and a core dump
 /// under the kit's `panic = "abort"`.
 ///
+/// When the caller wraps the helper in `timeout`, call
+/// [`crate::process::set_run_budget`] with less than that first, so every
+/// child ends in time and this reply is printed before the wrapper kills.
+///
 /// ```no_run
 /// use foamy_helper::{Failure, json};
 /// fn main() -> std::process::ExitCode {

@@ -18,7 +18,10 @@
 //! ```
 //!
 //! The same system tools the old helpers ran are run with the same argv;
-//! this module only bounds them.
+//! this module only bounds them. A helper that its caller wraps in
+//! `timeout` also gives the whole run a budget
+//! ([`crate::process::set_run_budget`]): every child then ends within it,
+//! whatever the children's own timeouts add up to.
 
 use std::ffi::OsStr;
 use std::fs::File;
@@ -42,7 +45,8 @@ use crate::process::{Priority, Resource};
 /// What a bounded child left behind.
 #[derive(Debug)]
 pub struct Output {
-    /// How it ended (after a kill: by `SIGKILL`).
+    /// How it ended (after a kill: by `SIGKILL`; also when it was never
+    /// started because the run budget had run out).
     pub status: ExitStatus,
     /// Captured standard output, at most `max_output` bytes.
     pub stdout: Vec<u8>,
@@ -185,7 +189,9 @@ impl Bounded {
         self
     }
 
-    /// Deadline for the whole run, from spawn to exit.
+    /// Deadline for the whole run, from spawn to exit; earlier when the
+    /// process's run budget ([`crate::process::set_run_budget`]) ends first.
+    /// `Duration::MAX` is no deadline of its own.
     pub fn timeout(mut self, timeout: Duration) -> Bounded {
         self.timeout = timeout;
         self
@@ -284,11 +290,16 @@ impl Bounded {
 
     /// Runs the child to completion within the bounds. `Err` only when it
     /// could not be started or waited for; a timeout or an overflow is an
-    /// [`Output`] with `timed_out` or `overflowed` set.
+    /// [`Output`] with `timed_out` or `overflowed` set. After the run
+    /// budget's end the child is not started: `timed_out`, no output.
     pub fn run(self) -> io::Result<Output> {
         let started = Instant::now();
+        if run_over(started) {
+            return Ok(Output::not_started());
+        }
+        let deadline = deadline_for(started, self.timeout);
         let child = self.start(Stdin::Own)?;
-        let mut run = Run::new(started + child.timeout, None);
+        let mut run = Run::new(deadline, None);
         run.add(child)?;
         Ok(run.finish()?.outputs.remove(0))
     }
@@ -297,7 +308,6 @@ impl Bounded {
     fn start(self, stdin: Stdin) -> io::Result<Started> {
         let Bounded {
             mut command,
-            timeout,
             max_output,
             stdin: input,
             die_with_parent,
@@ -306,6 +316,7 @@ impl Bounded {
             priority,
             inherit,
             hooks,
+            ..
         } = self;
         let feed = match (stdin, input) {
             (Stdin::Pipe, _) => {
@@ -358,7 +369,6 @@ impl Bounded {
             stdout: child.stdout.take().map(OwnedFd::from),
             stderr: child.stderr.take().map(OwnedFd::from),
             feed,
-            timeout,
             stage: Stage {
                 child,
                 status: None,
@@ -378,9 +388,10 @@ impl Bounded {
 /// [`Bounded::pipe_into`]; each stage keeps its own environment, limits,
 /// priority, sandbox and output cap.
 ///
-/// - **Deadline:** the shorter of the two stages' timeouts, from the start.
-///   When it passes, both are killed (each still running reports
-///   `timed_out`).
+/// - **Deadline:** the shorter of the two stages' timeouts, from the start,
+///   or the run budget's end ([`crate::process::set_run_budget`]) when that
+///   is earlier. When it passes, both are killed (each still running
+///   reports `timed_out`); after the budget's end neither starts.
 /// - **Output:** the first stage's standard error and the second stage's
 ///   standard output and error are captured, each up to its stage's
 ///   `max_output`; more kills both. The piped bytes are not capped:
@@ -488,11 +499,19 @@ impl Pipeline {
             ));
         }
         let started = Instant::now();
+        if run_over(started) {
+            return Ok(PipelineOutput {
+                first: Output::not_started(),
+                second: Output::not_started(),
+                piped: 0,
+                cancelled: false,
+            });
+        }
+        let deadline = deadline_for(started, first.timeout.min(second.timeout));
         let mut first = first.start(Stdin::Own)?;
         // If the second can't start, dropping `first` kills and reaps it
         // (Stage's Drop).
         let mut second = second.start(Stdin::Pipe)?;
-        let deadline = started + first.timeout.min(second.timeout);
         let (Some(from), Some(to)) = (first.stdout.take(), second.stdin.take()) else {
             return Err(io::Error::other("pipeline stages without pipes"));
         };
@@ -536,7 +555,39 @@ struct Started {
     stdout: Option<OwnedFd>,
     stderr: Option<OwnedFd>,
     feed: Option<Vec<u8>>,
-    timeout: Duration,
+}
+
+/// A deadline as good as none: what `Duration::MAX` (which would overflow
+/// an `Instant`) means.
+const NO_DEADLINE: Duration = Duration::from_secs(100 * 365 * 86400);
+
+/// When a run started at `started` with `timeout` must end: its own
+/// deadline or the process's run deadline, whichever comes first.
+fn deadline_for(started: Instant, timeout: Duration) -> Instant {
+    let own = started
+        .checked_add(timeout)
+        .unwrap_or_else(|| started + NO_DEADLINE);
+    crate::process::run_deadline().map_or(own, |run| own.min(run))
+}
+
+/// The process's run deadline has passed: start nothing more.
+fn run_over(now: Instant) -> bool {
+    crate::process::run_deadline().is_some_and(|run| run <= now)
+}
+
+impl Output {
+    /// A child not started because the run deadline had passed: timed out,
+    /// reported like one killed at its deadline.
+    fn not_started() -> Output {
+        use std::os::unix::process::ExitStatusExt;
+        Output {
+            status: ExitStatus::from_raw(Signal::KILL.as_raw()),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            timed_out: true,
+            overflowed: false,
+        }
+    }
 }
 
 /// A running (or reaped) child and what it wrote.
@@ -1182,6 +1233,104 @@ mod tests {
                 Ok(_) => thread::sleep(Duration::from_millis(10)),
             }
         }
+    }
+
+    /// Runs this test binary again with only `test` (in this module) and
+    /// `FOAMY_CHILD_TEST` set to `arg`: for what changes the whole process
+    /// (the run budget, the panic hook), which other tests share.
+    fn rerun(test: &str, arg: &Path) -> Output {
+        Bounded::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                &format!("child::tests::{test}"),
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env("FOAMY_CHILD_TEST", arg)
+            .timeout(Duration::from_secs(60))
+            .run()
+            .unwrap()
+    }
+
+    /// [`run_budget_ends_every_child_within_it`]'s child: three children of
+    /// 20 s each under a 1 s budget, then one more after it ended. Prints
+    /// what happened; run normally it does nothing.
+    #[test]
+    fn run_budget_child() {
+        let Some(dir) = std::env::var_os("FOAMY_CHILD_TEST") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        let start = Instant::now();
+        crate::process::set_run_budget(Duration::from_secs(1));
+        for i in 0..3 {
+            let output = sh("sleep 30 & echo $! > \"$0\"; wait")
+                .arg(dir.join(format!("grandchild{i}")))
+                .timeout(Duration::from_secs(20))
+                .run()
+                .unwrap();
+            println!("child {i} timed_out={}", output.timed_out);
+        }
+        let pipeline = sh("echo x")
+            .pipe_into(sh("touch \"$0\"; cat").arg(dir.join("late")))
+            .run()
+            .unwrap();
+        let late = sh("touch \"$0\"").arg(dir.join("late")).run().unwrap();
+        println!(
+            "late timed_out={} {} {} {:?}",
+            late.timed_out,
+            pipeline.first.timed_out,
+            pipeline.second.timed_out,
+            late.status.signal()
+        );
+        println!("elapsed_ms={}", start.elapsed().as_millis());
+    }
+
+    #[test]
+    fn run_budget_ends_every_child_within_it() {
+        // A helper the caller wraps in `timeout 30s` whose children's own
+        // deadlines add up to more must still end them all and reply in
+        // time (foamy-power K1).
+        let dir = crate::fs::tests::TempDir::new("budget");
+        let output = rerun("run_budget_child", &dir.0);
+        assert!(output.success(), "{output:?}");
+        let text = output.stdout_lossy();
+        assert!(text.contains("child 0 timed_out=true"), "{text}");
+        assert!(text.contains("child 2 timed_out=true"), "{text}");
+        assert!(
+            text.contains(&format!(
+                "late timed_out=true true true Some({})",
+                Signal::KILL.as_raw()
+            )),
+            "{text}"
+        );
+        let elapsed: u64 = text
+            .lines()
+            .find_map(|line| line.strip_prefix("elapsed_ms="))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(elapsed < 3000, "within the 1 s budget: {elapsed} ms");
+        assert!(!dir.0.join("late").exists(), "nothing starts after it");
+        for i in 0..3 {
+            let path = dir.0.join(format!("grandchild{i}"));
+            if path.exists() {
+                assert!(not_running(&pids(&path)[0]), "grandchild {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn no_timeout_does_not_overflow() {
+        let output = sh("exit 0").timeout(Duration::MAX).run().unwrap();
+        assert!(output.success(), "{output:?}");
+        let output = sh("printf x")
+            .timeout(Duration::MAX)
+            .pipe_into(Bounded::new("cat").timeout(Duration::MAX))
+            .run()
+            .unwrap();
+        assert!(output.success() && output.second.stdout == b"x");
     }
 
     #[test]
