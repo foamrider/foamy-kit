@@ -1,7 +1,6 @@
 pragma Singleton
 import QtQuick
 import qs.Commons
-import qs.Commons as Commons
 
 // Foamy design tokens: the one place the foamy look is defined, so every
 // foamy plugin matches every other one. Values follow DESIGN.md. Sizes go
