@@ -7,7 +7,7 @@
 # kit/rust/rust-toolchain.toml, file(1), and qemu-aarch64 binfmt for the
 # aarch64 runs (each skipped with a SKIP line when missing).
 set -uo pipefail
-cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
 status=0
 run() {
   echo "== $*"
