@@ -1,0 +1,8 @@
+# ruff findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline ruff`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+kit/native/native.py: C901: `cmd_native` is too complex (> 15) | def cmd_native(args): [27]
+kit/native/native.py: C901: `native_preflight` is too complex (> 15) | def native_preflight(plugin, crate): [25]
+kit/native/native.py: C901: `notices_bytes` is too complex (> 15) | def notices_bytes(plugin, channel, binaries, env, cwd): [22]
+tools/foamykit.py: C901: `lint_text` is too complex (> 15) | def lint_text(name, text): [20]
+tools/foamykit.py: C901: `sync_plugin` is too complex (> 15) | def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print, add=None): [51]
