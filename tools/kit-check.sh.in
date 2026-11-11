@@ -130,8 +130,12 @@ for pin in "${pins[@]}"; do
     [[ $info == *"ELF 64-bit LSB"* && $info == *"$want"* ]] || fail "$rel is not a 64-bit $arch ELF: $info"
     [[ $info == *"statically linked"* || $info == *"static-pie linked"* ]] || fail "$rel is not statically linked: $info"
   done
-  [[ $(source_hash "$crate") == "$(value source)" ]] ||
+  if [[ $(source_hash "$crate") != "$(value source)" ]]; then
     fail "$binary is stale: $crate/, kit/rust, Cargo.toml, Cargo.lock or rust-toolchain.toml changed since it was built (run kit/native/build-native.sh .)"
+  elif [[ $(value kit) != "$version" ]]; then
+    # Fresh binaries: the pin's kit line names the kit they match; sync refreshes it.
+    fail "$crate/native.pin says kit $(value kit), foamy-kit.lock says $version (run foamy-kit sync.sh, which refreshes it)"
+  fi
   native_bins+=("$binary")
 done
 

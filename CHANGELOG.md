@@ -96,6 +96,14 @@
   over" that saves with force), and add the new message to its catalogs if
   it shows `prefs.error`. foamy-teams will (accounts).
 
+- `sync.sh` refreshes the `kit <version>` line of each `native.pin` whose
+  binaries are still fresh after the sync (the pin's source hash matches),
+  and changes nothing else in it; a stale pin keeps the version that built
+  it until the rebuild. `tests/kit-check.sh`, `check.sh` and `--verify` fail
+  when a fresh pin names another kit version than `foamy-kit.lock`. Before,
+  sync left `kit 0.8.1` in foamy-notification-center's pin after the 0.9.0
+  sync, and nothing noticed. After syncing, commit the refreshed pins.
+
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit
   components lose their 4.0 branches: `FoamyI18n` uses the shell's

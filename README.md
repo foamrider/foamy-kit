@@ -301,9 +301,14 @@ leaves the Rust code alone keeps the binaries fresh. `check.sh` and
 `tests/kit-check.sh` (bash, coreutils, `file`) fail when a pinned binary is
 missing, a symlink, not executable, has another checksum, is not a static
 64-bit ELF for its arch, or the sources changed since the build ("stale"),
-when FoamyNative is synced without a `native.pin`, and when
+when FoamyNative is synced without a `native.pin`, when the pin of fresh
+binaries names another kit version than `foamy-kit.lock`, and when
 `THIRD_PARTY_NOTICES.md` is missing or doesn't name the pin's source hash
-and checksums.
+and checksums. The pin's `kit` line is the kit version its binaries match:
+the build writes it, and sync refreshes that one line in a pin whose source
+hash still matches after the sync (a kit bump that leaves `kit/rust` alone),
+never its source hash or checksums; a stale pin keeps the version that built
+it until the rebuild.
 
 ### Third-party notices
 

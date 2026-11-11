@@ -372,14 +372,36 @@ def tamper_tests(plugin, base):
                  code == 0 and "native/target/ is a cargo target dir" in out and code2 == 0
                  and "native/target/ is a cargo target dir" in out2, (out + out2).strip())
     shutil.rmtree(plugin / "native/target")
+    # The pin's kit line: checked, and refreshed by sync while the binaries are fresh.
+    pin_data = pin.read_bytes()
+    version = foamykit.kit_version()
+    pin.write_bytes(pin_data.replace(f"\nkit {version}\n".encode(), b"\nkit 0.0.1\n"))
+    passed, detail = both(f"native/native.pin says kit 0.0.1, foamy-kit.lock says {version}")
+    ok &= report("a pin whose kit line is stale fails kit-check and check.sh", passed, detail)
+    main_rs = plugin / "native/src/main.rs"
+    main_data = main_rs.read_bytes()
+    main_rs.write_bytes(main_data + b"// edit\n")
+    code, out = sh(SYNC, plugin)
+    ok &= report("sync leaves a stale pin's kit line (the binaries need a rebuild)",
+                 code == 0 and b"\nkit 0.0.1\n" in pin.read_bytes() and "native.pin" not in out, out.strip())
+    passed, detail = both(f"{BINARY} is stale")
+    ok &= report("a stale pin reports staleness, not its kit line", passed and "says kit" not in detail, detail)
+    main_rs.write_bytes(main_data)
+    code, out = sh(SYNC, plugin)
+    code2, out2 = kit_check(plugin)
+    ok &= report("sync refreshes a fresh pin's kit line, and only that line",
+                 code == 0 and "native/native.pin" in out and pin.read_bytes() == pin_data and code2 == 0, (out + out2).strip())
     old_kit = base / "next-kit"
     shutil.copytree(KIT_ROOT, old_kit, ignore=shutil.ignore_patterns(".git", "tests", "preview"))
     (old_kit / "VERSION").write_text("9.9.9\n")
     sh(old_kit / "sync.sh", plugin)
     code, out = kit_check(plugin)
     stamp = (plugin / "kit/rust/foamy-helper/src/lib.rs").read_text().splitlines()[0]
+    bumped = pin.read_bytes()
     ok &= report("a kit version bump alone keeps the binaries fresh (stamps are not hashed)",
                  code == 0 and "foamy-kit 9.9.9 " in stamp, out.strip())
+    ok &= report("the bump's sync moves the pin's kit line, keeping its source hash and checksums",
+                 bumped == pin_data.replace(f"\nkit {version}\n".encode(), b"\nkit 9.9.9\n"), bumped.decode(errors="replace"))
     sh(SYNC, plugin)
     code, out = kit_check(plugin)
     ok &= report("intact again after the tamper tests", code == 0, out.strip())

@@ -286,7 +286,28 @@ def verify_native(plugin, lock):
         if native_source_hash(plugin, crate) != pin.get("source"):
             problems.append(f"{binary} is stale: {crate}/, kit/rust, Cargo.toml, Cargo.lock or {TOOLCHAIN_FILE} "
                             f"changed since it was built (run kit/native/build-native.sh .)")
+        elif lock and lock["version"] and pin.get("kit") != lock["version"]:
+            # Fresh binaries: the pin's kit line is the kit they match, which
+            # sync refreshes (a rebuild writes it too).
+            problems.append(f"{label} says kit {pin.get('kit')}, foamy-kit.lock says {lock['version']} "
+                            f"(run foamy-kit sync.sh, which refreshes it)")
     return problems + notices_problems(plugin, pins)
+
+
+def refresh_pin_kit(path, version):
+    """The pin at `path` with its `kit` line set to `version` (bytes), or
+    None when it already says so or has no kit line. Nothing else changes:
+    the source hash and checksums are the build's."""
+    data = Path(path).read_bytes()
+    lines = data.split(b"\n")
+    for index, line in enumerate(lines):
+        parts = line.split()
+        if len(parts) == 2 and parts[0] == b"kit":
+            if parts[1] == version.encode():
+                return None
+            lines[index] = b"kit " + version.encode()
+            return b"\n".join(lines)
+    return None
 
 
 # --------------------------------------------------------------- native build
@@ -1653,7 +1674,9 @@ def cmd_native(args):
         if getattr(args, "notices", False):
             if not (crate_dir / PIN_NAME).is_file():
                 raise KitError(f"no {crate}/{PIN_NAME}; build first (kit/native/build-native.sh .)")
-            stale = [p for p in verify_native(plugin, read_lock(plugin)) if not p.startswith(NOTICES_NAME)]
+            # The notices only need current binaries; a pin's kit line is sync's.
+            stale = [p for p in verify_native(plugin, read_lock(plugin))
+                     if not p.startswith(NOTICES_NAME) and " says kit " not in p]
             if stale:
                 raise KitError("the committed binaries don't match their native.pin and sources; rebuild them "
                                "(kit/native/build-native.sh .), which writes the notices too:\n  " + "\n  ".join(stale))
