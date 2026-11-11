@@ -37,6 +37,23 @@
   every `bar.showTooltip` call.
 - REVIEW.md section 5: plain text alone doesn't bound a host tooltip's size,
   and a line-mode `SplitParser` or a `StdioCollector` is not a memory bound.
+- `FoamySchedule` (opt-in component): `kit/FoamySchedule.js` and
+  `kit/FoamyScheduleDay.qml`, moved from foamy-train's `Schedule.js` and
+  `ScheduleDay.qml`. foamy-zendesk carried byte-identical copies ("keep the
+  two in step until it moves into foamy-kit"); the JS is unchanged apart from
+  `.pragma library`, a null-safe `week()` and more exports (`dayKeys`,
+  `minutes`, `validOverride`, `nextScheduled`). The row's weekday label is
+  injectable (`labelComponent`: any Component whose root has `text`; train
+  passes `TrainText`, zendesk `PlainText`; default a plain-text body label;
+  `labelItem`). Node tests (`tests/schedule.test.cjs`, train's and zendesk's
+  schedule cases) and a row test (`tests/test_schedule.py`).
+
+  After syncing (train, zendesk): `sync.sh <plugin> --add FoamySchedule`,
+  delete `Schedule.js` and `ScheduleDay.qml`, import
+  `"kit/FoamySchedule.js" as Schedule` (Panel, the service/store), use
+  `FoamyScheduleDay { labelComponent: Component { TrainText { } } … }` in the
+  settings page, and point the schedule unit tests at the kit (or drop them:
+  the kit tests cover them).
 
 ### Changed
 - `preview/harness.py` isolates every run by default (render.py and every

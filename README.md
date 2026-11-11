@@ -44,6 +44,7 @@ edited in a plugin: change it here, then sync.
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblem(key)`), node loader for unit tests |
 | FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never splitting a surrogate pair |
+| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
 | FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
@@ -835,7 +836,7 @@ tests/run-all.sh
 
 Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
-Runs FoamyPrefs and FoamyText unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
+Runs FoamyPrefs, FoamyText and FoamySchedule unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
 on throwaway copies, the FoamyPopup geometry test (4 bar positions, max
 height, menu padding, plus the old fork as a negative control), runtime
 tests of i18n/motion/palette/prefs/cursor/leader election/IPC
