@@ -33,6 +33,15 @@
   rebuilds; no call site changes.
 
 ### Fixed
+- `process::exit_on_panic` (and `json::run`, `json::serve`, `favicon::run`,
+  which install it) kills the process group of every `Bounded` child still
+  running before it exits 101. The hook exits without unwinding (the
+  release profile aborts on panic), so no drop killed them, and
+  `PR_SET_PDEATHSIG` reaches only the child: a panic mid-run (in a
+  `run_with_progress` callback or another thread) left grandchildren
+  running. The kit keeps a list of unreaped children for this; a child
+  leaves it in the same critical section that reaps it, so a recycled pid is
+  never killed.
 - `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
   longer panics on `Instant` overflow; it means no deadline of its own.
 - `favicon` (foamy-notifications, foamy-notification-center): a host's

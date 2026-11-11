@@ -31,6 +31,7 @@ use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::{Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -38,7 +39,7 @@ use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::Errno;
 use rustix::pipe::{SpliceFlags, fcntl_setpipe_size, splice};
-use rustix::process::{Pid, Signal, getpid, kill_process_group};
+use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, getpid, kill_process_group, waitid};
 
 use crate::process::{Priority, Resource};
 
@@ -363,7 +364,12 @@ impl Bounded {
                 Ok(())
             });
         }
+        // Registered under the lock, so the panic hook either sees the
+        // child or runs before it exists.
+        let mut live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
         let mut child = command.spawn()?;
+        live.push(child.id());
+        drop(live);
         Ok(Started {
             stdin: child.stdin.take(),
             stdout: child.stdout.take().map(OwnedFd::from),
@@ -404,7 +410,8 @@ impl Bounded {
 ///   gets `EPIPE` (or `SIGPIPE`) on its next write.
 /// - **Cancel and errors:** both stages are killed, process groups
 ///   included, and always waited for, so nothing is left running or as a
-///   zombie.
+///   zombie. A panic under the kit's panic hook
+///   ([`crate::process::exit_on_panic`]) kills both groups before the exit.
 ///
 /// ```no_run
 /// use std::ops::ControlFlow;
@@ -548,6 +555,27 @@ enum Stdin {
     Pipe,
 }
 
+/// The children started here and not yet reaped. Each leads its own process
+/// group, so its pid is also the group to kill. A pid leaves the list in the
+/// same critical section that reaps it: until then the kernel can't give
+/// the number to another process.
+static LIVE: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// Kills the process group of every child started here and not yet reaped.
+/// For the kit's panic hook ([`crate::process::exit_on_panic`]), which
+/// exits without unwinding (the release profile aborts on panic), so no
+/// [`Stage`] drop would kill them, and `PR_SET_PDEATHSIG` reaches only the
+/// child itself, not what it started.
+pub(crate) fn kill_live_groups() {
+    let live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
+    for &pid in live.iter() {
+        if let Some(pid) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
+            let _ = kill_process_group(pid, Signal::KILL);
+            let _ = rustix::process::kill_process(pid, Signal::KILL);
+        }
+    }
+}
+
 /// A spawned child with the ends of its pipes.
 struct Started {
     stage: Stage,
@@ -610,25 +638,46 @@ impl Stage {
         }
     }
 
+    /// The exit status if the child has exited (reaping it), else `None`.
+    fn try_reap(&mut self) -> io::Result<Option<ExitStatus>> {
+        if self.status.is_none() {
+            let mut live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
+            self.status = self.child.try_wait()?;
+            if self.status.is_some() {
+                let pid = self.child.id();
+                live.retain(|&live| live != pid);
+            }
+        }
+        Ok(self.status)
+    }
+
     fn reap(&mut self) -> io::Result<ExitStatus> {
-        match self.status {
-            Some(status) => Ok(status),
-            None => {
-                let status = self.child.wait()?;
-                self.status = Some(status);
-                Ok(status)
+        loop {
+            if let Some(status) = self.try_reap()? {
+                return Ok(status);
+            }
+            // Wait for the exit without reaping (the pid stays this child's
+            // and in `LIVE`), then reap in `try_reap`.
+            let pid = Pid::from_child(&self.child);
+            match waitid(
+                WaitId::Pid(pid),
+                WaitIdOptions::EXITED | WaitIdOptions::NOWAIT,
+            ) {
+                Ok(_) | Err(Errno::INTR) => {}
+                Err(error) => return Err(error.into()),
             }
         }
     }
 }
 
 impl Drop for Stage {
-    /// An error or a panic on the way: kill and reap, never leave a running
-    /// child or a zombie behind.
+    /// An error, or a panic that unwinds, on the way: kill and reap, never
+    /// leave a running child or a zombie behind. (A panic under the kit's
+    /// hook exits without unwinding; the hook kills the groups itself.)
     fn drop(&mut self) {
         if self.status.is_none() {
             kill(&mut self.child);
-            let _ = self.child.wait();
+            let _ = self.reap();
         }
     }
 }
@@ -854,9 +903,7 @@ impl<'p> Run<'p> {
         }
         loop {
             for stage in &mut self.stages {
-                if stage.status.is_none() {
-                    stage.status = stage.child.try_wait()?;
-                }
+                stage.try_reap()?;
             }
             if self.stages.iter().all(|stage| stage.status.is_some()) {
                 return Ok(End::Done);
@@ -1319,6 +1366,46 @@ mod tests {
                 assert!(not_running(&pids(&path)[0]), "grandchild {i}");
             }
         }
+    }
+
+    /// [`a_panic_kills_the_children_groups`]'s child: the kit's panic
+    /// hook, a child with a grandchild running on another thread (a
+    /// pipeline stage, say), then a panic. Run normally it does nothing.
+    #[test]
+    fn panic_child() {
+        let Some(dir) = std::env::var_os("FOAMY_CHILD_TEST") else {
+            return;
+        };
+        let dir = Path::new(&dir).to_path_buf();
+        crate::process::exit_on_panic(101);
+        let pids = dir.join("pids");
+        let script =
+            "echo $$ > \"$0.tmp\"; sleep 30 & echo $! >> \"$0.tmp\"; mv \"$0.tmp\" \"$0\"; wait";
+        let target = pids.clone();
+        thread::spawn(move || {
+            sh(script)
+                .arg(&target)
+                .timeout(Duration::from_secs(60))
+                .run()
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !pids.exists() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("a helper bug while a child runs");
+    }
+
+    #[test]
+    fn a_panic_kills_the_children_groups() {
+        // The hook exits without unwinding, so no drop kills the child,
+        // and PR_SET_PDEATHSIG reaches only the child, not its children.
+        let dir = crate::fs::tests::TempDir::new("panic");
+        let output = rerun("panic_child", &dir.0);
+        assert_eq!(output.status.code(), Some(101), "{output:?}");
+        let pids = pids(&dir.0.join("pids"));
+        assert_eq!(pids.len(), 2, "{pids:?}");
+        assert!(not_running(&pids[0]), "the child");
+        assert!(not_running(&pids[1]), "the grandchild");
     }
 
     #[test]

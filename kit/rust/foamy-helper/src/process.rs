@@ -27,6 +27,9 @@ pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 's
     let report = REPORT.get_or_init(panic::take_hook);
     panic::set_hook(Box::new(move |info| {
         report(info);
+        // No unwinding follows (the release profile aborts on panic), so
+        // the children's drops never run: end their process groups here.
+        crate::child::kill_live_groups();
         after();
         std::process::exit(code);
     }));
@@ -36,7 +39,9 @@ pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 's
 /// aborting: the kit's release profile has `panic = "abort"`, which ends in
 /// `SIGABRT` and a core dump. The panic message still goes to standard
 /// error; standard output gets nothing, so a JSON-lines peer never sees a
-/// torn reply. [`crate::json::run`] and [`crate::json::serve`] install it
+/// torn reply. Before the exit it kills the process group of every
+/// [`crate::child::Bounded`] child still running, so nothing the helper
+/// started outlives it. [`crate::json::run`] and [`crate::json::serve`] install it
 /// themselves; **every helper that runs its own loop or protocol calls it
 /// first thing in `main`**, before parsing arguments (read them with
 /// `std::env::args_os()` afterwards: `std::env::args()` panics on non-UTF-8).
