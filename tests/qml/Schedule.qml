@@ -15,18 +15,24 @@ ShellRoot {
   property int invalids: 0
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + label)
+    }
   }
   function eq(actual, expected, label) {
     check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
   }
   function find(item, name) {
-    if (!item) return null
-    if (item.objectName === name) return item
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
     var kids = item.children || []
     for (var i = 0; i < kids.length; i++) {
       var found = find(kids[i], name)
-      if (found) return found
+      if (found)
+        return found
     }
     return null
   }
@@ -42,7 +48,9 @@ ShellRoot {
         width: parent.width
         label: "Monday <b>1</b>"
         value: "08:00-16:00"
-        onChanged: function(range) { shell.changes = shell.changes.concat([range]) }
+        onChanged: function (range) {
+          shell.changes = shell.changes.concat([range])
+        }
         onInvalid: shell.invalids++
       }
       FoamyScheduleDay {
@@ -51,14 +59,25 @@ ShellRoot {
         label: "Tuesday"
         value: ""
         lastRange: "22:00-02:00"
-        labelComponent: Component { Text { property bool injected: true; textFormat: Text.PlainText } }
-        onChanged: function(range) { shell.changes = shell.changes.concat(["tue " + range]) }
+        labelComponent: Component {
+          Text {
+            property bool injected: true
+            textFormat: Text.PlainText
+          }
+        }
+        onChanged: function (range) {
+          shell.changes = shell.changes.concat(["tue " + range])
+        }
       }
     }
   }
 
-  FoamyWait { id: wait }
-  Component.onCompleted: wait.waitFor(function() { return monday.labelItem !== null && tuesday.labelItem !== null }, 5000, run)
+  FoamyWait {
+    id: wait
+  }
+  Component.onCompleted: wait.waitFor(function () {
+    return monday.labelItem !== null && tuesday.labelItem !== null
+  }, 5000, run)
 
   function run(ready) {
     check(ready, "both labels load")

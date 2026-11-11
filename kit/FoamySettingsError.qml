@@ -11,7 +11,7 @@ Item {
   property string text: ""
   property bool retryable: false
 
-  signal retry()
+  signal retry
 
   visible: text !== ""
   implicitHeight: visible ? Math.max(message.implicitHeight, retryable ? retryButton.implicitHeight : 0) : 0

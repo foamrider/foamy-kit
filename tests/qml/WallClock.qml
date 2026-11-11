@@ -9,7 +9,8 @@ ShellRoot {
   property real pausedDate: 0
   function check(ok, label) {
     checks++
-    if (!ok) console.log("FOAMY FAIL " + label)
+    if (!ok)
+      console.log("FOAMY FAIL " + label)
   }
   Kit.FoamyWallClock {
     id: clock
@@ -26,7 +27,8 @@ ShellRoot {
       var bounded = true
       for (var now = first - 1800000; now <= second + 1800000; now += 997) {
         var delay = clock.msUntilNextTick(now)
-        if (delay <= 0 || delay > step || (now + delay) % step !== 0) bounded = false
+        if (delay <= 0 || delay > step || (now + delay) % step !== 0)
+          bounded = false
       }
       check(bounded, "positive epoch-aligned delays across fallback, step " + step)
       check(clock.msUntilNextTick(first) === step, "whole tick waits one full step")

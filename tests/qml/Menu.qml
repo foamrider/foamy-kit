@@ -19,18 +19,32 @@ ShellRoot {
   readonly property string tag: host + "/" + (rtl ? "rtl" : "ltr") + "@" + Quickshell.env("FOAMY_SCALE")
   property int checks: 0
   property int failures: 0
-  function check(ok, label) { checks++; if (!ok) { failures++; console.log("FOAMY FAIL " + tag + " " + label) } }
-  function eq(actual, expected, label) { check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected)) }
-  function near(a, b) { return Math.abs(a - b) <= 1.01 }
+  function check(ok, label) {
+    checks++
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + tag + " " + label)
+    }
+  }
+  function eq(actual, expected, label) {
+    check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
+  }
+  function near(a, b) {
+    return Math.abs(a - b) <= 1.01
+  }
 
   FloatingWindow {
     id: window
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim }
+    ScreenSim {
+      id: sim
+    }
   }
-  MockBar { id: bar }
+  MockBar {
+    id: bar
+  }
 
   property int searchClicks: 0
   property int clearClicks: 0
@@ -56,7 +70,9 @@ ShellRoot {
         property alias rowBelow: rowBelow
         // Synthetic keys and clicks go to the window the card is in.
         property alias ev: bodyEvent
-        TestEvent { id: bodyEvent }
+        TestEvent {
+          id: bodyEvent
+        }
         implicitHeight: column.implicitHeight
         LayoutMirroring.enabled: shell.rtl
         LayoutMirroring.childrenInherit: true
@@ -73,40 +89,115 @@ ShellRoot {
             meta: "2 notifications"
             onSettingsClicked: shell.settingsClicks++
             trailing: [
-              FoamyAction { objectName: "search"; visible: shell.showSearch; iconName: "search"; tooltipText: "Search"; onClicked: shell.searchClicks++ },
-              FoamyAction { objectName: "clear"; iconName: "trash"; destructive: true; tooltipText: "Clear all"; onClicked: shell.clearClicks++ },
-              FoamyAction { objectName: "refresh"; iconName: "refresh-cw"; tooltipText: "Refresh"; onClicked: shell.refreshClicks++ }
+              FoamyAction {
+                objectName: "search"
+                visible: shell.showSearch
+                iconName: "search"
+                tooltipText: "Search"
+                onClicked: shell.searchClicks++
+              },
+              FoamyAction {
+                objectName: "clear"
+                iconName: "trash"
+                destructive: true
+                tooltipText: "Clear all"
+                onClicked: shell.clearClicks++
+              },
+              FoamyAction {
+                objectName: "refresh"
+                iconName: "refresh-cw"
+                tooltipText: "Refresh"
+                onClicked: shell.refreshClicks++
+              }
             ]
             menuItems: [
-              FoamyMenuItem { objectName: "silence"; text: "Silence notifications"; iconName: "bell-off"; enabled: shell.silenceEnabled },
+              FoamyMenuItem {
+                objectName: "silence"
+                text: "Silence notifications"
+                iconName: "bell-off"
+                enabled: shell.silenceEnabled
+              },
               FoamyMenuItem {
                 objectName: "snooze"
                 text: "Snooze notifications"
                 iconName: "alarm-clock"
-                FoamyMenuItem { text: "30 minutes"; iconName: "clock"; onTriggered: shell.snoozed = 30 }
-                FoamyMenuItem { text: "1 hour"; iconName: "clock"; onTriggered: shell.snoozed = 60 }
+                FoamyMenuItem {
+                  text: "30 minutes"
+                  iconName: "clock"
+                  onTriggered: shell.snoozed = 30
+                }
+                FoamyMenuItem {
+                  text: "1 hour"
+                  iconName: "clock"
+                  onTriggered: shell.snoozed = 60
+                }
               }
             ]
-            Text { text: "3"; color: FoamyPalette.text; font.pixelSize: FoamyStyle.font.numeralCompact }
+            Text {
+              text: "3"
+              color: FoamyPalette.text
+              font.pixelSize: FoamyStyle.font.numeralCompact
+            }
           }
           // Room under the band so the menu drops inside the card.
-          Rectangle { id: rowBelow; width: parent.width; height: 220; color: "transparent"
-            MouseArea { anchors.fill: parent; hoverEnabled: true; property int presses: 0; onPressed: presses++ }
+          Rectangle {
+            id: rowBelow
+            width: parent.width
+            height: 220
+            color: "transparent"
+            MouseArea {
+              anchors.fill: parent
+              hoverEnabled: true
+              property int presses: 0
+              onPressed: presses++
+            }
           }
-          FoamyHeader { id: pair; width: parent.width; title: "Pair"
-            FoamyAction { iconName: "volume-2" }
-            FoamyAction { iconName: "mic" }
+          FoamyHeader {
+            id: pair
+            width: parent.width
+            title: "Pair"
+            FoamyAction {
+              iconName: "volume-2"
+            }
+            FoamyAction {
+              iconName: "mic"
+            }
           }
-          FoamyHeader { id: withMenu; width: parent.width; title: "With menu"
-            FoamyAction { iconName: "refresh-cw" }
-            menuItems: [ FoamyMenuItem { text: "Open"; iconName: "external-link" } ]
+          FoamyHeader {
+            id: withMenu
+            width: parent.width
+            title: "With menu"
+            FoamyAction {
+              iconName: "refresh-cw"
+            }
+            menuItems: [
+              FoamyMenuItem {
+                text: "Open"
+                iconName: "external-link"
+              }
+            ]
           }
-          FoamyHeader { id: noSettings; width: parent.width; title: "No settings"; showSettings: false
-            FoamyAction { iconName: "play" }
-            FoamyAction { iconName: "globe" }
-            FoamyAction { iconName: "download" }
+          FoamyHeader {
+            id: noSettings
+            width: parent.width
+            title: "No settings"
+            showSettings: false
+            FoamyAction {
+              iconName: "play"
+            }
+            FoamyAction {
+              iconName: "globe"
+            }
+            FoamyAction {
+              iconName: "download"
+            }
           }
-          FocusScope { id: catcher; width: 10; height: 10; focus: true }
+          FocusScope {
+            id: catcher
+            width: 10
+            height: 10
+            focus: true
+          }
         }
       }
     }
@@ -126,12 +217,26 @@ ShellRoot {
         LayoutMirroring.enabled: shell.rtl
         LayoutMirroring.childrenInherit: true
         title: "Nothing here"
-        FoamyAction { iconName: "search" }
+        FoamyAction {
+          iconName: "search"
+        }
         menuItems: [
-          FoamyMenuItem { text: "One"; iconName: "check" },
-          FoamyMenuItem { text: "Two"; iconName: "check" },
-          FoamyMenuItem { text: "Three"; iconName: "check" },
-          FoamyMenuItem { text: "Four"; iconName: "check" }
+          FoamyMenuItem {
+            text: "One"
+            iconName: "check"
+          },
+          FoamyMenuItem {
+            text: "Two"
+            iconName: "check"
+          },
+          FoamyMenuItem {
+            text: "Three"
+            iconName: "check"
+          },
+          FoamyMenuItem {
+            text: "Four"
+            iconName: "check"
+          }
         ]
       }
     }
@@ -145,20 +250,27 @@ ShellRoot {
     for (var i = 0; i < row.children.length; i++) {
       var item = row.children[i]
       var x = item.mapToItem(header, 0, 0).x
-      if (item.visible && x >= 0 && x < header.width) n++
+      if (item.visible && x >= 0 && x < header.width)
+        n++
     }
     return n + (header.settingsButton.visible ? 1 : 0)
   }
-  function names(entries) { return entries.map(function(e) { return e.separator ? "-" : e.text }) }
+  function names(entries) {
+    return entries.map(function (e) {
+      return e.separator ? "-" : e.text
+    })
+  }
 
   Timer {
-    interval: 900; running: true
+    interval: 900
+    running: true
     onTriggered: {
       Style.cornerRadius = 6
       // The live panel has the keyboard while open; the harness's offscreen
       // stand-in window isn't activated by itself.
       var w = popup.cardItem.Window.window
-      if (w && !w.active) w.requestActivate()
+      if (w && !w.active)
+        w.requestActivate()
       step1.start()
     }
   }
@@ -172,29 +284,34 @@ ShellRoot {
       var header = nc.titleRow
       // --- overflow rule ---------------------------------------------------------
       check(nc.overflowing && nc.settingsInMenu, "NC band overflows and Settings moves into the menu")
-      eq(header.shownTrailing.map(function(a) { return a.objectName }), ["search", "clear"], "first two actions stay")
-      eq(header.overflowTrailing.map(function(a) { return a.objectName }), ["refresh"], "the least important action moves")
+      eq(header.shownTrailing.map(function (a) {
+        return a.objectName
+      }), ["search", "clear"], "first two actions stay")
+      eq(header.overflowTrailing.map(function (a) {
+        return a.objectName
+      }), ["refresh"], "the least important action moves")
       check(!nc.settingsButton.visible && nc.menuButton.visible, "⋯ shown, settings button hidden")
       eq(visibleButtons(header), 3, "three buttons top right")
       var mx = nc.menuButton.mapToItem(nc, 0, 0).x
       var outer = true
       for (var i = 0; i < header.shownTrailing.length; i++) {
         var ax = header.shownTrailing[i].mapToItem(nc, 0, 0).x
-        if (shell.rtl ? ax < mx : ax > mx) outer = false
+        if (shell.rtl ? ax < mx : ax > mx)
+          outer = false
       }
       check(outer, "⋯ is the last button of the row")
-      check(header.shownTrailing[0].mapToItem(nc, 0, 0).x < header.shownTrailing[1].mapToItem(nc, 0, 0).x !== shell.rtl,
-            "actions keep their order in reading direction")
+      check(header.shownTrailing[0].mapToItem(nc, 0, 0).x < header.shownTrailing[1].mapToItem(nc, 0, 0).x !== shell.rtl, "actions keep their order in reading direction")
       eq(names(nc.menu.entries), ["Refresh", "Silence notifications", "Snooze notifications", "-", "Settings"], "menu entries")
       check(!body.pair.showsMenuButton && body.pair.settingsButton.visible && visibleButtons(body.pair) === 3, "two actions + Settings: no ⋯")
-      check(body.withMenu.showsMenuButton && !body.withMenu.overflowing && body.withMenu.settingsButton.visible
-            && visibleButtons(body.withMenu) === 3, "one action + menu items + Settings: ⋯ beside Settings")
+      check(body.withMenu.showsMenuButton && !body.withMenu.overflowing && body.withMenu.settingsButton.visible && visibleButtons(body.withMenu) === 3, "one action + menu items + Settings: ⋯ beside Settings")
       eq(names(body.withMenu.menu.entries), ["Open"], "menu of a non-overflowing header has only its items")
       check(!body.noSettings.showsMenuButton && visibleButtons(body.noSettings) === 3, "three actions, no Settings: no ⋯")
       // RTL: the buttons sit on the left.
       var bx = nc.menuButton.mapToItem(nc, 0, 0).x
-      if (shell.rtl) check(bx < nc.width / 2, "RTL: ⋯ on the left " + bx)
-      else check(bx > nc.width / 2, "LTR: ⋯ on the right " + bx)
+      if (shell.rtl)
+        check(bx < nc.width / 2, "RTL: ⋯ on the left " + bx)
+      else
+        check(bx > nc.width / 2, "LTR: ⋯ on the right " + bx)
       // A hidden action frees its slot: the next one comes back.
       shell.showSearch = false
       step2.start()
@@ -206,7 +323,9 @@ ShellRoot {
     interval: 200
     onTriggered: {
       var nc = popup.bodyItem.nc
-      eq(nc.shownTrailing.map(function(a) { return a.objectName }), ["clear", "refresh"], "hidden action frees its slot")
+      eq(nc.shownTrailing.map(function (a) {
+        return a.objectName
+      }), ["clear", "refresh"], "hidden action frees its slot")
       eq(names(nc.menu.entries), ["Silence notifications", "Snooze notifications", "-", "Settings"], "menu after the change")
       shell.showSearch = true
       step3.start()
@@ -221,9 +340,7 @@ ShellRoot {
       var nc = body.nc
       var search = nc.shownTrailing[0]
       eq(search ? search.objectName : "", "search", "shown again")
-      check(search && search.visible && search.parent === nc.menuButton.parent && search.width > 0
-            && search.mapToItem(nc, 0, 0).x !== nc.shownTrailing[1].mapToItem(nc, 0, 0).x,
-            "a re-shown action is laid out in the row " + (search ? [search.parent, search.visible, search.x, nc.shownTrailing[1].x] : ""))
+      check(search && search.visible && search.parent === nc.menuButton.parent && search.width > 0 && search.mapToItem(nc, 0, 0).x !== nc.shownTrailing[1].mapToItem(nc, 0, 0).x, "a re-shown action is laid out in the row " + (search ? [search.parent, search.visible, search.x, nc.shownTrailing[1].x] : ""))
       step3b.start()
     }
   }
@@ -236,7 +353,7 @@ ShellRoot {
     onTriggered: {
       var nc = popup.bodyItem.nc
       var search = nc.shownTrailing[0]
-      search.grabToImage(function(result) {
+      search.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/check-search.png")
         console.log("FOAMY PNGCHECK check-search.png")
         step3c.start()
@@ -259,11 +376,11 @@ ShellRoot {
       check(menu.currentIndex === 0, "keyboard open selects the first entry " + menu.currentIndex)
       var p = menu.panel.mapToItem(card, 0, 0)
       var b = nc.menuButton.mapToItem(card, 0, 0)
-      check(p.x >= 0 && p.y >= 0 && p.x + menu.panel.width <= card.width && p.y + menu.panel.height <= card.height,
-            "panel inside the card " + JSON.stringify([p.x, p.y, menu.panel.width, menu.panel.height, card.width, card.height]))
-      if (shell.rtl) check(near(p.x, b.x), "RTL: panel's left edge on the button's left edge " + p.x + " vs " + b.x)
-      else check(near(p.x + menu.panel.width, b.x + nc.menuButton.width), "LTR: panel's right edge on the button's right edge "
-                 + (p.x + menu.panel.width) + " vs " + (b.x + nc.menuButton.width))
+      check(p.x >= 0 && p.y >= 0 && p.x + menu.panel.width <= card.width && p.y + menu.panel.height <= card.height, "panel inside the card " + JSON.stringify([p.x, p.y, menu.panel.width, menu.panel.height, card.width, card.height]))
+      if (shell.rtl)
+        check(near(p.x, b.x), "RTL: panel's left edge on the button's left edge " + p.x + " vs " + b.x)
+      else
+        check(near(p.x + menu.panel.width, b.x + nc.menuButton.width), "LTR: panel's right edge on the button's right edge " + (p.x + menu.panel.width) + " vs " + (b.x + nc.menuButton.width))
       check(p.y >= b.y + nc.menuButton.height && p.y <= b.y + nc.menuButton.height + FoamyStyle.gap, "panel drops from the button " + p.y)
       check(near(menu.panel.height, menu.overlayItem.naturalHeight), "panel fits its entries")
       check(menu.overlayItem.activeFocus || menu.overlayItem.focus, "menu has the keys")
@@ -318,7 +435,7 @@ ShellRoot {
       var menu = nc.menu
       var card = popup.cardItem
       // Capture the open menu for screenshots (Snooze under the pointer).
-      card.grabToImage(function(result) {
+      card.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu.png")
         // A press outside the menu closes it and doesn't reach the row below.
         var presses = body.rowBelow.children[0].presses
@@ -354,7 +471,7 @@ ShellRoot {
       check(near(menu.panel.height, menu.overlayItem.naturalHeight), "the menu fits without scrolling " + menu.panel.height + " / " + menu.overlayItem.naturalHeight)
       var p = menu.panel.mapToItem(card, 0, 0)
       check(p.y + menu.panel.height <= card.height, "and stays inside the card")
-      card.grabToImage(function(result) {
+      card.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
         band.closeMenu()
         step6.start()

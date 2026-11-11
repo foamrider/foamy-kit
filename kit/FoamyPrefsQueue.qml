@@ -82,14 +82,21 @@ QtObject {
   signal saved(string key, var value)
   signal failed(string key, var value, string error)
 
-  function value(key) { return Prefs.value(fields, effectiveSettings, key) }
-  function values() { return Prefs.values(fields, effectiveSettings) }
+  function value(key) {
+    return Prefs.value(fields, effectiveSettings, key)
+  }
+  function values() {
+    return Prefs.values(fields, effectiveSettings)
+  }
   // "" or why the stored value of `key` is invalid (see storedProblems).
-  function storedProblem(key) { return Prefs.storedProblem(fields, effectiveSettings, key) }
+  function storedProblem(key) {
+    return Prefs.storedProblem(fields, effectiveSettings, key)
+  }
 
   function save(key, value, force) {
     var issue = Prefs.problem(fields, key, value)
-    if (!issue && force !== true && Prefs.keepsStored(fields, settings, key, pending)) issue = Prefs.STORED_INVALID
+    if (!issue && force !== true && Prefs.keepsStored(fields, settings, key, pending))
+      issue = Prefs.STORED_INVALID
     if (issue) {
       error = issue
       failed(key, value, issue)
@@ -99,8 +106,14 @@ QtObject {
     lastFailed = null
     // proc.running / reaping: a stopped save whose processes aren't gone yet.
     if (inFlight || waiting.length > 0 || proc.running || reaping) {
-      var next = waiting.filter(function(item) { return item.key !== key })
-      next.push({ key: key, value: value, force: force === true })
+      var next = waiting.filter(function (item) {
+        return item.key !== key
+      })
+      next.push({
+        key: key,
+        value: value,
+        force: force === true
+      })
       waiting = next
       return true
     }
@@ -108,7 +121,8 @@ QtObject {
   }
 
   function retry() {
-    if (!lastFailed) return false
+    if (!lastFailed)
+      return false
     var failedSave = lastFailed
     return save(failedSave.key, failedSave.value, failedSave.force === true)
   }
@@ -124,7 +138,8 @@ QtObject {
   }
 
   function dropPending(key) {
-    if (!(key in pending)) return
+    if (!(key in pending))
+      return
     var next = Prefs.overlay({}, pending)
     delete next[key]
     pending = next
@@ -135,7 +150,11 @@ QtObject {
     if (!result.ok) {
       error = result.error
       // A kept invalid array isn't retryable: the same save would refuse again.
-      lastFailed = result.storedInvalid ? null : { key: key, value: value, force: force }
+      lastFailed = result.storedInvalid ? null : {
+        key: key,
+        value: value,
+        force: force
+      }
       failed(key, value, result.error)
       Qt.callLater(advance)
       return false
@@ -157,7 +176,13 @@ QtObject {
       Qt.callLater(advance)
       return true
     }
-    current = { key: key, value: value, force: force, hadPrevious: hadPrevious, previous: previous }
+    current = {
+      key: key,
+      value: value,
+      force: force,
+      hadPrevious: hadPrevious,
+      previous: previous
+    }
     inFlight = true
     stderrHead = ""
     groupKill = []
@@ -172,7 +197,8 @@ QtObject {
   // Later calls for the same attempt (running -> false after exited(), the
   // exit of a command killed at the deadline) find nothing in flight.
   function finish(ok, detail) {
-    if (!inFlight) return
+    if (!inFlight)
+      return
     deadline.stop()
     var done = current
     current = null
@@ -207,18 +233,21 @@ QtObject {
   function killGroup() {
     var command = groupKill
     groupKill = []
-    if (command.length === 0) return
+    if (command.length === 0)
+      return
     reaping = true
     reaper.command = command
     reaper.running = true
   }
 
   function keepStderr(data) {
-    if (stderrHead.length < stderrLimit) stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
+    if (stderrHead.length < stderrLimit)
+      stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
   }
 
   function advance() {
-    if (inFlight || proc.running || reaping || waiting.length === 0) return
+    if (inFlight || proc.running || reaping || waiting.length === 0)
+      return
     var next = waiting[0]
     waiting = waiting.slice(1)
     run(next.key, next.value, next.force)
@@ -233,7 +262,8 @@ QtObject {
     onTriggered: {
       var now = Date.now()
       for (var key in queue.pending)
-        if (!queue.inFlight && now - (queue.pendingSince[key] || 0) > queue.reflectTimeoutMs) queue.dropPending(key)
+        if (!queue.inFlight && now - (queue.pendingSince[key] || 0) > queue.reflectTimeoutMs)
+          queue.dropPending(key)
     }
   }
 
@@ -244,7 +274,8 @@ QtObject {
     interval: Math.max(1, queue.saveTimeoutMs) + 2000
     onTriggered: {
       queue.killGroup()
-      if (queue.proc.running) queue.proc.signal(9)
+      if (queue.proc.running)
+        queue.proc.signal(9)
       queue.finish(false, "no exit after " + queue.saveTimeoutMs + " ms")
     }
   }
@@ -266,7 +297,8 @@ QtObject {
 
   property Process reaper: Process {
     onRunningChanged: {
-      if (running) return
+      if (running)
+        return
       queue.reaping = false
       Qt.callLater(queue.advance)
     }
@@ -276,21 +308,24 @@ QtObject {
     // Chunks as they arrive (no split), so only stderrLimit is ever kept.
     stderr: SplitParser {
       splitMarker: ""
-      onRead: function(data) { queue.keepStderr(data) }
+      onRead: function (data) {
+        queue.keepStderr(data)
+      }
     }
     onStarted: queue.groupKill = Prefs.killGroupCommand(processId)
-    onExited: function(code, status) {
+    onExited: function (code, status) {
       // timeout --signal=KILL kills its own group, itself included: signal 9.
       var timedOut = status !== 0 && code === 9 && Date.now() - queue.startedAt >= queue.saveTimeoutMs
       // Stopped by a signal: children that ignored it may still run.
-      if (status !== 0) queue.killGroup()
-      queue.finish(code === 0 && status === 0,
-                   timedOut ? "no exit after " + queue.saveTimeoutMs + " ms" : status === 0 ? "exit " + code : "stopped by signal " + code)
+      if (status !== 0)
+        queue.killGroup()
+      queue.finish(code === 0 && status === 0, timedOut ? "no exit after " + queue.saveTimeoutMs + " ms" : status === 0 ? "exit " + code : "stopped by signal " + code)
     }
     // After exited() this finds nothing in flight. Without exited() before it
     // (missing or non-executable command) the save never started.
     onRunningChanged: {
-      if (running) return
+      if (running)
+        return
       queue.finish(false, "the command couldn't start")
       Qt.callLater(queue.advance)
     }

@@ -50,23 +50,27 @@ QtObject {
   readonly property bool scrollable: !!target && maxY > minY + 0.5
 
   readonly property real minY: target ? target.originY - target.topMargin : 0
-  readonly property real maxY: target
-    ? Math.max(minY, target.originY + target.contentHeight + target.bottomMargin - target.height) : 0
+  readonly property real maxY: target ? Math.max(minY, target.originY + target.contentHeight + target.bottomMargin - target.height) : 0
 
-  function clamp(y) { return Math.max(minY, Math.min(maxY, y)) }
+  function clamp(y) {
+    return Math.max(minY, Math.min(maxY, y))
+  }
 
   // Scroll by `dy` content px. animate: glide there (wheel notches).
   function scrollBy(dy, animate) {
-    if (!target || dy === 0) return false
+    if (!target || dy === 0)
+      return false
     var from = animation.running ? animation.to : target.contentY
     var to = clamp(from + dy)
-    if (Math.abs(to - from) < 0.01 && !animation.running) return false
+    if (Math.abs(to - from) < 0.01 && !animation.running)
+      return false
     scrollTo(to, animate)
     return true
   }
 
   function scrollTo(y, animate) {
-    if (!target) return
+    if (!target)
+      return
     target.cancelFlick()
     var to = clamp(y)
     animation.stop()
@@ -82,39 +86,54 @@ QtObject {
   // Handle a wheel event (a WheelEvent, or {angleDelta, pixelDelta} in
   // tests). Returns true when it scrolled.
   function wheel(event) {
-    if (!target || !enabled) return false
+    if (!target || !enabled)
+      return false
     var pixel = event.pixelDelta ? event.pixelDelta.y : 0
     var angle = event.angleDelta ? event.angleDelta.y : 0
-    if (pixel !== 0) return scrollBy(-pixel, false)
-    if (angle !== 0) return scrollBy(-angle / 120 * notch, true)
+    if (pixel !== 0)
+      return scrollBy(-pixel, false)
+    if (angle !== 0)
+      return scrollBy(-angle / 120 * notch, true)
     return false
   }
 
   function _place(item, margin) {
-    if (!target || !item) return
+    if (!target || !item)
+      return
     var content = target.contentItem
     var ancestor = item
-    while (ancestor && ancestor !== content) ancestor = ancestor.parent
-    if (!ancestor) return
+    while (ancestor && ancestor !== content)
+      ancestor = ancestor.parent
+    if (!ancestor)
+      return
     var top = item.mapToItem(content, 0, 0).y
     var bottom = top + item.height
     var viewTop = animation.running ? animation.to : target.contentY
     var viewBottom = viewTop + target.height
     var m = margin === undefined ? root.margin : margin
     var y = viewTop
-    if (bottom - top + m * 2 > target.height || top < viewTop + m) y = top - m
-    else if (bottom > viewBottom - m) y = bottom - target.height + m
-    if (Math.abs(clamp(y) - target.contentY) > 0.5) scrollTo(y, true)
+    if (bottom - top + m * 2 > target.height || top < viewTop + m)
+      y = top - m
+    else if (bottom > viewBottom - m)
+      y = bottom - target.height + m
+    if (Math.abs(clamp(y) - target.contentY) > 0.5)
+      scrollTo(y, true)
   }
 
   property var _following: null
   property var _followMargin: undefined
-  function _refollow() { if (root._following) root._place(root._following, root._followMargin) }
+  function _refollow() {
+    if (root._following)
+      root._place(root._following, root._followMargin)
+  }
 
   function ensureVisible(item, margin) {
-    if (!target || !item) return
-    if (_following && _following !== item) _following.heightChanged.disconnect(_refollow)
-    if (_following !== item) item.heightChanged.connect(_refollow)
+    if (!target || !item)
+      return
+    if (_following && _following !== item)
+      _following.heightChanged.disconnect(_refollow)
+    if (_following !== item)
+      item.heightChanged.connect(_refollow)
     _following = item
     _followMargin = margin
     followTimer.restart()
@@ -125,7 +144,8 @@ QtObject {
     id: followTimer
     interval: root.followMs
     onTriggered: {
-      if (root._following) root._following.heightChanged.disconnect(root._refollow)
+      if (root._following)
+        root._following.heightChanged.disconnect(root._refollow)
       root._following = null
     }
   }
@@ -148,13 +168,20 @@ QtObject {
       enabled: root.enabled && root.scrollable && root.target !== null && root.target.interactive
       orientation: Qt.Vertical
       acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-      onWheel: function(event) { root.wheel(event) }
+      onWheel: function (event) {
+        root.wheel(event)
+      }
     }
   }
   function _attach() {
-    if (_handler) { _handler.destroy(); _handler = null }
-    if (target) _handler = _handlerComponent.createObject(target)
+    if (_handler) {
+      _handler.destroy()
+      _handler = null
+    }
+    if (target)
+      _handler = _handlerComponent.createObject(target)
   }
   onTargetChanged: _attach()
-  Component.onCompleted: if (target && !_handler) _attach()
+  Component.onCompleted: if (target && !_handler)
+    _attach()
 }

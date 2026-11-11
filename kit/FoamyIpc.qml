@@ -26,10 +26,12 @@ IpcHandler {
 
   Component.onCompleted: {
     var registry = Resolver.registry(handler)
-    if (registry) registry.register(handler)
+    if (registry)
+      registry.register(handler)
   }
   Component.onDestruction: {
     var registry = Resolver.registry(handler)
-    if (registry) registry.unregister(handler)
+    if (registry)
+      registry.unregister(handler)
   }
 }

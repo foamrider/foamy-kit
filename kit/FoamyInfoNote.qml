@@ -41,7 +41,12 @@ ColumnLayout {
 
   signal buttonHovered(bool hovered)
 
-  function toggle() { if (expanded) close(); else open() }
+  function toggle() {
+    if (expanded)
+      close()
+    else
+      open()
+  }
   function open() {
     expanded = true
     revealTimer.start()
@@ -53,10 +58,15 @@ ColumnLayout {
     interval: 0
     onTriggered: {
       for (var item = root.parent; item; item = item.parent)
-        if (typeof item.ensureVisible === "function") { item.ensureVisible(note); return }
+        if (typeof item.ensureVisible === "function") {
+          item.ensureVisible(note)
+          return
+        }
     }
   }
-  function close() { expanded = false }
+  function close() {
+    expanded = false
+  }
 
   spacing: FoamyStyle.gapSmall
 
@@ -100,12 +110,20 @@ ColumnLayout {
         Accessible.name: root.buttonTooltip
         Accessible.checkable: true
         Accessible.checked: root.expanded
-        Keys.onEscapePressed: function(event) { if (root.expanded) { root.close(); event.accepted = true } else event.accepted = false }
+        Keys.onEscapePressed: function (event) {
+          if (root.expanded) {
+            root.close()
+            event.accepted = true
+          } else
+            event.accepted = false
+        }
         onClicked: root.toggle()
         onHoveredChanged: root.buttonHovered(hovered)
       }
     }
-    Item { Layout.fillWidth: true }
+    Item {
+      Layout.fillWidth: true
+    }
   }
 
   Rectangle {
@@ -121,7 +139,11 @@ ColumnLayout {
     color: FoamyPalette.noteFill
     border.width: FoamyStyle.borderWidth
     border.color: FoamyPalette.divider
-    Behavior on opacity { NumberAnimation { duration: FoamyMotion.fadeIn } }
+    Behavior on opacity {
+      NumberAnimation {
+        duration: FoamyMotion.fadeIn
+      }
+    }
 
     Text {
       id: noteText

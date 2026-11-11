@@ -27,9 +27,11 @@ QtObject {
   property bool separator: false
   default property list<QtObject> items
   readonly property bool hasSubmenu: {
-    for (var i = 0; i < items.length; i++) if (items[i] && items[i].visible !== false) return true
+    for (var i = 0; i < items.length; i++)
+      if (items[i] && items[i].visible !== false)
+        return true
     return false
   }
 
-  signal triggered()
+  signal triggered
 }

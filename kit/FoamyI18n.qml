@@ -23,7 +23,9 @@ QtObject {
   id: root
   // The plugin's catalogs: kit/ sits in the plugin root, beside i18n/.
   property url catalogDirectory: Qt.resolvedUrl("../i18n")
-  property Translations backend: Translations { directory: root.catalogDirectory }
+  property Translations backend: Translations {
+    directory: root.catalogDirectory
+  }
   readonly property string language: backend.language
   readonly property string formatLocale: I18n.formatLocale
   readonly property bool rightToLeft: I18n.rightToLeft
@@ -51,12 +53,16 @@ QtObject {
   // "" without a time.
   function updatedAgo(updatedMs, nowMs) {
     var updated = Number(updatedMs)
-    if (!isFinite(updated) || updated <= 0) return ""
+    if (!isFinite(updated) || updated <= 0)
+      return ""
     var minutes = Math.max(0, Math.floor((Number(nowMs === undefined ? Date.now() : nowMs) - updated) / 60000))
-    if (minutes === 0) return t("Updated just now")
-    if (minutes < 60) return tn("Updated %1 minutes ago", minutes)
+    if (minutes === 0)
+      return t("Updated just now")
+    if (minutes < 60)
+      return tn("Updated %1 minutes ago", minutes)
     var hours = Math.floor(minutes / 60)
-    if (hours < 24) return tn("Updated %1 hours ago", hours)
+    if (hours < 24)
+      return tn("Updated %1 hours ago", hours)
     return tn("Updated %1 days ago", Math.floor(hours / 24))
   }
 

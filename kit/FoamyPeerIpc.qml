@@ -30,13 +30,29 @@ QtObject {
   property int limit: 8
 
   function call(target, method, args, done) {
-    var list = (args || []).map(function(value) { return String(value) })
-    var finish = function(ok, output) { if (done) Qt.callLater(function() { done(ok, output) }) }
+    var list = (args || []).map(function (value) {
+      return String(value)
+    })
+    var finish = function (ok, output) {
+      if (done)
+        Qt.callLater(function () {
+          done(ok, output)
+        })
+    }
     var result = Resolver.call(root, target, method, list)
-    if (result.ran) { finish(true, result.output); return }
-    if (running >= limit) { finish(false, ""); return }
+    if (result.ran) {
+      finish(true, result.output)
+      return
+    }
+    if (running >= limit) {
+      finish(false, "")
+      return
+    }
     running++
-    runner.createObject(root, { command: ["omarchy-shell", String(target), String(method)].concat(list), done: finish })
+    runner.createObject(root, {
+      command: ["omarchy-shell", String(target), String(method)].concat(list),
+      done: finish
+    })
   }
 
   property Component runner: Component {
@@ -45,22 +61,27 @@ QtObject {
       property var done: null
       property bool finished: false
       running: true
-      stdout: StdioCollector { id: output }
+      stdout: StdioCollector {
+        id: output
+      }
       function complete(ok, text) {
-        if (finished) return
+        if (finished)
+          return
         finished = true
         root.running = Math.max(0, root.running - 1)
-        if (proc.done) proc.done(ok, text)
+        if (proc.done)
+          proc.done(ok, text)
         proc.destroy()
       }
-      onExited: function(code, status) {
+      onExited: function (code, status) {
         var text = String(output.text || "").trim()
         // omarchy-shell exits 0 with an error line when the target is missing.
         complete(code === 0 && status === 0 && !/^(error|No such|Target not found|Function not found)/i.test(text), text)
       }
       // After exited() this does nothing. Without it (omarchy-shell missing)
       // Quickshell emits no exited(), only running -> false.
-      onRunningChanged: if (!running) complete(false, "")
+      onRunningChanged: if (!running)
+        complete(false, "")
     }
   }
 }

@@ -29,8 +29,14 @@ Item {
   Rectangle {
     anchors.fill: parent
     gradient: Gradient {
-      GradientStop { position: 0; color: Qt.darker(root.iconColor, 6.5) }
-      GradientStop { position: 1; color: Qt.darker(root.iconColor, 3.2) }
+      GradientStop {
+        position: 0
+        color: Qt.darker(root.iconColor, 6.5)
+      }
+      GradientStop {
+        position: 1
+        color: Qt.darker(root.iconColor, 3.2)
+      }
     }
   }
 
@@ -46,7 +52,9 @@ Item {
       Rectangle {
         required property int index
         readonly property real along: 0.05 + index * 0.032
-        width: 14; height: 14; radius: 3
+        width: 14
+        height: 14
+        radius: 3
         color: Qt.alpha(root.iconColor, 0.55)
         x: root.vertical ? (root.thickness - width) / 2 : root.width * along
         y: root.vertical ? root.height * along : (root.thickness - height) / 2
@@ -57,7 +65,9 @@ Item {
   // The plugin button the popup hangs from.
   Rectangle {
     id: anchorIcon
-    width: 22; height: 22; radius: 5
+    width: 22
+    height: 22
+    radius: 5
     color: Qt.alpha(root.iconColor, 0.9)
     x: root.vertical ? strip.x + (root.thickness - width) / 2 : root.width * root.anchorAlong
     y: root.vertical ? root.height * root.anchorAlong : strip.y + (root.thickness - height) / 2

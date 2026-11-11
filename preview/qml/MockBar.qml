@@ -27,20 +27,45 @@ QtObject {
   property var saved: []
   property QtObject shell: QtObject {
     function updateEntryInline(id, settings) {
-      bar.saved = bar.saved.concat([{ id: id, settings: settings }])
+      bar.saved = bar.saved.concat([
+        {
+          id: id,
+          settings: settings
+        }
+      ])
       return true
     }
   }
-  function requestPopout(owner) { activePopout = owner }
-  function releasePopout(owner) { if (activePopout === owner) activePopout = null }
-  function notePopoutCard(card) { lastCard = card }
-  function popoutCardFor(owner) { return null }
-  function switchPanelFrom(owner, direction) { return false }
-  function targetBelongsToWindow(target, window) { return false }
-  function showTooltip(target, text) {}
-  function hideTooltip(target) {}
-  function registerClickTarget(target) {}
-  function unregisterClickTarget(target) {}
-  function moduleWidgets(id) { return [] }
-  function run(command) {}
+  function requestPopout(owner) {
+    activePopout = owner
+  }
+  function releasePopout(owner) {
+    if (activePopout === owner)
+      activePopout = null
+  }
+  function notePopoutCard(card) {
+    lastCard = card
+  }
+  function popoutCardFor(owner) {
+    return null
+  }
+  function switchPanelFrom(owner, direction) {
+    return false
+  }
+  function targetBelongsToWindow(target, window) {
+    return false
+  }
+  function showTooltip(target, text) {
+  }
+  function hideTooltip(target) {
+  }
+  function registerClickTarget(target) {
+  }
+  function unregisterClickTarget(target) {
+  }
+  function moduleWidgets(id) {
+    return []
+  }
+  function run(command) {
+  }
 }

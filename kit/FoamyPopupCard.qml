@@ -32,7 +32,8 @@ PopupCard {
   readonly property Item cardItem: surfaceHook.card
 
   function ensureBody() {
-    if (body) bodyRequested = true
+    if (body)
+      bodyRequested = true
     return bodyLoader.item
   }
 
@@ -43,7 +44,8 @@ PopupCard {
   // the card grows while it is open instead of the menu scrolling.
   contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
 
-  onOpenChanged: if (open && body) bodyRequested = true
+  onOpenChanged: if (open && body)
+    bodyRequested = true
 
   Loader {
     id: bodyLoader
@@ -63,8 +65,12 @@ PopupCard {
       var candidate = parent ? parent.parent : null
       if (candidate && "borderSpec" in candidate && "contentTopInset" in candidate && "radius" in candidate) {
         card = candidate
-        candidate.radius = Qt.binding(function() { return root.cornerRadius })
-        candidate.color = Qt.binding(function() { return root.surfaceColor })
+        candidate.radius = Qt.binding(function () {
+          return root.cornerRadius
+        })
+        candidate.color = Qt.binding(function () {
+          return root.surfaceColor
+        })
       } else {
         console.warn("FoamyPopupCard: host card not found; keeping the stock radius")
       }

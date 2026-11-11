@@ -16,7 +16,9 @@ QtObject {
   readonly property bool reduceMotion: Style.reduceMotion === true
   readonly property var easeOut: Style.easeOut
 
-  function duration(ms) { return Style.duration(ms) }
+  function duration(ms) {
+    return Style.duration(ms)
+  }
 
   // Named durations (ms), matched to the 4.5 motion guide. Nothing over 300.
   readonly property int hover: duration(100)
@@ -34,5 +36,7 @@ QtObject {
   readonly property int pulse: 1200
 
   // True when a looping animation may run for an item that is `shown`.
-  function loopAllowed(shown) { return !!shown && !reduceMotion }
+  function loopAllowed(shown) {
+    return !!shown && !reduceMotion
+  }
 }

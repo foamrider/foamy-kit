@@ -17,8 +17,8 @@ import qs.Ui
 CursorSurface {
   id: root
 
-  signal hovered()
-  signal clicked()
+  signal hovered
+  signal clicked
 
   property int cursorShape: Qt.PointingHandCursor
 
@@ -26,7 +26,8 @@ CursorSurface {
 
   HoverHandler {
     cursorShape: root.cursorShape
-    onHoveredChanged: if (hovered) root.hovered()
+    onHoveredChanged: if (hovered)
+      root.hovered()
   }
   TapHandler {
     onTapped: root.clicked()

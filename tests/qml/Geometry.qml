@@ -22,9 +22,14 @@ ShellRoot {
 
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + label)
+    }
   }
-  function near(a, b) { return Math.abs(a - b) <= 1 }
+  function near(a, b) {
+    return Math.abs(a - b) <= 1
+  }
 
   FloatingWindow {
     id: screenWindow
@@ -42,28 +47,54 @@ ShellRoot {
 
   readonly property Item anchorItem: sim.anchor
 
-  MockBar { id: facadeBar; position: shell.position; barSize: shell.stripThickness }
-  MockFullBar { id: fullBar; position: shell.position; barSize: shell.stripThickness; barSizes: ({ "FOAMY-1": 44 }) }
+  MockBar {
+    id: facadeBar
+    position: shell.position
+    barSize: shell.stripThickness
+  }
+  MockFullBar {
+    id: fullBar
+    position: shell.position
+    barSize: shell.stripThickness
+    barSizes: ({
+        "FOAMY-1": 44
+      })
+  }
 
   Component {
     id: tallPopup
     FoamyPopup {
       // default (kit 0.4.0): only the screen limits the card
-      body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
+      body: Component {
+        Rectangle {
+          implicitHeight: 3000
+          color: "transparent"
+        }
+      }
     }
   }
   Component {
     id: cappedPopup
     FoamyPopup {
       maxHeight: FoamyStyle.popupMaxHeight
-      body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
+      body: Component {
+        Rectangle {
+          implicitHeight: 3000
+          color: "transparent"
+        }
+      }
     }
   }
   Component {
     id: maxedPopup
     FoamyPopup {
       maxHeight: 300
-      body: Component { Rectangle { implicitHeight: 3000; color: "transparent" } }
+      body: Component {
+        Rectangle {
+          implicitHeight: 3000
+          color: "transparent"
+        }
+      }
     }
   }
   Component {
@@ -73,7 +104,12 @@ ShellRoot {
         Column {
           property bool built: true
           spacing: FoamyStyle.gap
-          FoamyHeader { width: parent.width; iconName: "monitor"; title: "Geometry"; meta: shell.position + " bar" }
+          FoamyHeader {
+            width: parent.width
+            iconName: "monitor"
+            title: "Geometry"
+            meta: shell.position + " bar"
+          }
         }
       }
     }
@@ -81,7 +117,12 @@ ShellRoot {
   Component {
     id: card
     FoamyPopupCard {
-      body: Component { Rectangle { implicitHeight: 2400; color: "transparent" } }
+      body: Component {
+        Rectangle {
+          implicitHeight: 2400
+          color: "transparent"
+        }
+      }
       contentHeight: fittedContentHeight(bodyImplicitHeight)
     }
   }
@@ -98,10 +139,14 @@ ShellRoot {
     var expectedAvail = screenH - (vertical ? margin * 2 : t + gap + margin)
     check(near(popup.availableCardHeight, expectedAvail), label + " availableCardHeight " + popup.availableCardHeight + " expected " + expectedAvail)
     check(popup.availableCardHeight > screenH / 2, label + " available height is sane (" + popup.availableCardHeight + ")")
-    if (position === "top") check(near(y, t + gap), label + " top: card y " + y + " expected " + (t + gap))
-    if (position === "bottom") check(near(y + h, screenH - t - gap), label + " bottom: card bottom " + (y + h) + " expected " + (screenH - t - gap))
-    if (position === "left") check(near(x, t + gap), label + " left: card x " + x + " expected " + (t + gap))
-    if (position === "right") check(near(x + w, screenW - t - gap), label + " right: card right " + (x + w) + " expected " + (screenW - t - gap))
+    if (position === "top")
+      check(near(y, t + gap), label + " top: card y " + y + " expected " + (t + gap))
+    if (position === "bottom")
+      check(near(y + h, screenH - t - gap), label + " bottom: card bottom " + (y + h) + " expected " + (screenH - t - gap))
+    if (position === "left")
+      check(near(x, t + gap), label + " left: card x " + x + " expected " + (t + gap))
+    if (position === "right")
+      check(near(x + w, screenW - t - gap), label + " right: card right " + (x + w) + " expected " + (screenW - t - gap))
     check(x >= 0 && y >= 0 && x + w <= screenW && y + h <= screenH, label + " card is on screen " + [x, y, w, h])
   }
 
@@ -117,13 +162,42 @@ ShellRoot {
     var positions = ["top", "bottom", "left", "right"]
     var list = []
     for (var i = 0; i < positions.length; i++) {
-      list.push({ position: positions[i], kind: "tall", bar: "facade" })
-      list.push({ position: positions[i], kind: "tall", bar: "full" })
-      list.push({ position: positions[i], kind: "standard", bar: "facade" })
-      list.push({ position: positions[i], kind: "card", bar: "facade" })
-      list.push({ position: positions[i], kind: "capped", bar: "facade" })
-      list.push({ position: positions[i], kind: "maxed", bar: "facade" })
-      if (hasFork) list.push({ position: positions[i], kind: "fork", bar: "facade" })
+      list.push({
+        position: positions[i],
+        kind: "tall",
+        bar: "facade"
+      })
+      list.push({
+        position: positions[i],
+        kind: "tall",
+        bar: "full"
+      })
+      list.push({
+        position: positions[i],
+        kind: "standard",
+        bar: "facade"
+      })
+      list.push({
+        position: positions[i],
+        kind: "card",
+        bar: "facade"
+      })
+      list.push({
+        position: positions[i],
+        kind: "capped",
+        bar: "facade"
+      })
+      list.push({
+        position: positions[i],
+        kind: "maxed",
+        bar: "facade"
+      })
+      if (hasFork)
+        list.push({
+          position: positions[i],
+          kind: "fork",
+          bar: "facade"
+        })
     }
     cases = list
     runner.start()
@@ -141,21 +215,35 @@ ShellRoot {
   }
 
   function begin() {
-    if (step >= cases.length) { finish(); return }
+    if (step >= cases.length) {
+      finish()
+      return
+    }
     var c = cases[step]
     position = c.position
     currentBar = c.bar === "full" ? fullBar : facadeBar
     currentKind = c.kind
     currentLabel = host + "/" + c.position + "/" + c.kind + "/" + c.bar
-    var props = { anchorItem: shell.anchorItem, bar: currentBar, open: false }
+    var props = {
+      anchorItem: shell.anchorItem,
+      bar: currentBar,
+      open: false
+    }
     if (c.kind === "fork") {
       current = forkComponent.createObject(shell, props)
       current.contentHeight = current.fittedContentHeight(3000)
       current.open = true
     } else {
-      var components = { tall: tallPopup, standard: standardPopup, card: card, capped: cappedPopup, maxed: maxedPopup }
+      var components = {
+        tall: tallPopup,
+        standard: standardPopup,
+        card: card,
+        capped: cappedPopup,
+        maxed: maxedPopup
+      }
       current = components[c.kind].createObject(shell, props)
-      if (c.kind === "standard") check(current.bodyItem === null, currentLabel + " body is lazy (not built before open)")
+      if (c.kind === "standard")
+        check(current.bodyItem === null, currentLabel + " body is lazy (not built before open)")
       current.open = true
     }
     settle.start()
@@ -166,13 +254,11 @@ ShellRoot {
     var t = thicknessFor(currentBar)
     if (currentKind === "fork") {
       var o = p.cardOrigin
-      var broken = p.availableCardHeight <= 120 || (position === "top" && !near(o.y, t + p.gap))
-        || (position === "bottom" && !near(o.y + p.contentHeight, screenH - t - p.gap))
-        || (position === "right" && !near(o.x + p.contentWidth, screenW - t - p.gap))
-        || (position === "left" && !near(o.x, t + p.gap))
+      var broken = p.availableCardHeight <= 120 || (position === "top" && !near(o.y, t + p.gap)) || (position === "bottom" && !near(o.y + p.contentHeight, screenH - t - p.gap)) || (position === "right" && !near(o.x + p.contentWidth, screenW - t - p.gap)) || (position === "left" && !near(o.x, t + p.gap))
       // Negative control: the pre-kit fork of the 4.0 KeyboardPanel.
       check(broken, currentLabel + " the old 4.0 fork should misplace on a full-screen bar window")
-      if (broken) console.log("FOAMY NOTE " + currentLabel + " fork broken as expected: availableCardHeight " + p.availableCardHeight + " origin " + o.x + "," + o.y)
+      if (broken)
+        console.log("FOAMY NOTE " + currentLabel + " fork broken as expected: availableCardHeight " + p.availableCardHeight + " origin " + o.x + "," + o.y)
       p.open = false
       p.destroy()
       next()
@@ -199,15 +285,21 @@ ShellRoot {
       check(Qt.colorEqual(c.border.color, FoamyPalette.border), currentLabel + " border colour alpha(text, .15)")
       check(p.layerNamespace === "omarchy-keyboard-panel", currentLabel + " layer namespace " + p.layerNamespace)
     }
-    if (currentKind === "tall") check(near(c.height, p.availableCardHeight), currentLabel + " default: card fills the available height " + c.height)
-    if (currentKind === "capped") check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " maxHeight popupMaxHeight caps " + c.height)
-    if (currentKind === "maxed") check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
+    if (currentKind === "tall")
+      check(near(c.height, p.availableCardHeight), currentLabel + " default: card fills the available height " + c.height)
+    if (currentKind === "capped")
+      check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " maxHeight popupMaxHeight caps " + c.height)
+    if (currentKind === "maxed")
+      check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
     if (currentKind === "standard") {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")
       check(p.contentWidth === FoamyStyle.popupWidth, currentLabel + " standard width " + p.contentWidth)
       if (position === "top" && currentBar === facadeBar) {
         var shot = out + "/geometry-" + host + ".png"
-        sim.grabToImage(function(result) { if (!result.saveToFile(shot)) console.log("FOAMY FAIL save " + shot) })
+        sim.grabToImage(function (result) {
+          if (!result.saveToFile(shot))
+            console.log("FOAMY FAIL save " + shot)
+        })
       }
       p.open = false
       closeCheck.target = p
@@ -230,7 +322,10 @@ ShellRoot {
     }
   }
 
-  function next() { step++; runner.start() }
+  function next() {
+    step++
+    runner.start()
+  }
 
   function finish() {
     console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)

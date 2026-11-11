@@ -45,7 +45,8 @@ Item {
   implicitHeight: column.implicitHeight
 
   function show() {
-    field.text = value            // the internal editor, never `value`
+    // the internal editor, never `value`
+    field.text = value
     dirty = false
   }
 
@@ -56,7 +57,8 @@ Item {
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
 
   function cancelEdit() {
@@ -65,18 +67,21 @@ Item {
   }
 
   function problem(text) {
-    if (typeof validate !== "function") return ""
+    if (typeof validate !== "function")
+      return ""
     var verdict = validate(text)
     return verdict === true ? "" : typeof verdict === "string" && verdict !== "" ? verdict : invalidText
   }
 
   function commitEdit(revertInvalid) {
-    if (!dirty) return true
+    if (!dirty)
+      return true
     var next = trim ? field.text.trim() : field.text
     var issue = problem(next)
     if (issue !== "") {
       errorText = issue
-      if (revertInvalid) show()
+      if (revertInvalid)
+        show()
       return revertInvalid === true
     }
     errorText = ""
@@ -91,13 +96,17 @@ Item {
   }
 
   function handleKey(key) {
-    if (key === Qt.Key_Escape) { cancelEdit(); return true }
+    if (key === Qt.Key_Escape) {
+      cancelEdit()
+      return true
+    }
     return false
   }
 
   onValueChanged: {
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
   Component.onCompleted: show()
 
@@ -126,10 +135,17 @@ Item {
       translate: FoamyI18n.t
       horizontalAlignment: Text.AlignLeft
       Accessible.name: root.label
-      onTextEdited: { root.dirty = true; root.errorText = "" }
+      onTextEdited: {
+        root.dirty = true
+        root.errorText = ""
+      }
       onAccepted: root.commitEdit(false)
-      onEditingFinished: if (!field.inputActiveFocus) root.commitEdit(true)
-      onKeyPressed: function(event) { if (root.handleKey(event.key)) event.accepted = true }
+      onEditingFinished: if (!field.inputActiveFocus)
+        root.commitEdit(true)
+      onKeyPressed: function (event) {
+        if (root.handleKey(event.key))
+          event.accepted = true
+      }
     }
 
     Text {

@@ -31,12 +31,20 @@ QtObject {
   property bool wrap: false
   readonly property bool active: index >= 0
 
-  function at(i) { return index === i }
-  function hover(i) { if (i >= 0 && i < count) index = i }
-  function reset() { index = -1 }
+  function at(i) {
+    return index === i
+  }
+  function hover(i) {
+    if (i >= 0 && i < count)
+      index = i
+  }
+  function reset() {
+    index = -1
+  }
   // A letter shortcut with no Ctrl/Alt/Meta held (Shift is fine).
   function plain(modifiers) {
-    if (modifiers === undefined || modifiers === null) return true
+    if (modifiers === undefined || modifiers === null)
+      return true
     return (modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) === 0
   }
   // Emit a catcher's textKey (tests, synthetic keys); no modifiers by default.
@@ -44,11 +52,18 @@ QtObject {
     catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
   }
   function move(delta) {
-    if (count <= 0) { index = -1; return }
-    if (index < 0) { index = delta < 0 ? count - 1 : 0; return }
+    if (count <= 0) {
+      index = -1
+      return
+    }
+    if (index < 0) {
+      index = delta < 0 ? count - 1 : 0
+      return
+    }
     var next = index + (delta < 0 ? -1 : 1)
     index = wrap ? (next + count) % count : Math.max(0, Math.min(count - 1, next))
   }
 
-  onCountChanged: if (index >= count) index = count - 1
+  onCountChanged: if (index >= count)
+    index = count - 1
 }

@@ -21,9 +21,13 @@ QtObject {
   readonly property real radiusSmall: Style.cornerRadius
   readonly property bool rounded: radius > 0
   // A pill only when the theme rounds corners at all.
-  function pillRadius(height) { return rounded ? height / 2 : 0 }
+  function pillRadius(height) {
+    return rounded ? height / 2 : 0
+  }
   // Radius for a surface inset by `inset` inside one with radius `outer`.
-  function innerRadius(outer, inset) { return Math.max(0, outer - inset) }
+  function innerRadius(outer, inset) {
+    return Math.max(0, outer - inset)
+  }
 
   // --- surfaces --------------------------------------------------------------
   readonly property int borderWidth: 1

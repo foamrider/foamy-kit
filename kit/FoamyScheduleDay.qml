@@ -41,20 +41,28 @@ RowLayout {
   readonly property Item labelItem: labelLoader.item
   readonly property bool dayEnabled: value !== ""
   signal changed(string value)
-  signal invalid()
+  signal invalid
   spacing: FoamyStyle.gap
 
   function restoreInputs(force) {
-    if (value !== "" && Schedule.validRange(value)) lastRange = value
+    if (value !== "" && Schedule.validRange(value))
+      lastRange = value
     var parts = lastRange.split("-")
-    if (force || !fromInput.inputActiveFocus) fromInput.text = parts[0]
-    if (force || !toInput.inputActiveFocus) toInput.text = parts[1]
+    if (force || !fromInput.inputActiveFocus)
+      fromInput.text = parts[0]
+    if (force || !toInput.inputActiveFocus)
+      toInput.text = parts[1]
   }
   function saveInputs() {
-    if (!dayEnabled) return
+    if (!dayEnabled)
+      return
     var range = fromInput.text.trim() + "-" + toInput.text.trim()
-    if (!Schedule.validRange(range)) { invalid(); return }
-    if (range !== value) changed(range)
+    if (!Schedule.validRange(range)) {
+      invalid()
+      return
+    }
+    if (range !== value)
+      changed(range)
   }
   onValueChanged: restoreInputs()
   Component.onCompleted: restoreInputs()
@@ -74,7 +82,9 @@ RowLayout {
     id: labelLoader
     Layout.fillWidth: true
     sourceComponent: root.labelComponent
-    onLoaded: item.text = Qt.binding(function() { return root.label })
+    onLoaded: item.text = Qt.binding(function () {
+      return root.label
+    })
   }
   ToggleSwitch {
     id: daySwitch
@@ -110,7 +120,7 @@ RowLayout {
     translate: FoamyI18n.t
     Accessible.name: root.label + " · " + root.fromLabel
     onEditingFinished: root.saveInputs()
-    onKeyPressed: function(event) {
+    onKeyPressed: function (event) {
       if (event.key === Qt.Key_Escape) {
         root.restoreInputs(true)
         event.accepted = true
@@ -128,7 +138,7 @@ RowLayout {
     translate: FoamyI18n.t
     Accessible.name: root.label + " · " + root.toLabel
     onEditingFinished: root.saveInputs()
-    onKeyPressed: function(event) {
+    onKeyPressed: function (event) {
       if (event.key === Qt.Key_Escape) {
         root.restoreInputs(true)
         event.accepted = true

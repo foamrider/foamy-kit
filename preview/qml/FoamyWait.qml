@@ -24,12 +24,16 @@ QtObject {
   property int interval: 50
   property int pending: 0
 
-  property Component timer: Component { Timer { repeat: true } }
+  property Component timer: Component {
+    Timer {
+      repeat: true
+    }
+  }
 
   function waitFor(condition, timeoutMs, then, label) {
     var deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0)
     var lastError = ""
-    var holds = function() {
+    var holds = function () {
       try {
         return !!condition()
       } catch (error) {
@@ -37,29 +41,42 @@ QtObject {
         return false
       }
     }
-    var poll = root.timer.createObject(root, { interval: Math.max(1, root.interval) })
+    var poll = root.timer.createObject(root, {
+      interval: Math.max(1, root.interval)
+    })
     var done = false
     root.pending++
-    var finish = function(ok) {
-      if (done) return
+    var finish = function (ok) {
+      if (done)
+        return
       done = true
       poll.stop()
       poll.destroy()
       root.pending = Math.max(0, root.pending - 1)
       if (!ok && label)
         console.log("FOAMY FAIL " + label + ": not true after " + timeoutMs + " ms" + (lastError ? " (" + lastError + ")" : ""))
-      if (then) then(ok)
+      if (then)
+        then(ok)
     }
-    poll.triggered.connect(function() {
-      if (holds()) finish(true)
-      else if (Date.now() >= deadline) finish(false)
+    poll.triggered.connect(function () {
+      if (holds())
+        finish(true)
+      else if (Date.now() >= deadline)
+        finish(false)
     })
     poll.start()
   }
 
   function after(ms, then) {
-    var once = root.timer.createObject(root, { interval: Math.max(1, Number(ms) || 0), repeat: false })
-    once.triggered.connect(function() { once.destroy(); if (then) then() })
+    var once = root.timer.createObject(root, {
+      interval: Math.max(1, Number(ms) || 0),
+      repeat: false
+    })
+    once.triggered.connect(function () {
+      once.destroy()
+      if (then)
+        then()
+    })
     once.start()
   }
 }

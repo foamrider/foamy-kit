@@ -29,7 +29,8 @@ QtObject {
   property bool answering: false
 
   function recheck() {
-    if (!active || !handler) return
+    if (!active || !handler)
+      return
     answering = Resolver.prefer(preference, handler)
     others = Resolver.others(preference, handler).length
   }

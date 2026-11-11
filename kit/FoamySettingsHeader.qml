@@ -13,7 +13,7 @@ Item {
   property real topPadding: FoamyStyle.padding
   property real bottomPadding: FoamyStyle.padding
 
-  signal back()
+  signal back
 
   implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + topPadding + bottomPadding
 

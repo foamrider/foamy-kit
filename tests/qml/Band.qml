@@ -16,16 +16,28 @@ ShellRoot {
   readonly property string tag: Quickshell.env("FOAMY_TAG")
   property int checks: 0
   property int failures: 0
-  function check(ok, label) { checks++; if (!ok) { failures++; console.log("FOAMY FAIL " + tag + " " + label) } }
-  function near(a, b) { return Math.abs(a - b) <= 1 }
+  function check(ok, label) {
+    checks++
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + tag + " " + label)
+    }
+  }
+  function near(a, b) {
+    return Math.abs(a - b) <= 1
+  }
 
   FloatingWindow {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim }
+    ScreenSim {
+      id: sim
+    }
   }
-  MockBar { id: bar }
+  MockBar {
+    id: bar
+  }
 
   FoamyPopup {
     id: popup
@@ -45,12 +57,33 @@ ShellRoot {
           iconName: "battery-charging"
           title: "Power"
           meta: "41% · Charging"
-          Text { objectName: "heroValue"; text: "41%"; color: FoamyPalette.text; font.pixelSize: FoamyStyle.font.numeralCompact }
+          Text {
+            objectName: "heroValue"
+            text: "41%"
+            color: FoamyPalette.text
+            font.pixelSize: FoamyStyle.font.numeralCompact
+          }
         }
-        Item { width: 1; height: 120 }
-        FoamyHeroBand { id: compactBand; width: parent.width; compact: true; topRadius: 0 }
-        Item { width: 1; height: 20 }
-        FoamyHeroBand { id: pictureBand; width: parent.width; title: "Artwork"; imageSource: Qt.resolvedUrl("plugin/preview/artwork.png") }
+        Item {
+          width: 1
+          height: 120
+        }
+        FoamyHeroBand {
+          id: compactBand
+          width: parent.width
+          compact: true
+          topRadius: 0
+        }
+        Item {
+          width: 1
+          height: 20
+        }
+        FoamyHeroBand {
+          id: pictureBand
+          width: parent.width
+          title: "Artwork"
+          imageSource: Qt.resolvedUrl("plugin/preview/artwork.png")
+        }
       }
     }
   }
@@ -93,22 +126,35 @@ ShellRoot {
       check(popup.bodyItem.compactBand.height >= FoamyStyle.settingsButtonSize + FoamyStyle.bandPaddingTop + FoamyStyle.bandPaddingBottom - 1, "compact band fits the back button")
       var icon = band.titleRow.children[0].children[0]
       var settings = band.settingsButton.mapToItem(band, 0, 0).x
-      if (rtl) check(settings < band.width / 2, "RTL: settings button on the left " + settings)
-      else check(settings > band.width / 2, "LTR: settings button on the right " + settings)
+      if (rtl)
+        check(settings < band.width / 2, "RTL: settings button on the left " + settings)
+      else
+        check(settings > band.width / 2, "LTR: settings button on the right " + settings)
       check(band.mirrored === rtl, "band knows its direction")
       var hero = null
-      for (var i = 0; i < band.hero.length; i++) if (band.hero[i].objectName === "heroValue") hero = band.hero[i]
+      for (var i = 0; i < band.hero.length; i++)
+        if (band.hero[i].objectName === "heroValue")
+          hero = band.hero[i]
       var heroX = hero ? hero.mapToItem(band, 0, 0).x : -1
-      if (rtl) check(heroX + hero.width > band.width - FoamyStyle.padding - 2, "RTL: hero content starts on the right " + heroX)
-      else check(near(heroX, FoamyStyle.padding), "LTR: hero content starts at the padding " + heroX)
+      if (rtl)
+        check(heroX + hero.width > band.width - FoamyStyle.padding - 2, "RTL: hero content starts on the right " + heroX)
+      else
+        check(near(heroX, FoamyStyle.padding), "LTR: hero content starts at the padding " + heroX)
       check(near(card.height, popup.bodyImplicitHeight + 2), "card fits the body " + card.height)
-      console.log("FOAMY BAND " + JSON.stringify({ height: Math.round(band.height), y: Math.round(p.y), pictureY: Math.round(popup.bodyItem.pictureBand.mapToItem(card, 0, 0).y) }))
+      console.log("FOAMY BAND " + JSON.stringify({
+        height: Math.round(band.height),
+        y: Math.round(p.y),
+        pictureY: Math.round(popup.bodyItem.pictureBand.mapToItem(card, 0, 0).y)
+      }))
       check(!band.roundBottom && band.separator, "a band followed by content keeps a square bottom and the hairline")
       var only = bandOnly.bodyItem
       check(only && only.endsCard && only.roundBottom && !only.separator, "a band that ends the card rounds its bottom, no hairline")
-      bandOnly.cardItem.grabToImage(function(r2) { r2.saveToFile(Quickshell.env("FOAMY_OUT") + "/band-only.png") })
-      card.grabToImage(function(result) {
-        if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png")) console.log("FOAMY FAIL save")
+      bandOnly.cardItem.grabToImage(function (r2) {
+        r2.saveToFile(Quickshell.env("FOAMY_OUT") + "/band-only.png")
+      })
+      card.grabToImage(function (result) {
+        if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png"))
+          console.log("FOAMY FAIL save")
         console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
         console.log("FOAMY DONE")
         Qt.quit()

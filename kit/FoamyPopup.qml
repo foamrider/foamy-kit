@@ -70,7 +70,8 @@ KeyboardPanel {
   readonly property Item cardItem: surfaceHook.card
 
   function ensureBody() {
-    if (body) bodyRequested = true
+    if (body)
+      bodyRequested = true
     return bodyLoader.item
   }
 
@@ -82,7 +83,8 @@ KeyboardPanel {
   contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
   focusTarget: bodyLoader
 
-  onOpenChanged: if (open && body) bodyRequested = true
+  onOpenChanged: if (open && body)
+    bodyRequested = true
 
   Loader {
     id: bodyLoader
@@ -106,8 +108,12 @@ KeyboardPanel {
       var candidate = parent ? parent.parent : null
       if (candidate && "borderSpec" in candidate && "contentTopInset" in candidate && "radius" in candidate) {
         card = candidate
-        candidate.radius = Qt.binding(function() { return root.cornerRadius })
-        candidate.color = Qt.binding(function() { return root.surfaceColor })
+        candidate.radius = Qt.binding(function () {
+          return root.cornerRadius
+        })
+        candidate.color = Qt.binding(function () {
+          return root.surfaceColor
+        })
       } else {
         console.warn("FoamyPopup: host card not found; keeping the stock radius")
       }
