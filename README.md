@@ -741,6 +741,60 @@ runs whose process is gone.
 Comparing screenshots: `preview/compare.py old.png new.png` (or two
 directories). It compares RGB and alpha; never compare one without the other.
 
+### Test helpers for plugins
+
+Plugin runtime tests import the harness from the kit checkout (they don't
+sync it), and the same goes for these helpers:
+
+```python
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import harness, hostenv
+```
+
+- **`harness/FoamyWait.qml`**, in every run's QML (`import "harness"`): steps
+  that wait for a condition instead of a fixed `after(ms)` chain, so they
+  neither flake on a loaded machine nor waste time on an idle one.
+
+  ```qml
+  FoamyWait { id: wait }
+  wait.waitFor(function() { return service.ready }, 10000, function(ok) {
+    check(ok, "the service became ready")
+    nextStep()
+  })
+  wait.waitFor(function() { return !proc.running }, 5000, nextStep, "the save ends")  // label: a timeout fails the run
+  wait.after(500, nextStep)                                                            // when the step really is time
+  ```
+
+  `then(ok)` is called once and always later; a throwing condition counts as
+  false; `pending` counts the waits in flight.
+- **`harness.wait_for(condition, timeout, interval=0.05, stop=None)`** polls a
+  Python condition and returns its value (or None after the timeout);
+  **`Run.wait_for_log(text, timeout)`** waits until the running shell logs
+  `text` (a `FOAMY READY` line before an IPC call).
+- **`preview/hostenv.py`** for what runs outside `harness.Run`, or needs a
+  private Omarchy tree:
+  - `isolate(env, base)`: the harness's isolation for a process the test
+    starts itself (its own `qs`, `notify-send`): no Omarchy bin dir or
+    `$APPDIR` on `PATH`/`LD_LIBRARY_PATH`, dead audio and system-bus
+    addresses. `library_path()`, `isolated_path()` and `host_bins()` are the
+    parts.
+  - `make(base, app, env=None, stubs=None, names=())`: environment overrides
+    for a private `OMARCHY_PATH` (the host's `shell/` and `default/` only) whose
+    `bin/` and `PATH` stubs log every `omarchy-*` call to
+    `<base>/omarchy-calls.log` and succeed; `omarchy-shell` reaches the test's
+    own shell (`qs ipc -n -p <app>`), never the live one. `stubs` replaces or
+    adds scripts; `calls(base)` reads the log.
+  - `check(env, *outputs)`: fails when a host bin dir is on `PATH` or a host
+    script's path shows up in the outputs.
+  - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
+    whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
+    fake.
+
+  It replaces the plugin copies (`tests/hostenv.py` in foamy-notifications and
+  foamy-notification-center, the `isolate()`s in foamy-audio and foamy-bolt,
+  foamy-github's `fake_plugin()`); `tests/test_helpers.py` covers it.
+
 ### Before / after trio
 
 ```bash

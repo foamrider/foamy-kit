@@ -15,6 +15,15 @@
   sync refuses a symlink, non-UTF-8 file or broken markers, even with
   `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
   missing or stale. foamy-kit has its own `AGENTS.md`.
+- Shared test helpers that plugins import from the kit checkout, like the
+  harness, instead of copying them (three plugins had): `harness/FoamyWait.qml`
+  in every run (`waitFor(condition, timeoutMs, then[, label])`, `after(ms,
+  then)`: condition-driven steps instead of fixed delays, which flaked under
+  load in vitals, bolt and zendesk), `harness.wait_for()` and
+  `Run.wait_for_log()` on the Python side, and `preview/hostenv.py`
+  (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
+  own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
+  helpers for plugins".
 
 ### Changed
 - `preview/harness.py` isolates every run by default (render.py and every
@@ -33,7 +42,7 @@
   inside qs.
 
   After syncing: a plugin test whose QML runs a host command now gets exit
-  127 and a `host-commands.log` line; give it a `fakebin` stand-in.
+  127 and a `host-commands.log` line; give it a `fakebin` stand-in (or `hostenv.make()` stubs).
   Plugin-local `isolate()`/`library_path()` copies are redundant.
 
 ### Removed

@@ -60,6 +60,21 @@ from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = KIT_ROOT / "preview"
+
+
+def _load_hostenv():
+    """The kit's preview/hostenv.py, by path: a plugin's own tests/hostenv.py
+    imported earlier must not stand in for it."""
+    import importlib.util
+    import sys
+    spec = importlib.util.spec_from_file_location("foamy_kit_hostenv", PREVIEW / "hostenv.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["foamy_kit_hostenv"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+hostenv = _load_hostenv()
 # Host shells: Omarchy 4.5 only, the installed one (FOAMY_HOST_45 overrides).
 # 4.0 support ended with kit 0.9.0: asking for it fails with a clear message,
 # and available_hosts() prints a SKIP line for it, so a plugin test that still
@@ -130,12 +145,6 @@ def processes_under(path):
         if needle in cmdline:
             found.append(int(entry.name))
     return found
-
-
-def _in_appdir(path):
-    """True for a path inside the running AppImage ($APPDIR)."""
-    appdir = (os.environ.get("APPDIR") or "").rstrip("/")
-    return bool(appdir) and (path == appdir or path.startswith(appdir + "/"))
 
 
 # Shadows a host command left on PATH: logged, refused like a missing one.
@@ -322,20 +331,11 @@ class Run:
                 (bin_dir / name).chmod(0o755)
             self.env["PATH"] = f"{bin_dir}:{self.env['PATH']}"
 
-    def host_bins(self):
-        """Omarchy's bin directories (real paths) that never reach a run's PATH."""
-        bins = {"/usr/share/omarchy/bin", str(self.host.parent / "bin")}
-        if os.environ.get("OMARCHY_PATH"):
-            bins.add(str(Path(os.environ["OMARCHY_PATH"]) / "bin"))
-        return {os.path.realpath(b) for b in bins}
-
     def _isolated_path(self):
         """The caller's PATH without Omarchy's and an AppImage's bin
         directories, behind a directory of stubs for every omarchy command
         left on it."""
-        bins = self.host_bins()
-        kept = [p for p in os.environ.get("PATH", "/usr/bin:/bin").split(":")
-                if p and os.path.realpath(p) not in bins and not _in_appdir(p)]
+        kept = [p for p in hostenv.isolated_path(None, self.host.parent / "bin").split(":") if p]
         blocked = self.base / "host-bin"
         blocked.mkdir()
         names = set()
@@ -415,7 +415,7 @@ class Run:
             "DBUS_SYSTEM_BUS_ADDRESS": (self.system_bus if self.system_bus.startswith("unix:")
                                         else f"unix:path={self.base}/no-system-bus"),
         })
-        library_path = ":".join(p for p in os.environ.get("LD_LIBRARY_PATH", "").split(":") if p and not _in_appdir(p))
+        library_path = hostenv.library_path()
         if library_path:
             env["LD_LIBRARY_PATH"] = library_path
         else:
@@ -498,6 +498,12 @@ class Run:
         except subprocess.TimeoutExpired:
             pass
 
+    def wait_for_log(self, text, timeout=20):
+        """Wait (while qs runs) until its log shows `text`; True when it did."""
+        log = self.base / "qs.log"
+        return wait_for(lambda: text in log.read_text(errors="replace") if log.exists() else False, timeout,
+                        stop=lambda: self.process is None or self.process.poll() is not None)
+
     def run(self, timeout=40, done="FOAMY DONE"):
         self.start()
         try:
@@ -523,6 +529,20 @@ class Run:
         """Remove this run's own temp dir (and nothing else)."""
         self.stop()
         shutil.rmtree(self.base, ignore_errors=True)
+
+
+def wait_for(condition, timeout=10, interval=0.05, stop=None):
+    """Poll `condition()` until it returns something truthy (returned) or
+    `timeout` seconds pass (None); `stop()` true ends the wait early. For
+    test steps whose length depends on machine load: no fixed sleeps."""
+    deadline = time.monotonic() + timeout
+    while True:
+        value = condition()
+        if value:
+            return value
+        if time.monotonic() >= deadline or (stop is not None and stop()):
+            return condition() or None
+        time.sleep(interval)
 
 
 OWNED_DIR = re.compile(r"^foamy-kit-[\w.-]*?-(\d+)-[\w]+$")
