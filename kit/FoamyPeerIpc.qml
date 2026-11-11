@@ -20,6 +20,12 @@ QtObject {
   id: root
 
   // CLI calls in flight; bounded so a stuck shell cannot pile up processes.
+  // Each call is a finite job without a deadline of its own: on 4.5
+  // omarchy-shell bounds itself. Its socket request and its `qs ipc`
+  // fallback each run under `timeout --kill-after=1s` with
+  // OMARCHY_SHELL_IPC_TIMEOUT (default 2s), so a call to a hung shell ends
+  // within about 6 s and frees its slot. Wrapping it in another timeout
+  // would only cut a call that may already have run.
   property int running: 0
   property int limit: 8
 
