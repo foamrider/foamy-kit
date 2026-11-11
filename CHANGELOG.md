@@ -58,6 +58,27 @@
   127 and a `host-commands.log` line; give it a `fakebin` stand-in (or `hostenv.make()` stubs).
   Plugin-local `isolate()`/`library_path()` copies are redundant.
 
+- `FoamyPrefs`/`FoamyPrefsQueue` (behaviour change, kit-wide): an invalid
+  stored array is no longer replaced by the next save of that key. An array
+  setting holds user data (accounts, folders); one invalid item (a hand edit,
+  an older shape) makes the whole value read as the default, so a save built
+  from what the panel showed wiped every other entry (foamy-teams D1,
+  REVIEW item 7). Now `save(key, value)` refuses when the stored array
+  (present, not null) fails the schema: `FoamyPrefs.save()` returns
+  `storedInvalid: true` with `STORED_INVALID` ("The saved list in shell.json
+  isn't valid, so it wasn't replaced."), nothing is written, `failed()` fires
+  and it isn't retryable. `save(key, value, true)` (and `FoamyPrefs.save(…,
+  pending, true)`) replaces it on purpose. `storedProblem(key)` and
+  `storedProblems` (queue), `FoamyPrefs.storedProblem()/storedProblems()`
+  say which stored value is invalid. Other keys still save and carry the
+  stored array over verbatim; invalid scalars and objects, absent and null
+  values, reads and the inline/CLI paths are unchanged.
+
+  After syncing: a plugin whose array settings hold user data should show
+  `storedProblem(key)` (and block the editor, or offer a confirmed "start
+  over" that saves with force), and add the new message to its catalogs if
+  it shows `prefs.error`. foamy-teams will (accounts).
+
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit
   components lose their 4.0 branches: `FoamyI18n` uses the shell's

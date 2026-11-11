@@ -46,10 +46,22 @@
 // error string. Invalid stored values read as the default (array and object
 // defaults are copied, so callers can't mutate the schema).
 //
+// An invalid stored array is kept, not replaced. An array setting usually
+// holds what the user entered (accounts, folders), and one bad item (a hand
+// edit, an older plugin's shape) makes the whole value read as the default,
+// so a save built from what the panel shows would wipe the rest. save()
+// therefore refuses to overwrite a stored array that fails the schema
+// (STORED_INVALID, `storedInvalid: true`) unless it is called with
+// force = true, e.g. after the user confirmed starting over.
+// storedProblem() says which stored value is invalid, so the panel can say so
+// and block editing. Absent and null stored values, scalars and objects are
+// replaced as before.
+//
 // Node unit tests: require("../kit/node-loader.cjs").load("FoamyPrefs").
 
 var NOT_ALLOWED = "That value isn't allowed."
 var NO_ENTRY = "Settings can't be saved: this widget has no bar entry."
+var STORED_INVALID = "The saved list in shell.json isn't valid, so it wasn't replaced."
 
 function field(fields, key) {
   for (var i = 0; i < (fields || []).length; i++) if (fields[i] && fields[i].key === key) return fields[i]
@@ -105,6 +117,23 @@ function problem(fields, key, value) {
 
 function valid(fields, key, value) {
   return problem(fields, key, value) === ""
+}
+
+// "" when the stored value for `key` is valid, absent or null, else why it
+// isn't (problem()'s message). The setting then reads as its default.
+function storedProblem(fields, settings, key) {
+  if (!isPlainObject(settings) || settings[key] === undefined || settings[key] === null) return ""
+  return problem(fields, key, settings[key])
+}
+
+// { key: message } for every schema key whose stored value is invalid.
+function storedProblems(fields, settings) {
+  var out = {}
+  for (var i = 0; i < (fields || []).length; i++) {
+    var issue = storedProblem(fields, settings, fields[i].key)
+    if (issue) out[fields[i].key] = issue
+  }
+  return out
 }
 
 function clone(value) {
@@ -200,14 +229,27 @@ function canSaveInline(bar) {
   return !!(bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
 }
 
-// { ok, changed, inline, command, settings, error }. `command` is non-empty
-// only when the caller must run it (inline save unavailable or refused).
-// `pending`: values saved earlier that `settings` doesn't show yet.
-function save(bar, moduleName, fields, settings, key, next, pending) {
-  var result = { ok: false, changed: false, inline: false, command: [], settings: null, error: "" }
+// True when save() would refuse `key` without force: an array field whose
+// stored value (`settings` with `pending` on top) is present and invalid.
+function keepsStored(fields, settings, key, pending) {
+  var f = field(fields, key)
+  return !!f && f.type === "array" && storedProblem(fields, overlay(settings, pending), key) !== ""
+}
+
+// { ok, changed, inline, command, settings, error, storedInvalid }.
+// `command` is non-empty only when the caller must run it (inline save
+// unavailable or refused). `pending`: values saved earlier that `settings`
+// doesn't show yet. `force`: replace an invalid stored array (see above).
+function save(bar, moduleName, fields, settings, key, next, pending, force) {
+  var result = { ok: false, changed: false, inline: false, command: [], settings: null, error: "", storedInvalid: false }
   if (!moduleName) { result.error = NO_ENTRY; return result }
   var issue = problem(fields, key, next)
   if (issue) { result.error = issue; return result }
+  if (force !== true && keepsStored(fields, settings, key, pending)) {
+    result.error = STORED_INVALID
+    result.storedInvalid = true
+    return result
+  }
   var effective = overlay(settings, pending)
   result.settings = merged(effective, key, next)
   result.ok = true
@@ -228,7 +270,8 @@ function save(bar, moduleName, fields, settings, key, next, pending) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-  NOT_ALLOWED: NOT_ALLOWED, NO_ENTRY: NO_ENTRY, field: field, problem: problem, valid: valid, value: value,
+  NOT_ALLOWED: NOT_ALLOWED, NO_ENTRY: NO_ENTRY, STORED_INVALID: STORED_INVALID, field: field, problem: problem,
+  valid: valid, storedProblem: storedProblem, storedProblems: storedProblems, keepsStored: keepsStored, value: value,
   values: values, canonical: canonical, equal: equal, overlay: overlay, settle: settle, merged: merged,
   saveCommand: saveCommand, bounded: bounded, killGroupCommand: killGroupCommand, canSaveInline: canSaveInline,
   save: save

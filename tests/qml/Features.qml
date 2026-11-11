@@ -175,6 +175,17 @@ ShellRoot {
   QtObject { id: cliBar; property var shell: null }
   FoamyPrefsQueue { id: inlineQueue; bar: inlineBar; moduleName: "foamy.test"; fields: shell.fields; settings: ({ id: "foamy.test", a: "", b: "", keep: 1 }) }
   FoamyPrefsQueue { id: cliQueue; bar: cliBar; moduleName: "foamy.test"; fields: shell.fields; settings: ({}) }
+  // The stored list has four items (maxItems 3): user data the schema rejects.
+  QtObject {
+    id: storedBar
+    property var saved: []
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) { storedBar.saved = storedBar.saved.concat([JSON.parse(JSON.stringify(settings))]); return true }
+    }
+  }
+  FoamyPrefsQueue { id: storedQueue; bar: storedBar; moduleName: "foamy.stored"; fields: shell.fields; settings: ({ id: "foamy.stored", list: [1, 2, 3, 4], a: "" }) }
+  property var storedFailures: []
+  Connections { target: storedQueue; function onFailed(key, value, error) { shell.storedFailures = shell.storedFailures.concat([error]) } }
 
   // --- IPC fixtures -----------------------------------------------------------------
   FoamyIpc { id: first; target: "foamy.shared-target"; function who(): string { return "first" } }
@@ -351,6 +362,21 @@ ShellRoot {
     eq(Object.keys(inlineQueue.pending), [], "pending settles once the host reflects it")
     check(!inlineQueue.save("list", [1, 2, 3, 4]), "array maxItems is enforced")
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
+
+    // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
+    eq(storedQueue.storedProblem("list"), "That value isn't allowed.", "storedProblem names the invalid stored list")
+    eq(storedQueue.storedProblem("a"), "", "a valid stored value has no problem")
+    eq(Object.keys(storedQueue.storedProblems), ["list"], "storedProblems lists it")
+    eq(storedQueue.value("list"), [], "it still reads as the default")
+    check(!storedQueue.save("list", [9]), "a save over the invalid stored list is refused")
+    eq(storedQueue.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with its own message")
+    eq(storedFailures, ["The saved list in shell.json isn't valid, so it wasn't replaced."], "failed() reports it")
+    check(!storedQueue.saving && !storedQueue.canRetry, "nothing runs and nothing to retry")
+    eq(storedBar.saved.length, 0, "nothing was written")
+    check(storedQueue.save("a", "x"), "another key still saves")
+    eq(storedBar.saved[0], { list: [1, 2, 3, 4], a: "x" }, "carrying the stored list over verbatim")
+    check(storedQueue.save("list", [9], true), "a forced save replaces it")
+    eq(storedBar.saved[1], { list: [9], a: "x" }, "the forced value is written")
 
     // --- FoamyPrefsQueue: CLI, newest value per key, failure + retry ------------------
     cliQueue.save("a", "first")
