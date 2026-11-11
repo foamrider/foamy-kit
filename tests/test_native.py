@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, foamykit, harness, report, run_shell  # noqa: E402
+from common import FIXTURES, KIT_ROOT, copy_kit, foamykit, harness, report, run_shell  # noqa: E402
 
 SYNC = str(KIT_ROOT / "sync.sh")
 CHECK = str(KIT_ROOT / "check.sh")
@@ -78,6 +78,7 @@ def sync_tests(base):
             "tests/kit-check.sh",
             "REVIEW.md",
         ]
+        + list(foamykit.TOOLING_FILES)
         + rust_sources
     )
     lock = foamykit.read_lock(plugin)
@@ -207,11 +208,19 @@ def sync_tests(base):
     code, out = sh(SYNC, plugin, "--components", "FoamyPrefs")
     leftovers = sorted(p.relative_to(plugin).as_posix() for p in (plugin / "kit").rglob("*"))
     ok &= report(
-        "dropping FoamyNative removes kit/rust, kit/native, rust-toolchain.toml and .github (no empty dirs)",
+        "dropping FoamyNative removes kit/rust, kit/native, rust-toolchain.toml and verify-native.yml (no empty dirs)",
         code == 0
         and not (plugin / "rust-toolchain.toml").exists()
-        and not (plugin / ".github").exists()
-        and leftovers == ["kit/FoamyPrefs.js", "kit/FoamyPrefsQueue.qml", "kit/node-loader.cjs", "kit/qmldir"],
+        and sorted(p.name for p in (plugin / ".github/workflows").iterdir()) == ["checks.yml"]
+        and leftovers
+        == [
+            "kit/FoamyPrefs.js",
+            "kit/FoamyPrefsQueue.qml",
+            "kit/node-loader.cjs",
+            "kit/qmldir",
+            "kit/tooling",
+            "kit/tooling/validate.py",
+        ],
         f"{leftovers}",
     )
     own = fresh(base, "own-toolchain")
@@ -595,7 +604,7 @@ def tamper_tests(plugin, base):
         (out + out2).strip(),
     )
     old_kit = base / "next-kit"
-    shutil.copytree(KIT_ROOT, old_kit, ignore=shutil.ignore_patterns(".git", "tests", "preview"))
+    copy_kit(old_kit)
     (old_kit / "VERSION").write_text("9.9.9\n")
     sh(old_kit / "sync.sh", plugin)
     code, out = kit_check(plugin)

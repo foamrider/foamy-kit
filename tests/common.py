@@ -15,6 +15,19 @@ FIXTURES = KIT_ROOT / "tests/fixtures"
 PLUGINS = KIT_ROOT.parent
 
 
+def copy_kit(target):
+    """A copy of foamy-kit without its tests and preview, as an older or newer
+    kit to sync from. tests/validate.sh stays: sync copies it into plugins."""
+
+    def ignore(directory, names):
+        if Path(directory) == KIT_ROOT / "tests":
+            return [n for n in names if n != "validate.sh"]
+        return [n for n in names if n in (".git", "preview") or (n == "tests" and Path(directory) != KIT_ROOT)]
+
+    shutil.copytree(KIT_ROOT, target, ignore=ignore)
+    return target
+
+
 def synced_demo(components=None):
     """A temporary copy of the demo plugin with the kit synced into it."""
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-demo-"))

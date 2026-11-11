@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, PLUGINS, foamykit, report  # noqa: E402
+from common import FIXTURES, KIT_ROOT, PLUGINS, copy_kit, foamykit, report  # noqa: E402
 
 SYNC = str(KIT_ROOT / "sync.sh")
 CHECK = str(KIT_ROOT / "check.sh")
@@ -458,7 +458,7 @@ def main():
     # 6. Version drift across plugins fails check.sh.
     if b is not None:
         old_kit = base / "old-kit"
-        shutil.copytree(KIT_ROOT, old_kit, ignore=shutil.ignore_patterns(".git", "tests", "preview"))
+        copy_kit(old_kit)
         (old_kit / "VERSION").write_text("0.0.9\n")
         (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
         code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
