@@ -52,8 +52,11 @@ def main():
     ok &= report("stamp sits after the shebang in scripts", shell_lines[0].startswith("#!") and shell_lines[1].startswith("# foamy-kit "))
     ok &= report("scripts stay executable", os.access(a / "kit/clipboard.sh", os.X_OK) and os.access(a / "tests/kit-check.sh", os.X_OK))
     ok &= report("kit files are regular files (no symlinks)", not any(p.is_symlink() for p in a.rglob("*")))
-    code, out = sh(VALIDATE, str(a))
-    ok &= report("omarchy-plugin-validate accepts the synced plugin", code == 0, out.strip())
+    if os.access(VALIDATE, os.X_OK):
+        code, out = sh(VALIDATE, str(a))
+        ok &= report("omarchy-plugin-validate accepts the synced plugin", code == 0, out.strip())
+    else:
+        print("SKIP omarchy-plugin-validate: not installed (an Omarchy host tool)")
     code, out = sh("env", "-i", "PATH=/usr/bin:/bin", "bash", str(a / "tests/kit-check.sh"))
     ok &= report("generated tests/kit-check.sh passes (clean environment)", code == 0 and "OK" in out, out.strip())
 
