@@ -27,6 +27,7 @@ run python3 -I test_compare.py
 run python3 -I test_harness.py
 run python3 -I test_isolation.py
 run python3 -I test_helpers.py
+run python3 -I test_i18n_runtime.py
 run python3 -I test_band.py
 run python3 -I test_menu.py
 run python3 -I test_components.py

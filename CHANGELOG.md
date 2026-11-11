@@ -24,6 +24,15 @@
   (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
   own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
   helpers for plugins".
+- `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
+  replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
+  the same template: a translated key switching no → da/ar → en live, the
+  English fallback, literal values, one plugin-specific plural). It derives
+  every expectation from the plugin's own catalogs (a translated string, a
+  plural entry's `one` form, right-to-left under Arabic), runs under the
+  isolated harness and waits on conditions, not fixed ticks. After syncing,
+  replace `tests/i18n-runtime.py` with `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .`
+  (foamy-notifications keeps its card checks).
 - `FoamyText` (`kit/FoamyText.js`, a new component): `cap(text, maxLines,
   maxChars)` and `tooltip(text)` (6 lines of 100 characters) bound text for
   a sink with no size limit of its own. The host bar tooltip is a PlainText

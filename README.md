@@ -801,6 +801,15 @@ import harness, hostenv
   It replaces the plugin copies (`tests/hostenv.py` in foamy-notifications and
   foamy-notification-center, the `isolate()`s in foamy-audio and foamy-bolt,
   foamy-github's `fake_plugin()`); `tests/test_helpers.py` covers it.
+- **`preview/i18n_runtime.py <plugin>`**: the plugin's catalogs through the
+  kit's `FoamyI18n` in an isolated shell, switching the language file live
+  (the first non-English catalog, Norwegian when there is one, then Arabic,
+  then English). Expectations come from the catalogs: a translated string and
+  its English fallback, a plural entry's `one` form in the language's digits,
+  right-to-left only under Arabic, English-only and unknown strings, values
+  substituted once. It replaces the per-plugin `tests/i18n-runtime.py`
+  variants; plugin UI under a language switch (foamy-notifications' cards)
+  stays in the plugin's own test. `tests/test_i18n_runtime.py` covers it.
 
 ### Before / after trio
 
