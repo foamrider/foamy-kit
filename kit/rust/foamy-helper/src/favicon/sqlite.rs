@@ -837,10 +837,11 @@ impl Database {
             let (kind, n) = varint(&payload.local[..header_len as usize], at as usize)?;
             at += n as u64;
             columns.push((kind, offset));
-            offset += serial_len(kind)?;
-        }
-        if offset > payload.total {
-            return broken("record is longer than its payload");
+            // A crafted header can claim columns of up to 2^63 bytes each.
+            offset = match offset.checked_add(serial_len(kind)?) {
+                Some(end) if end <= payload.total => end,
+                _ => return broken("record is longer than its payload"),
+            };
         }
         Ok(Record {
             db: self,
@@ -1165,6 +1166,30 @@ mod tests {
             "header claims more pages than the file has"
         );
         assert!(header(b"not a database", 1).is_err());
+    }
+
+    #[test]
+    fn huge_column_sizes_are_a_broken_record_not_an_overflow() {
+        let mut page = vec![0u8; 512];
+        page[..16].copy_from_slice(MAGIC);
+        page[16..18].copy_from_slice(&512u16.to_be_bytes());
+        page[18] = 1;
+        page[19] = 1;
+        page[21..24].copy_from_slice(&[64, 32, 32]);
+        page[56..60].copy_from_slice(&1u32.to_be_bytes());
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let db = Database::from_image(page, deadline).unwrap();
+        // Header length 19, then two blobs of (2^64 - 1 - 12) / 2 bytes
+        // each: their sum overflows u64.
+        let mut local = vec![19u8];
+        local.extend_from_slice(&[0xff; 9]);
+        local.extend_from_slice(&[0xff; 9]);
+        let payload = Payload {
+            local,
+            total: 19,
+            overflow: 0,
+        };
+        assert!(db.record(payload, 1).is_err());
     }
 
     #[test]

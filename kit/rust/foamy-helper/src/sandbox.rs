@@ -67,8 +67,11 @@ const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
 const X32_SYSCALL_BIT: u32 = 0x4000_0000;
 
 /// Syscalls an image decoder must not make: no new processes (`clone`,
-/// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), mounts,
-/// `ptrace` or `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
+/// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), `mount`
+/// (only the classic call: the newer mount API, `umount2` and
+/// `pivot_root` are not listed; without namespaces, which are denied, a
+/// mount needs privileges the decoder doesn't have anyway), `ptrace` or
+/// `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
 /// attack surface a decoder never needs: io_uring (`io_uring_setup`,
 /// `io_uring_enter`, `io_uring_register`), the key store (`add_key`,
 /// `request_key`, `keyctl`) and `userfaultfd`. Per architecture, ascending.
@@ -353,11 +356,17 @@ fn install(program: &[sock_filter]) -> io::Result<()> {
 }
 
 /// A Landlock ruleset that handles only "execute": a child restricted by it
-/// may execute (and map as its ELF interpreter) exactly the allowed files,
-/// and nothing else, whatever its configuration says. Everything else
+/// may `execve` (and have the kernel load as an ELF interpreter) only the
+/// allowed files, whatever its configuration says, so it can't start the
+/// filters, hooks or helpers it would run by path. Everything else
 /// (reading, writing, networking) stays as it was. Equivalent to
 /// `setpriv --landlock-access fs:execute --landlock-rule
 /// path-beneath:execute:<path>…`, applied in the child just before `exec`.
+///
+/// It is not a barrier against code that already runs in the child:
+/// Landlock checks `execve`, not `mmap`, so an allowed dynamic loader runs
+/// any readable binary given as its argument (`ld-linux-x86-64.so.2
+/// /bin/sh -c …`), and an allowed interpreter runs any script.
 #[derive(Debug)]
 pub struct ExecOnly {
     ruleset: OwnedFd,
@@ -393,7 +402,9 @@ impl ExecOnly {
     }
 
     /// Allows `program` and its ELF interpreter (the dynamic loader), as
-    /// github_status does for Git.
+    /// github_status does for Git. The loader can run other binaries when
+    /// invoked directly (see [`ExecOnly`]); a program that execs only by
+    /// path, as Git does, can't use that.
     pub fn for_program(program: &Path) -> io::Result<ExecOnly> {
         let mut paths = vec![program.to_path_buf()];
         paths.extend(elf_interpreter(program));
@@ -403,7 +414,8 @@ impl ExecOnly {
     /// github_status's `_probe_sandbox`: finds `name` in `PATH` (resolved
     /// to its real path), restricts execution to it and its interpreter,
     /// and checks that the restriction works (`<program> <args>` exits 0)
-    /// and bites (`/bin/sh -c 'exit 0'` cannot run). Returns the program to
+    /// and bites (`/bin/sh -c 'exit 0'` cannot be executed directly; through
+    /// the allowed loader it could, see [`ExecOnly`]). Returns the program to
     /// run and the restriction, or `None`: then run unrestricted, as the
     /// Python helper did without setpriv or Landlock. Probe once and keep
     /// the result.

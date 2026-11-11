@@ -58,6 +58,19 @@
   misleading "requires a kernel configured with CONFIG_SECCOMP". Runs that
   overlap in time still need a memfd each. The live bubblewrap test now
   checks its second run really ran under the filter.
+- `json::run`: a panic in another thread after the reply no longer prints
+  a second, `INTERNAL` reply; the helper still exits 101.
+- `favicon`: a crafted record header whose column sizes add up past 2^64
+  is a broken record instead of a debug-build overflow panic (release
+  builds wrapped and rejected it later).
+- `lock::FileLock::exclusive_within(path, Duration::MAX)` waits as long as
+  it takes instead of panicking on `Instant` overflow.
+- Docs: `ExecOnly` says what Landlock's execute right covers (an allowed
+  dynamic loader can still run other binaries handed to it); the decoder
+  filters deny the classic `mount` call only (not the new mount API, which
+  needs privileges the decoder lacks without namespaces); the `net` example
+  bounds the connect too and says that DNS and connect are outside
+  `DeadlineStream`; a lock file is 0600 only when the lock creates it.
 - `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
   longer panics on `Instant` overflow; it means no deadline of its own.
 - `favicon` (foamy-notifications, foamy-notification-center): a host's
