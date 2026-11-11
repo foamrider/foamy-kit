@@ -4,9 +4,14 @@ import QtQuick
 // plus ensureVisible(item).
 //
 //   Flickable { id: list; … }
-//   FoamyWheelScroll { id: wheel; target: list }        // declare it anywhere
+//   FoamyWheelScroll { id: wheelScroll; target: list }  // declare it anywhere
+//   readonly property alias wheel: wheelScroll          // optional, for tests
 //   …
-//   onExpandedChanged: if (expanded) wheel.ensureVisible(section)
+//   onExpandedChanged: if (expanded) wheelScroll.ensureVisible(section)
+//
+// Give the id another name than a property it backs: `id: wheel` next to
+// `property alias wheel: wheel` shadows the property (qmllint
+// id-shadows-member).
 //
 // Why: Qt 6's Flickable turns every wheel event into a short smoothing
 // animation that starts from where the content is *now*. A high-resolution

@@ -47,9 +47,9 @@ FocusScope {
 
   // The page's scroll view and its wheel/ensureVisible helper.
   readonly property alias flickable: scroll
-  readonly property alias wheel: wheel
+  readonly property alias wheel: wheelScroll
 
-  function ensureVisible(item, margin) { wheel.ensureVisible(item, margin) }
+  function ensureVisible(item, margin) { wheelScroll.ensureVisible(item, margin) }
 
   // Focus follow: the least scroll that shows the focused control.
   function keepVisible(item) {
@@ -81,7 +81,7 @@ FocusScope {
     onBack: root.back()
   }
 
-  FoamyWheelScroll { id: wheel; target: scroll }
+  FoamyWheelScroll { id: wheelScroll; target: scroll }
 
   Flickable {
     id: scroll
