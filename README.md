@@ -2,9 +2,10 @@
 
 The canonical source of the components every foamy Omarchy shell plugin shares
 (`foamy-audio`, `foamy-bolt`, … `foamy-weather`), plus the tools that keep
-them identical: `sync.sh`, `check.sh`, a design lint, an offscreen preview
-harness for screenshots, and a build tool for plugins' bundled Rust helpers
-that each plugin carries itself ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
+them identical: `sync.sh`, `check.sh`, a design lint, one validation command
+with pinned linters and formatters and its CI job ([Tooling](#tooling)), an
+offscreen preview harness for screenshots, and a build tool for plugins'
+bundled Rust helpers that each plugin carries itself ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
 The shared code review standard lives in [REVIEW.md](REVIEW.md): structure,
 simplification, linting and dead-code analysis, defensive programming, security
 and validation evidence. Read it before reviewing kit or plugin changes.
@@ -59,14 +60,17 @@ Each file's header documents its API. Dependencies are in `kit/components.json`.
 ```
 
 Sync writes `kit/` (components, a generated `kit/qmldir` registering the
-singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the review
-block in `AGENTS.md`, and `foamy-kit.lock`
+singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the
+[tooling](#tooling) (`tests/validate.sh`, `kit/tooling/validate.py`,
+`mise.toml`, `ruff.toml`, `.oxlintrc.json`, `.qmlformat.ini`,
+`.github/workflows/checks.yml`), the review block in `AGENTS.md`, and
+`foamy-kit.lock`
 (version, components, body hashes). Line 1 of every stamped code file (line 2 after
 `pragma`, `.pragma` or a shebang) is
 
     // foamy-kit 0.1.0 <sha256 of the body> — do not edit; change foamy-kit and run sync
 
-`.sh`, `.toml` and `qmldir` use `#`. Rust and TOML files always carry the stamp
+`.sh`, `.py`, `.toml`, `.yml`, `.ini` and `qmldir` use `#`. Rust and TOML files always carry the stamp
 on line 1 (a Rust `#![…]` attribute is not a shebang), and it is always one
 line, so a kit version change never shifts a line number (Rust panic locations
 embed them). A component's files may live in subdirectories of `kit/` (glob
@@ -123,6 +127,91 @@ Fails when plugins are on different kit versions, a stamped file, notice or
 native helper doesn't match its pin ([Native helpers](#native-helpers)), or
 the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
+
+## Tooling
+
+Every repository has one validation command, synced from the kit (foamy-kit
+runs the same files on itself):
+
+```bash
+mise install                 # once: the tools mise.toml pins (https://mise.jdx.dev)
+tests/validate.sh            # everything, on the Omarchy host
+tests/validate.sh --ci       # what GitHub's runner can do (checks.yml runs this)
+tests/validate.sh --fast     # no native helper tests; tests/suite.sh gets --fast
+tests/validate.sh --only qmllint,ruff     # or --skip CHECKS; --list names them
+tests/validate.sh --update-baseline qmllint   # rewrite a baseline, then review its diff
+```
+
+It prints a PASS, FAIL or SKIP line per check and exits nonzero on any
+failure. A pinned tool that is missing or at another version fails with
+"run `mise install`"; a check that can't run where you are (the host checks
+under `--ci`) is a SKIP with the reason.
+
+| Check | What runs |
+|---|---|
+| `kit-check` | `bash tests/kit-check.sh` |
+| `plugin-validate` | `omarchy-plugin-validate <plugin>` (host) |
+| `design-lint` | foamy-kit's `check.sh <plugin>`, when the kit is at `$FOAMY_KIT` or `~/GitHub/Personal/foamy-kit` (else SKIP) |
+| `qmllint` | `/usr/lib/qt6/bin/qmllint` with `qs` as the Omarchy shell (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`) and Qt's QML dir on the import path; every default category, unused imports as errors, Qt Design Studio's categories off (host) |
+| `qmlformat` | `/usr/lib/qt6/bin/qmlformat -s .qmlformat.ini`, compared with each file (host; Qt 6.12's output) |
+| `oxlint` | `.oxlintrc.json` over every `.js`/`.cjs`/`.mjs`. QML-loaded files are linted from a copy in which `.pragma`/`.import` lines are `//` comments (same line numbers); their top-level functions are QML's API, so an unused one is not reported |
+| `ruff`, `ruff-format` | `ruff check` and `ruff format --check` with `ruff.toml` (E, F, W, B, C901 at 15; E402 allowed in `tests/`) |
+| `vulture` | `vulture --min-confidence 60` |
+| `shellcheck` | `bash -n` and `shellcheck -x` on every `*.sh` and shell-shebang script |
+| `shfmt` | `shfmt -i 2 -ci -bn -d` on the same scripts |
+| `native` | `kit/native/build-native.sh . --test --crate <crate>` for each `native.pin` (`--fast`: SKIP; `--ci`: SKIP, verify-native.yml runs it) |
+| `suite` | `bash tests/suite.sh [--ci] [--fast]`: the repository's own tests |
+
+Kit-owned files (everything `foamy-kit.lock` lists, all of `kit/`) are never
+linted or reformatted in a plugin. The checks read git-tracked and untracked,
+non-ignored files.
+
+**What a plugin adds** (its own files; sync never touches them):
+
+- `tests/suite.sh`, required: the plugin's node, Python and offscreen runtime
+  tests. It gets `--ci` (no Quickshell, no Omarchy host: run only node and
+  host-free Python tests) and `--fast` (skip the slow runtime tests), and
+  must exit nonzero on any failure. `FOAMY_KIT` is set when the kit was found,
+  and the pinned tools (node included) come first on `PATH`.
+- `tests/lint/<check>-baseline.txt` (qmllint, oxlint, ruff, vulture,
+  shellcheck): the findings that existed when the check was adopted, written
+  by `--update-baseline` and reviewed in the commit like code. An entry is
+  file, rule, message and the reported line's text (not its number), so
+  edits elsewhere don't invalidate it; only findings not in it fail, and a
+  baselined C901 function fails again once its score grows. Validate notes
+  fixed entries; shrink the file then. Never regenerate it to get a new
+  finding through.
+- `tests/lint/exclude.txt`: `<glob> [checks]  # reason` lines for paths a check
+  must not read, such as test inputs whose exact text is the test, or
+  harness scenes whose imports exist only in the harness's staged copy.
+- `tests/lint/vulture-ignore.txt`: `<name>  # reason` lines for dynamic entry
+  points Vulture can't see (atexit or signal handlers, names called by
+  string).
+- `.ruff.toml` (`extend = "ruff.toml"` first) and `tests/lint/oxlintrc.json`
+  (`"extends": ["../../.oxlintrc.json"]`) for plugin rules or ignores, each
+  with a comment saying why. `.mise.toml` adds tools; validate still requires
+  the kit's pinned versions.
+
+Adopting it in a plugin: sync, `mise install`, write `tests/suite.sh`, run the
+formatters once and commit that migration on its own (`ruff format --config
+ruff.toml <files>`, `shfmt -i 2 -ci -bn -w <scripts>`, `qmlformat -s
+.qmlformat.ini -i <file>`; qmlformat moves an end-of-line comment after a
+JavaScript statement to the next line, so move such comments above their
+statement first), then `tests/validate.sh --update-baseline`, review and
+commit the baselines.
+
+The pins (`mise.toml`) are exact versions, each the newest release at least
+a week old when chosen; `mise install` installs them, and CI installs the
+same file through jdx/mise-action. Not pinned there: Python 3.11 or newer
+(the system's: the tests use its packages), Qt 6, Quickshell and the Omarchy
+shell (the host), and rustup (FoamyNative reads `rust-toolchain.toml`).
+There is no JavaScript formatter yet.
+
+`.github/workflows/checks.yml` runs `tests/validate.sh --ci` on ubuntu-24.04
+for pushes to main and dev and for pull requests, with read-only contents
+permission and no secrets; actions/checkout and jdx/mise-action are pinned by
+commit. It sits beside verify-native.yml, which still rebuilds and attests
+native helpers.
 
 ## Native helpers
 
@@ -850,8 +939,16 @@ behaviour; `FoamyI18n` uses the shell's `Translations`, `FoamyMotion` its
 ## Tests
 
 ```bash
-tests/run-all.sh
+tests/run-all.sh             # every test
+tests/validate.sh            # the linters and formatters, then tests/suite.sh (run-all.sh)
+tests/validate.sh --ci       # what CI runs: tests/suite.sh --ci is the node, sync/check,
+                             # validate and image-compare tests
 ```
+
+`test_validate.py` runs a synced plugin's own `tests/validate.sh`: QML-loaded
+JavaScript linted through its directives, baselines (line shifts, grown
+complexity, fixed entries), kit-owned files left alone, reasons required, a
+missing pinned tool, the suite hook and `--ci`. It needs `mise install`.
 
 Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
@@ -888,8 +985,8 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 
 `VERSION` is the kit version stamped into every copy. Bump it for any change
-under `kit/`, `tools/kit-check.sh.in`, `REVIEW.md` or the `AGENTS.md` review
-block, then sync every plugin so `check.sh`
+under `kit/`, `tools/kit-check.sh.in`, `REVIEW.md`, the tooling files or the
+`AGENTS.md` review block, then sync every plugin so `check.sh`
 sees one version everywhere.
 
 ## License

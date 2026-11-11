@@ -3,6 +3,31 @@
 ## 0.9.0 — unreleased (dev)
 
 ### Added
+- `tests/validate.sh`: one validation command for foamy-kit and every
+  plugin (README "Tooling", REVIEW.md section 3). It runs kit-check,
+  omarchy-plugin-validate, the kit's `check.sh`, Qt 6 qmllint (with the
+  Omarchy shell as `qs`, unused imports as errors), qmlformat, Oxlint (over
+  QML-loaded files too, their `.pragma`/`.import` read as comments), Ruff
+  lint and format, Vulture, `bash -n` with ShellCheck, shfmt,
+  `build-native.sh --test` and then the plugin's own `tests/suite.sh`; it
+  exits nonzero on any failure. `--ci` skips the host checks with a reason,
+  `--fast` the native tests. Existing findings live in reviewed
+  `tests/lint/<check>-baseline.txt` files that match on file, rule, message
+  and source text; only new findings (or a baselined function grown more
+  complex) fail. `--update-baseline` rewrites them. Kit-owned files are never
+  linted or reformatted in a plugin.
+- Pinned tools and shared configuration: `mise.toml` (node 26.13.0, ruff
+  0.17.3, oxlint 1.91.0, vulture 2.16, shfmt 3.14.1, shellcheck 0.11.0;
+  `mise install`), `ruff.toml` (E, F, W, B, C901 at 15), `.oxlintrc.json`,
+  `.qmlformat.ini` (2-space indent, no reordering). A missing or other
+  version fails validate.
+- `.github/workflows/checks.yml`: `tests/validate.sh --ci` on ubuntu-24.04
+  for pushes and pull requests (actions pinned by commit, read-only, no
+  secrets). foamy-kit runs it too.
+- Sync writes all of these into every plugin, whatever its component set:
+  stamped, locked and checked like kit code (INI files take a `#` stamp).
+  `kit/native/native.py` and `tests/kit-check.sh` accept the new lock paths.
+  A plugin adds `tests/suite.sh` and, when adopting, its baselines.
 - `REVIEW.md`: the shared Foamy review standard (blocking checklist,
   severity, review order, deterministic checks, boundary and process
   lifecycle rules, security at the sink, tests, review record). `sync.sh`
@@ -28,6 +53,16 @@
   `json::run` and the README.
 
 ### Changed
+- foamy-kit's own Python, QML and shell scripts are formatted with ruff
+  format, qmlformat and shfmt (separate commits, no behaviour change);
+  qmlformat-displaced end-of-line comments sit above their statement. The
+  six unused QML imports qmllint found are gone (FoamyAction, FoamyPopup,
+  FoamyPopupCard, FoamyStyle, two preview files), as are native.py's unused
+  `WORKFLOW` and foamykit.py's unused `verify_file`. Plugins get the
+  reformatted kit files on their next sync; their stamped copies change,
+  nothing else does.
+- `test_sync_check.py` prints a SKIP line instead of failing when
+  omarchy-plugin-validate is not installed (CI).
 - `foamy-helper` is 0.1.2 (new public API). A plugin that syncs 0.9.0 runs
   `cargo update -p foamy-helper` (in `native/`, or its crate dir) and
   rebuilds; no call site changes.
