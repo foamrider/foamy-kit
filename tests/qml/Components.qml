@@ -28,17 +28,10 @@ ShellRoot {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim; fullScreenBar: shell.host === "4.5" }
-  }
-  FloatingWindow {
-    visible: shell.host !== "4.5"
-    implicitWidth: 1920
-    implicitHeight: 34
-    color: "black"
-    Item { id: stripAnchor; x: sim.anchor.x; y: 6; width: 22; height: 22 }
+    ScreenSim { id: sim }
   }
   MockBar { id: bar }
-  readonly property Item anchorButton: shell.host === "4.5" ? sim.anchor : stripAnchor
+  readonly property Item anchorButton: sim.anchor
 
   property int refreshes: 0
   property int calendarClicks: 0

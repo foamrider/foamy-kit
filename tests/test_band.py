@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FoamyHeroBand on 4.5 (and 4.0 with FOAMY_HOST_40), dark and light themes, LTR and RTL:
+"""FoamyHeroBand on 4.5, dark and light themes, LTR and RTL:
 geometry inside a real FoamyPopup card, and pixels of the captured card
 (rounded transparent corners, tinted band vs body, hairline edge, glow on the
 trailing side, clipped picture)."""

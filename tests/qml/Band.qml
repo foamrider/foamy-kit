@@ -23,21 +23,13 @@ ShellRoot {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim; fullScreenBar: shell.host === "4.5" }
-  }
-  // 4.0 bars are strip windows (4.5 bars span the screen): as in the real hosts.
-  FloatingWindow {
-    visible: shell.host !== "4.5"
-    implicitWidth: 1920
-    implicitHeight: 34
-    color: "black"
-    Item { id: stripAnchor; x: sim.anchor.x; y: 6; width: 22; height: 22 }
+    ScreenSim { id: sim }
   }
   MockBar { id: bar }
 
   FoamyPopup {
     id: popup
-    anchorItem: shell.host === "4.5" ? sim.anchor : stripAnchor
+    anchorItem: sim.anchor
     bar: bar
     open: true
     body: Component {
@@ -66,7 +58,7 @@ ShellRoot {
   // A band-only popup (empty states): the band ends the card.
   FoamyPopup {
     id: bandOnly
-    anchorItem: shell.host === "4.5" ? sim.anchor : stripAnchor
+    anchorItem: sim.anchor
     bar: bar
     open: true
     centerOnBar: true

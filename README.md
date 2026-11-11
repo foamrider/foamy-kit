@@ -21,12 +21,12 @@ edited in a plugin: change it here, then sync.
 | FoamyStyle | `FoamyStyle.qml` (singleton) | Radius, border, font family and type scale, widths, spacing, control sizes |
 | FoamyPalette | `FoamyPalette.qml` (singleton) | Surface tones and theme status colours from colors.toml |
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
-| FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration` (4.5), `reduceMotion`, named tokens |
-| FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; 4.5 Translations, English on 4.0 |
+| FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
+| FoamyI18n | `FoamyI18n.qml` (singleton), `FoamyI18nText.js`, `node-loader.cjs` | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations. `FoamyI18nText.js`: its value substitution, and `translator(catalog, english)` for node tests |
 | FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
-| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with 4.5's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
-| FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process on 4.5, bounded `omarchy-shell` fallback |
+| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
+| FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
 | FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene |
@@ -42,7 +42,9 @@ edited in a plugin: change it here, then sync.
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
-| FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), node loader for unit tests |
+| FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblem(key)`), node loader for unit tests |
+| FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never splitting a surrogate pair |
+| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
 | FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
@@ -299,9 +301,14 @@ leaves the Rust code alone keeps the binaries fresh. `check.sh` and
 `tests/kit-check.sh` (bash, coreutils, `file`) fail when a pinned binary is
 missing, a symlink, not executable, has another checksum, is not a static
 64-bit ELF for its arch, or the sources changed since the build ("stale"),
-when FoamyNative is synced without a `native.pin`, and when
+when FoamyNative is synced without a `native.pin`, when the pin of fresh
+binaries names another kit version than `foamy-kit.lock`, and when
 `THIRD_PARTY_NOTICES.md` is missing or doesn't name the pin's source hash
-and checksums.
+and checksums. The pin's `kit` line is the kit version its binaries match:
+the build writes it, and sync refreshes that one line in a pin whose source
+hash still matches after the sync (a kit bump that leaves `kit/rust` alone),
+never its source hash or checksums; a stale pin keeps the version that built
+it until the rebuild.
 
 ### Third-party notices
 
@@ -653,25 +660,44 @@ empty program and bubblewrap refuses to start it (it fails closed).
 ## Preview
 
 ```bash
-preview/render.py ../foamy-audio --host both --out /tmp/audio-shots
-preview/publish-screenshots.sh ../foamy-audio /tmp/audio-shots/4.5 fix-omarchy-45/audio
+preview/render.py ../foamy-audio --out /tmp/audio-shots
+preview/publish-screenshots.sh ../foamy-audio /tmp/audio-shots fix-omarchy-45/audio
 ```
 
 `render.py` runs Quickshell offscreen (software renderer, temp HOME and XDG
 dirs, no Wayland/Hyprland variables) against a host shell (only its QML is
-loaded, no host script or binary is ever run): `--host 4.5` (the default) is
-the installed Omarchy 4.5 shell, `/usr/share/omarchy/shell` (`FOAMY_HOST_45`
-overrides). 4.0 is opt-in: `--host 4.0` needs `FOAMY_HOST_40` pointing at a 4.0
-shell directory. `--host both`, `--trio` and `--before-host` use the hosts that
-are there and print a `SKIP … set FOAMY_HOST_40` line for 4.0 otherwise
-(`harness.available_hosts()`); with `--host both` the PNGs go to `<out>/<host>/`. Offscreen Qt has no
+loaded, no host script or binary is ever run): the installed Omarchy 4.5
+shell, `/usr/share/omarchy/shell` (`FOAMY_HOST_45` overrides). Omarchy 4.0 is
+not supported since 0.9.0: `--host 4.0` stops with a message, `--host both`
+renders 4.5 into `<out>/4.5/` as it used to, `FOAMY_HOST_40` is ignored, and
+`harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a caller
+still lists. Offscreen Qt has no
 layer shell, so the host's own `Ui/KeyboardPanel.qml` is loaded with its
 `PanelWindow` swapped for an item that draws into a simulated 1920x1080
-screen; its geometry and motion code is the host's. 4.5 runs use a full-screen
-bar window, 4.0 runs a strip window, like the real bars. Each run gets a
+screen; its geometry and motion code is the host's. The bar window spans the
+screen, like the real 4.5 bar. Each run gets a
 private D-Bus session (no service activation: the desktop's MPRIS players
 and notifications are invisible), and `qs` dies with the render, even when
 the render itself is killed; the temp dir is removed (`--keep` keeps it).
+
+What a run's processes (qs, the plugin's `Process`es, the host QML) can
+reach is isolated by default (0.9.0):
+
+- **No host commands.** Omarchy's bin directories (`/usr/share/omarchy/bin`,
+  the host's `../bin`, the caller's `$OMARCHY_PATH/bin`) leave `PATH`, and
+  any other `omarchy`/`omarchy-*` still on it (`/usr/bin`, a wrapper in
+  `~/.local/bin`) is shadowed by a stub that exits 127 and logs the call to
+  `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`). `Run(…,
+  fakebin={"omarchy": script})` stand-ins come first.
+- **No AppImage libraries.** Entries under `$APPDIR` (an editor's bundled
+  libnotify) leave `LD_LIBRARY_PATH` and `PATH`.
+- **No audio server.** `PULSE_SERVER` and `PIPEWIRE_REMOTE` name dead
+  sockets; the lookup dirs are the private runtime dir.
+- **No system bus.** `DBUS_SYSTEM_BUS_ADDRESS` is a dead address, so
+  NetworkManager, logind, UPower and BlueZ are out of reach. A test that
+  needs one opts in: `Run(…, system_bus="private")` starts a second private
+  daemon (`Run.system_bus_address`) for its fake services, and
+  `system_bus="unix:path=…"` uses a bus the test runs itself.
 The plugin is loaded over `file://`, like the shell loads it, so plugin
 subdirectories need no qmldir.
 
@@ -699,7 +725,7 @@ Item {
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
-`--theme dark|light|<colors.toml>`, `--language da` (4.5), `--position`,
+`--theme dark|light|<colors.toml>`, `--language da`, `--position`,
 `--rounding`, `--scale 1.25` (display scale: windows get that device pixel
 ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
 `--timeout`, `--bus private|none`, `--keep`.
@@ -727,26 +753,86 @@ runs whose process is gone.
 Comparing screenshots: `preview/compare.py old.png new.png` (or two
 directories). It compares RGB and alpha; never compare one without the other.
 
+### Test helpers for plugins
+
+Plugin runtime tests import the harness from the kit checkout (they don't
+sync it), and the same goes for these helpers:
+
+```python
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import harness, hostenv
+```
+
+- **`harness/FoamyWait.qml`**, in every run's QML (`import "harness"`): steps
+  that wait for a condition instead of a fixed `after(ms)` chain, so they
+  neither flake on a loaded machine nor waste time on an idle one.
+
+  ```qml
+  FoamyWait { id: wait }
+  wait.waitFor(function() { return service.ready }, 10000, function(ok) {
+    check(ok, "the service became ready")
+    nextStep()
+  })
+  wait.waitFor(function() { return !proc.running }, 5000, nextStep, "the save ends")  // label: a timeout fails the run
+  wait.after(500, nextStep)                                                            // when the step really is time
+  ```
+
+  `then(ok)` is called once and always later; a throwing condition counts as
+  false; `pending` counts the waits in flight.
+- **`harness.wait_for(condition, timeout, interval=0.05, stop=None)`** polls a
+  Python condition and returns its value (or None after the timeout);
+  **`Run.wait_for_log(text, timeout)`** waits until the running shell logs
+  `text` (a `FOAMY READY` line before an IPC call).
+- **`preview/hostenv.py`** for what runs outside `harness.Run`, or needs a
+  private Omarchy tree:
+  - `isolate(env, base)`: the harness's isolation for a process the test
+    starts itself (its own `qs`, `notify-send`): no Omarchy bin dir or
+    `$APPDIR` on `PATH`/`LD_LIBRARY_PATH`, dead audio and system-bus
+    addresses. `library_path()`, `isolated_path()` and `host_bins()` are the
+    parts.
+  - `make(base, app, env=None, stubs=None, names=())`: environment overrides
+    for a private `OMARCHY_PATH` (the host's `shell/` and `default/` only) whose
+    `bin/` and `PATH` stubs log every `omarchy-*` call to
+    `<base>/omarchy-calls.log` and succeed; `omarchy-shell` reaches the test's
+    own shell (`qs ipc -n -p <app>`), never the live one. `stubs` replaces or
+    adds scripts; `calls(base)` reads the log.
+  - `check(env, *outputs)`: fails when a host bin dir is on `PATH` or a host
+    script's path shows up in the outputs.
+  - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
+    whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
+    fake.
+
+  It replaces the plugin copies (`tests/hostenv.py` in foamy-notifications and
+  foamy-notification-center, the `isolate()`s in foamy-audio and foamy-bolt,
+  foamy-github's `fake_plugin()`); `tests/test_helpers.py` covers it.
+- **`preview/i18n_runtime.py <plugin>`**: the plugin's catalogs through the
+  kit's `FoamyI18n` in an isolated shell, switching the language file live
+  (the first non-English catalog, Norwegian when there is one, then Arabic,
+  then English). Expectations come from the catalogs: a translated string and
+  its English fallback, a plural entry's `one` form in the language's digits,
+  right-to-left only under Arabic, English-only and unknown strings, values
+  substituted once. It replaces the per-plugin `tests/i18n-runtime.py`
+  variants; plugin UI under a language switch (foamy-notifications' cards)
+  stays in the plugin's own test. `tests/test_i18n_runtime.py` covers it.
+
 ### Before / after trio
 
 ```bash
 preview/render.py ../foamy-power --trio --url-prefix https://raw.githubusercontent.com/foamrider/foamy-power/pr-assets/fix-omarchy-45/power
 ```
 
-Renders each view per host: `<view>-before.png` (the `origin/dev` tree,
-`--dev-ref`) and `<view>-after-4.5.png` (the working tree; plus
-`<view>-after-4.0.png` with `FOAMY_HOST_40`), and writes `trio.md`, a PR-body
-table with one After column per host. Before comes from `git archive`
+Renders each view: `<view>-before.png` (the `origin/dev` tree,
+`--dev-ref`) and `<view>-after-4.5.png` (the working tree), and writes
+`trio.md`, a PR-body table. Before comes from `git archive`
 (the plugin repo is not touched), with layer-shell windows (pre-kit popup
 forks, overlay windows) swapped for the offscreen stand-in — only the windows
 and their own `anchors { }` blocks are rewritten — and bare `Color.` qualified
 (Qt 6.12 shadows it), so dev looks as it did. Describe the dev UI in
 `preview/Before.qml` in the current tree (or `--before-preview FILE`); else dev's
-own `preview/Preview.qml` is used. Before tries the available hosts of
-`--before-host 4.5,4.0` in order: when dev doesn't render on 4.5, or its popup
-fork is clipped there (the 120 px card the kit fixed), it falls back to the 4.0
-host if `FOAMY_HOST_40` is set, and the column header says so; without it the
-header says the fork is clipped (or that dev did not render). Card images only;
+own `preview/Preview.qml` is used. When dev's popup fork is clipped on 4.5
+(the 120 px card the kit fixed) or dev doesn't render, the column header says
+so. Card images only;
 `--states` limits the views.
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
@@ -755,12 +841,11 @@ branch through a temporary worktree (the working tree is untouched), prints
 
 ## Compatibility
 
-`dev` plugins target Omarchy 4.5, the installed shell; only 4.5 is tested by
-default. The kit keeps its 4.0 code paths (opt-in tests: `FOAMY_HOST_40`), with
-runtime feature detection only: the stock KeyboardPanel and
-PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
-4.5-only singletons through `Qt.createQmlObject`, `FoamyMotion` checks
-`typeof Style.duration`. No dual code paths beyond that.
+Plugins and the kit target Omarchy 4.5, the installed shell, and nothing
+else: 0.9.0 removed the 4.0 code paths, the `--host 4.0` harness option and
+`FOAMY_HOST_40`. The stock KeyboardPanel and PopupCard bring the host's own
+behaviour; `FoamyI18n` uses the shell's `Translations`, `FoamyMotion` its
+`Style.duration`, and `FoamyIpc` registers with its `IpcRegistry`.
 
 ## Tests
 
@@ -768,11 +853,9 @@ PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
 tests/run-all.sh
 ```
 
-Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`)
-and on 4.0 only when `FOAMY_HOST_40` points at a 4.0 shell; otherwise each
-prints `SKIP … on 4.0` and passes.
+Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
-Runs FoamyPrefs unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
+Runs FoamyPrefs, FoamyText, FoamySchedule and FoamyI18nText unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
 on throwaway copies, the FoamyPopup geometry test (4 bar positions, max
 height, menu padding, plus the old fork as a negative control), runtime
 tests of i18n/motion/palette/prefs/cursor/leader election/IPC

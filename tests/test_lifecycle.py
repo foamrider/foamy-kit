@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""How the kit's Process users end, on 4.5 and, with FOAMY_HOST_40, 4.0
-(tests/qml/Lifecycle.qml): every way a FoamyPrefsQueue CLI save ends (exit
+"""How the kit's Process users end, on 4.5 (tests/qml/Lifecycle.qml): every way a FoamyPrefsQueue CLI save ends (exit
 0, exit 1, can't start, hangs past the deadline, stopped, queue destroyed)
 clears `saving`, rolls back and stays retryable, and its stderr is capped;
 a timed-out or abandoned array save's omarchy-shell child is killed with it

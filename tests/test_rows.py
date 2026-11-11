@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.4.2 settings rows (tests/qml/Rows.qml) on 4.5 (and 4.0 with FOAMY_HOST_40), LTR and
+"""kit 0.4.2 settings rows (tests/qml/Rows.qml) on 4.5, LTR and
 RTL, at display scale 1.0 and 1.25: toggle rows, compact FoamyNumberFields
 and compact FoamyDropdowns share a row height and a trailing edge; the
 compact dropdown's width, cap, elision and open list; a section title with

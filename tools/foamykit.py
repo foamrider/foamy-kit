@@ -451,6 +451,23 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         changed.append(LOCK_NAME)
         if not dry_run:
             lock_path.write_bytes(new_lock)
+    # A native.pin's `kit` line names the kit its binaries match. After the
+    # files above, a pin whose source hash still matches is fresh at this
+    # version: refresh only that line (never the source hash or checksums).
+    # A stale pin keeps the version that built it until the rebuild.
+    if "FoamyNative" in selected:
+        for pin_path in native.native_pins(plugin):
+            crate = pin_path.parent.name
+            if not inside(plugin, f"{crate}/{native.PIN_NAME}"):
+                continue
+            pin = native.read_pin(pin_path)
+            if not dry_run and native.native_source_hash(plugin, crate) != pin.get("source"):
+                continue
+            data = native.refresh_pin_kit(pin_path, version)
+            if data is not None:
+                changed.append(f"{crate}/{native.PIN_NAME}")
+                if not dry_run:
+                    replace_file(pin_path, data)
 
     verb = "would update" if dry_run else "updated"
     if changed:
@@ -521,7 +538,7 @@ RULES = {
     "radius-x2": "use FoamyStyle.radius",
     "hex-colour": "use Commons.Color or FoamyPalette (theme colours), not a hex literal",
     "unguarded-loop": "infinite animations need `running: … && !FoamyMotion.reduceMotion`",
-    "raw-ipc": "use FoamyIpc (4.5 socket fast path, 4.0 fallback)",
+    "raw-ipc": "use FoamyIpc (registers with IpcRegistry for the omarchy-shell socket fast path)",
     "opt-out-reason": "a foamy-lint opt-out needs a reason: // foamy-lint: allow <rule> — <why>",
     "empty-glyph": "a glyph's text is empty (an icon character was lost); write it as an escape like \"\\u{f0e7}\"",
     "pua-literal": "private-use (icon font) character written literally; editors and tools strip them, use an escape like \"\\u{f0e7}\"",

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Epoch scheduling through DST fallback, ticking, pause, and resume on 4.5 (and
-4.0 with FOAMY_HOST_40)."""
+"""Epoch scheduling through DST fallback, ticking, pause, and resume on 4.5."""
 import shutil
 import sys
 from pathlib import Path

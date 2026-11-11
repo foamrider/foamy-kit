@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wheel scrolling (tests/qml/Wheel.qml) on 4.5 (and 4.0 with FOAMY_HOST_40) at display
+"""Wheel scrolling (tests/qml/Wheel.qml) on 4.5 at display
 scale 1.0 and 1.25: why settings pages moved only a few px per notch (Qt's
 Flickable loses most of a high-resolution notch; printed as NOTE lines) and
 FoamyWheelScroll / FoamySettingsPage / ensureVisible / FoamyInfoNote."""

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render a foamy plugin's popup states to PNGs in an isolated offscreen shell.
 
-  preview/render.py <plugin-dir> [--host 4.5|4.0|both] [--out DIR]
+  preview/render.py <plugin-dir> [--host 4.5] [--out DIR]
                     [--preview FILE] [--states a,b] [--theme dark|light|FILE]
                     [--language da] [--position top|bottom|left|right] [--rounding 6]
 
@@ -16,10 +16,9 @@ copied onto the screen at its anchor), or for service plugins any Item with a
 `cardItem`, drawn in screen coordinates. Without a cardItem only the screen
 is captured.
 
-Hosts: 4.5 is the installed shell (/usr/share/omarchy/shell; FOAMY_HOST_45
-overrides). 4.0 is opt-in: set FOAMY_HOST_40 to a 4.0 shell directory.
-`--host both`, `--trio` and `--before-host` use the hosts that are there and
-print a SKIP line for the others.
+Host: Omarchy 4.5, the installed shell (/usr/share/omarchy/shell;
+FOAMY_HOST_45 overrides). 4.0 support ended with foamy-kit 0.9.0: `--host 4.0`
+fails with a message, and `--host both` renders 4.5 into <out>/4.5/ as before.
 
 Nothing touches ~/.config, the live session or its D-Bus: see preview/harness.py.
 """
@@ -81,9 +80,6 @@ def render(plugin, host, out, preview=None, states=None, theme="dark", language=
             run.cleanup()
 
 
-HOST_LABEL = {"4.0": "4.0", "4.5": "4.5"}
-
-
 def dev_copy(plugin, ref, before_preview):
     """Extract `ref` of the plugin repo (git archive: the repo is not touched)
     into a temp dir and make it renderable offscreen. Returns the copy, or
@@ -122,19 +118,15 @@ def dev_copy(plugin, ref, before_preview):
     return copy
 
 
-def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("4.5", "4.0"), states=None,
-         theme="dark", url_prefix="", timeout=120):
-    """Render <view>-before.png (dev), <view>-after-<host>.png for each
-    available host (4.5; 4.0 only with FOAMY_HOST_40) and trio.md (a PR-body
-    table). Before tries the available hosts of `before_hosts` in order.
-    Returns (rows, before_label)."""
+def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, theme="dark", url_prefix="", timeout=120):
+    """Render <view>-before.png (dev), <view>-after-4.5.png and trio.md (a
+    PR-body table). Returns (rows, before_label)."""
     plugin = Path(plugin).resolve()
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f"foamy-kit-trio-{os.getpid()}-"))
     after = {}
     after_hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="trio after")
-    before_hosts = harness.available_hosts(before_hosts, what="trio before", require=False)
     try:
         for host in after_hosts:
             shots = render(plugin, host, work / f"after-{host}", states=states, theme=theme, timeout=timeout)
@@ -153,54 +145,35 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("
             preview = copy / ("preview/Before.qml" if (copy / "preview/Before.qml").is_file() else "preview/Preview.qml")
             if not preview.is_file():
                 before_label = "Before (dev: no preview/Before.qml)"
-            reason = ""
-            if preview.is_file() and not before_hosts:
-                before_label = "Before (dev: no host to render on)"
-            for host in before_hosts if preview.is_file() else ():
-                shots = render(copy, host, work / f"before-{host}", preview=preview, states=states, theme=theme,
-                               timeout=timeout, lenient=True)
+            elif shots := render(copy, "4.5", work / "before", preview=preview, states=states, theme=theme,
+                                 timeout=timeout, lenient=True):
+                for path, _ in shots:
+                    if not path.name.endswith("-screen.png"):
+                        target = out / f"{path.stem}-before.png"
+                        shutil.copyfile(path, target)
+                        before[path.stem] = target
                 # A pre-kit fork on the 4.5 full-screen bar window gets a 120 px
-                # card at the wrong edge (the bug the kit fixed): that is not
-                # the dev design, so try the next host.
-                clipped = [info for _, info in shots or [] if re.search(r"\bavail (\d+)", info)
+                # card at the wrong edge (the bug the kit fixed): say so.
+                clipped = [info for _, info in shots if re.search(r"\bavail (\d+)", info)
                            and int(re.search(r"\bavail (\d+)", info).group(1)) <= 120]
-                if shots and clipped and host != before_hosts[-1]:
-                    print(f"before: dev's popup is clipped on {HOST_LABEL[host]} (old fork); trying the next host", file=sys.stderr)
-                    reason = "popup fork clipped on " + HOST_LABEL[host]
-                    continue
-                if shots:
-                    for path, _ in shots:
-                        if not path.name.endswith("-screen.png"):
-                            target = out / f"{path.stem}-before.png"
-                            shutil.copyfile(path, target)
-                            before[path.stem] = target
-                    if host != before_hosts[0]:
-                        before_label = f"Before (dev, {HOST_LABEL[host]} host; {reason})"
-                    elif clipped:
-                        # No other host to try (4.0 is opt-in): say the card is the clipped fork.
-                        before_label = f"Before (dev, {HOST_LABEL[host]} host; popup fork clipped)"
-                    else:
-                        before_label = f"Before (dev, {HOST_LABEL[host]} host)"
-                    break
-                print(f"before: dev did not render on {HOST_LABEL[host]}", file=sys.stderr)
-                reason = f"did not render on {HOST_LABEL[host]}"
+                before_label = "Before (dev, 4.5 host; popup fork clipped)" if clipped else "Before (dev, 4.5 host)"
             else:
-                if preview.is_file() and before_hosts:
-                    before_label = "Before (dev did not render)"
+                print("before: dev did not render on 4.5", file=sys.stderr)
+                before_label = "Before (dev did not render)"
             shutil.rmtree(copy.parent, ignore_errors=True)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     views = []
-    for host in sorted(after, key=lambda h: h != "4.5"):
+    for host in after_hosts:
         views += [v for v in after[host] if v not in views]
     views += [v for v in before if v not in views]
     prefix = url_prefix.rstrip("/") + "/" if url_prefix else ""
     cell = lambda files, view, alt: f"![{alt}]({prefix}{files[view].name})" if view in files else "—"
-    lines = ["| View | " + " | ".join([before_label] + [f"After {HOST_LABEL[h]}" for h in after_hosts]) + " |",
+    lines = ["| View | " + " | ".join([before_label] + [f"After {h}" for h in after_hosts]) + " |",
              "|---" * (2 + len(after_hosts)) + "|"]
     for view in views:
         lines.append(f"| {view} | {cell(before, view, view + ' before')} | "
-                     + " | ".join(cell(after[h], view, f"{view} after {HOST_LABEL[h]}") for h in after_hosts) + " |")
+                     + " | ".join(cell(after[h], view, f"{view} after {h}") for h in after_hosts) + " |")
     (out / "trio.md").write_text("\n".join(lines) + "\n")
     return lines, before_label
 
@@ -208,7 +181,8 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, before_hosts=("
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("plugin")
-    parser.add_argument("--host", default="4.5", choices=["4.0", "4.5", "both"])
+    parser.add_argument("--host", default="4.5", choices=["4.5", "4.0", "both"],
+                        help="4.5 (the only supported host); both = 4.5 into <out>/4.5/; 4.0 is retired")
     parser.add_argument("--out", default=None, help="output directory (default /tmp/foamy-preview-<plugin>)")
     parser.add_argument("--preview", default=None)
     parser.add_argument("--states", default="", help="comma-separated subset of previewStates")
@@ -223,26 +197,26 @@ def main():
     parser.add_argument("--bus", default="private", choices=["private", "none"],
                         help="session D-Bus: a private daemon (default) or none; never the desktop's")
     parser.add_argument("--trio", action="store_true",
-                        help="Before (dev) / After per host (4.5; 4.0 with FOAMY_HOST_40) per view, plus trio.md")
+                        help="Before (dev) / After (4.5) per view, plus trio.md")
     parser.add_argument("--dev-ref", default="origin/dev", help="git ref for Before (default origin/dev)")
     parser.add_argument("--before-preview", default=None,
                         help="preview for the dev tree (default <plugin>/preview/Before.qml, else dev's preview/Preview.qml)")
-    parser.add_argument("--before-host", default="4.5,4.0",
-                        help="hosts to try for Before, in order (unavailable ones are skipped: 4.0 needs FOAMY_HOST_40)")
     parser.add_argument("--url-prefix", default="", help="image URL prefix for trio.md (e.g. the pr-assets raw URL)")
     args = parser.parse_args()
     harness.install_signal_cleanup()
     if args.trio:
         plugin = Path(args.plugin).resolve()
         out = Path(args.out or f"/tmp/foamy-trio-{plugin.name}")
-        lines, label = trio(plugin, out, args.dev_ref, args.before_preview, tuple(h for h in args.before_host.split(",") if h),
+        lines, label = trio(plugin, out, args.dev_ref, args.before_preview,
                             [s for s in args.states.split(",") if s] or None, args.theme, args.url_prefix, args.timeout)
         print("\n".join(lines))
         print(f"\nPNGs and trio.md in {out}")
         return 0
     plugin = Path(args.plugin).resolve()
     out = Path(args.out or f"/tmp/foamy-preview-{plugin.name}")
-    hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="render") if args.host == "both" else [args.host]
+    if args.host in harness.RETIRED_HOSTS:
+        raise SystemExit(f"render: --host {args.host}: {harness.RETIRED_HOSTS[args.host]}")
+    hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="render")
     status = 0
     for host in hosts:
         target = out / host if args.host == "both" else out

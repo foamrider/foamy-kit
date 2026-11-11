@@ -5,10 +5,10 @@ import QtQuick
 //
 //   FoamyTextSettingField {
 //     width: parent.width
-//     label: FoamyI18n.t("Browser")
-//     value: prefs.value("youtubeBrowser")                    // bind it
+//     label: FoamyI18n.t("Display name")
+//     value: prefs.value("displayName")                       // bind it
 //     validate: function(text) { return text.length <= 64 || FoamyI18n.t("Too long") }
-//     onCommitted: function(v) { prefs.save("youtubeBrowser", v) }
+//     onCommitted: function(v) { prefs.save("displayName", v) }
 //   }
 //
 // Not editing: shows `value`, following external changes. Editing: keeps a

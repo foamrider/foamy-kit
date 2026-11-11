@@ -7,11 +7,9 @@ import "harness"
 import "plugin/kit"
 
 // FoamyPopup / FoamyPopupCard placement against a mock bar, for every bar
-// position. FOAMY_MODE=fullscreen: the bar window spans the screen (4.5);
-// FOAMY_MODE=strip: the bar window is the strip itself (4.0).
+// position. The bar window spans the screen, as on Omarchy 4.5.
 ShellRoot {
   id: shell
-  readonly property bool fullScreen: Quickshell.env("FOAMY_MODE") === "fullscreen"
   readonly property string out: Quickshell.env("FOAMY_OUT")
   readonly property string host: Quickshell.env("FOAMY_HOST")
   readonly property bool hasFork: Quickshell.env("FOAMY_FORK") === "1"
@@ -37,43 +35,12 @@ ShellRoot {
       id: sim
       position: shell.position
       thickness: shell.stripThickness
-      fullScreenBar: shell.fullScreen
       stripColor: Commons.Color.background
       iconColor: Commons.Color.foreground
     }
   }
 
-  // The 4.0 bar windows: just the strip, horizontal or vertical. Unused in 4.5 mode.
-  FloatingWindow {
-    id: horizontalStrip
-    visible: !shell.fullScreen
-    implicitWidth: shell.screenW
-    implicitHeight: shell.stripThickness
-    color: "black"
-    Rectangle {
-      id: horizontalAnchor
-      width: sim.anchor.width
-      height: sim.anchor.height
-      x: sim.anchor.x
-      y: (shell.stripThickness - height) / 2
-    }
-  }
-  FloatingWindow {
-    id: verticalStrip
-    visible: !shell.fullScreen
-    implicitWidth: shell.stripThickness
-    implicitHeight: shell.screenH
-    color: "black"
-    Rectangle {
-      id: verticalAnchor
-      width: sim.anchor.width
-      height: sim.anchor.height
-      x: (shell.stripThickness - width) / 2
-      y: sim.anchor.y
-    }
-  }
-
-  readonly property Item anchorItem: fullScreen ? sim.anchor : (sim.vertical ? verticalAnchor : horizontalAnchor)
+  readonly property Item anchorItem: sim.anchor
 
   MockBar { id: facadeBar; position: shell.position; barSize: shell.stripThickness }
   MockFullBar { id: fullBar; position: shell.position; barSize: shell.stripThickness; barSizes: ({ "FOAMY-1": 44 }) }
@@ -120,9 +87,8 @@ ShellRoot {
   }
   readonly property Component forkComponent: hasFork ? Qt.createComponent(Qt.resolvedUrl("fork/ForkedPopup.qml")) : null
 
-  // Expected bar strip thickness for `bar` on this host/mode.
+  // Expected bar strip thickness for `bar`.
   function thicknessFor(bar) {
-    if (!fullScreen) return stripThickness                       // 4.0: the window is the strip
     return typeof bar.barSizeFor === "function" ? bar.barSizeFor("FOAMY-1") : bar.barSize
   }
 
@@ -180,7 +146,7 @@ ShellRoot {
     position = c.position
     currentBar = c.bar === "full" ? fullBar : facadeBar
     currentKind = c.kind
-    currentLabel = host + "/" + (fullScreen ? "fullscreen" : "strip") + "/" + c.position + "/" + c.kind + "/" + c.bar
+    currentLabel = host + "/" + c.position + "/" + c.kind + "/" + c.bar
     var props = { anchorItem: shell.anchorItem, bar: currentBar, open: false }
     if (c.kind === "fork") {
       current = forkComponent.createObject(shell, props)
@@ -204,12 +170,9 @@ ShellRoot {
         || (position === "bottom" && !near(o.y + p.contentHeight, screenH - t - p.gap))
         || (position === "right" && !near(o.x + p.contentWidth, screenW - t - p.gap))
         || (position === "left" && !near(o.x, t + p.gap))
-      if (fullScreen && host === "4.5") {
-        check(broken, currentLabel + " the old 4.0 fork should misplace on a full-screen bar window")
-        if (broken) console.log("FOAMY NOTE " + currentLabel + " fork broken as expected: availableCardHeight " + p.availableCardHeight + " origin " + o.x + "," + o.y)
-      } else {
-        checkPlacement(currentLabel, o.x, o.y, p.contentWidth, p.contentHeight, t, p)
-      }
+      // Negative control: the pre-kit fork of the 4.0 KeyboardPanel.
+      check(broken, currentLabel + " the old 4.0 fork should misplace on a full-screen bar window")
+      if (broken) console.log("FOAMY NOTE " + currentLabel + " fork broken as expected: availableCardHeight " + p.availableCardHeight + " origin " + o.x + "," + o.y)
       p.open = false
       p.destroy()
       next()
@@ -243,7 +206,7 @@ ShellRoot {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")
       check(p.contentWidth === FoamyStyle.popupWidth, currentLabel + " standard width " + p.contentWidth)
       if (position === "top" && currentBar === facadeBar) {
-        var shot = out + "/geometry-" + host + "-" + (fullScreen ? "fullscreen" : "strip") + ".png"
+        var shot = out + "/geometry-" + host + ".png"
         sim.grabToImage(function(result) { if (!result.saveToFile(shot)) console.log("FOAMY FAIL save " + shot) })
       }
       p.open = false
@@ -270,7 +233,7 @@ ShellRoot {
   function next() { step++; runner.start() }
 
   function finish() {
-    console.log("FOAMY RESULT " + host + " " + (fullScreen ? "fullscreen" : "strip") + " checks=" + checks + " failures=" + failures)
+    console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
   }

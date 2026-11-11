@@ -14,7 +14,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Body font | `FoamyStyle.fontFamily` | `"sans-serif"`; never the literal *(lint)*. `monoFamily` (the Omarchy font) for numbers, code, glyphs |
 | Type scale | `FoamyStyle.font.*` | caption 10, bodySmall 11, body 12, subtitle 13, title 14, heading 16, iconLarge 18, display 24, displayLarge 28 (all `Style.space(n)`). Hero numbers (clock face, temperature, volume, countdown): `numeral` 56, `numeralCompact` 40, their unit in `display`. No other sizes |
 | Widths | `popupWidth` / `popupWidthWide` | 420 standard; 560 for data-dense panels (vitals, weather, monitor). The settings page uses the same width. Menus: `menuWidth` 232, `menuPadding` 8 |
-| Heights | FoamyPopup / FoamyPopupCard | The card fits its content up to the screen's **available height** (screen minus the bar, the gap and a margin; the host measures it: the 4.0 strip window, the 4.5 bar thickness), so content fits where the screen allows and scrolls only beyond. `maxHeight` caps it lower when a panel wants that (`popupMaxHeight` 640 is the old cap). Never a fixed height |
+| Heights | FoamyPopup / FoamyPopupCard | The card fits its content up to the screen's **available height** (screen minus the bar, the gap and a margin; the host measures it from the bar thickness), so content fits where the screen allows and scrolls only beyond. `maxHeight` caps it lower when a panel wants that (`popupMaxHeight` 640 is the old cap). Never a fixed height |
 | Spacing | `padding` 20, `gapTiny` 2, `gapSmall` 4, `gap` 8, `gapLarge` 12, `sectionGap` 14, `rowPadding` 10, `rowHeight` 36 | Popup card padding is 0; content insets by `padding` so lists scroll edge to edge |
 | Controls | `controlHeight` 32, `actionSize` 28, `iconSize` 15, `settingsButtonSize` 32, `settingsIconSize` 16, `iconStroke` 1.7 | |
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
@@ -22,7 +22,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Fills | `hoverFill` .08, `fieldFill` .055, `selectedFill` accent .18, `divider` .12 | |
 | Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text on the surface use `onSurface(c)` |
 | Disabled | `FoamyStyle.disabledOpacity` .45 | |
-| Motion | `FoamyMotion.hover` 100, `press` 160, `toggle` 120, `slider` 140, `fadeIn` 180, `fadeOut` 120, `grow` 200, `morph` 220, `slow` 300; `duration(ms)` | Every `duration:` goes through FoamyMotion *(lint)*. 0 under reduced motion on 4.5 |
+| Motion | `FoamyMotion.hover` 100, `press` 160, `toggle` 120, `slider` 140, `fadeIn` 180, `fadeOut` 120, `grow` 200, `morph` 220, `slow` 300; `duration(ms)` | Every `duration:` goes through FoamyMotion *(lint)*. 0 under reduced motion |
 
 ## Components
 
@@ -231,8 +231,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   entry). Arrays/objects are schema types (`array`, `object` + `validate`).
   Never a hand-built `setBarWidget` call or a plugin-local save queue.
 - **Letter shortcuts**: `onTextKey: function(text, modifiers)` and skip unless
-  `cursor.plain(modifiers)` (`modifiers` is undefined on 4.0, which has
-  `textKey(text)`). Tests emit with `cursor.emitTextKey(catcher, text)`.
+  `cursor.plain(modifiers)`. Tests emit with `cursor.emitTextKey(catcher, text)`.
 - **Native helpers**: a helper process is the plugin's bundled binary,
   launched with `FoamyNative.command(pluginDir, name, args)` (never a
   hand-built path, never `python3`). When `FoamyNative.unavailable(exitCode)`

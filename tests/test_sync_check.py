@@ -43,7 +43,7 @@ def main():
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,SafeTextField")
     files = sorted(p.name for p in (a / "kit").iterdir())
     ok &= report("sync adds the components and their dependencies", code == 0 and files == sorted([
-        "FoamyI18n.qml", "FoamyPalette.qml", "FoamyPopup.qml", "FoamyStyle.qml", "SafeTextField.qml", "clipboard.sh", "qmldir"]), f"{code} {files}")
+        "FoamyI18n.qml", "FoamyI18nText.js", "FoamyPalette.qml", "FoamyPopup.qml", "FoamyStyle.qml", "SafeTextField.qml", "clipboard.sh", "node-loader.cjs", "qmldir"]), f"{code} {files}")
     qmldir = (a / "kit/qmldir").read_text()
     ok &= report("generated qmldir registers singletons", "singleton FoamyStyle 1.0 FoamyStyle.qml" in qmldir and "\nFoamyPopup 1.0 FoamyPopup.qml" in qmldir)
     first = (a / "kit/FoamyStyle.qml").read_text().splitlines()
@@ -197,7 +197,7 @@ def main():
     # 5. Changing the component set removes files no longer needed.
     code, out = sh(SYNC, str(a), "--components", "FoamyI18n")
     files = sorted(p.name for p in (a / "kit").iterdir())
-    ok &= report("narrowing the components removes unneeded files", code == 0 and files == ["FoamyI18n.qml", "qmldir"], f"{files}")
+    ok &= report("narrowing the components removes unneeded files", code == 0 and files == ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs", "qmldir"], f"{files}")
     code, out = sh(SYNC, str(a), "--add", "FoamyPeerIpc")
     files = sorted(p.name for p in (a / "kit").iterdir())
     lock = foamykit.read_lock(a)

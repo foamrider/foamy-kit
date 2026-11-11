@@ -32,6 +32,54 @@
   `cargo update -p foamy-helper` (in `native/`, or its crate dir) and
   rebuilds; no call site changes.
 
+- `preview/harness.py` isolates every run by default (render.py and every
+  plugin runtime test that uses `harness.Run`). Reviews found runtime tests
+  running the real host tools (`omarchy-audio-*`, `pactl`, `omarchy bar
+  set`) and reaching the machine's system bus (foamy-train's test called the
+  real Entur API through NetworkManager's online state). Now Omarchy's bin
+  directories and an AppImage's `$APPDIR` entries leave `PATH`, every other
+  `omarchy`/`omarchy-*` on `PATH` is a stub that exits 127 and logs to
+  `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`), `$APPDIR` entries
+  leave `LD_LIBRARY_PATH`, `PULSE_SERVER`/`PIPEWIRE_REMOTE` name dead
+  sockets, and `DBUS_SYSTEM_BUS_ADDRESS` is a dead address. The private
+  session bus is unchanged. `Run(…, system_bus="private")` gives a test its
+  own system bus (`Run.system_bus_address`); `system_bus="unix:path=…"`
+  uses one the test provides. `tests/test_isolation.py` checks each from
+  inside qs.
+
+  After syncing: a plugin test whose QML runs a host command now gets exit
+  127 and a `host-commands.log` line; give it a `fakebin` stand-in (or `hostenv.make()` stubs).
+  Plugin-local `isolate()`/`library_path()` copies are redundant.
+
+- `FoamyPrefs`/`FoamyPrefsQueue` (behaviour change, kit-wide): an invalid
+  stored array is no longer replaced by the next save of that key. An array
+  setting holds user data (accounts, folders); one invalid item (a hand edit,
+  an older shape) makes the whole value read as the default, so a save built
+  from what the panel showed wiped every other entry (foamy-teams D1,
+  REVIEW item 7). Now `save(key, value)` refuses when the stored array
+  (present, not null) fails the schema: `FoamyPrefs.save()` returns
+  `storedInvalid: true` with `STORED_INVALID` ("The saved list in shell.json
+  isn't valid, so it wasn't replaced."), nothing is written, `failed()` fires
+  and it isn't retryable. `save(key, value, true)` (and `FoamyPrefs.save(…,
+  pending, true)`) replaces it on purpose. `storedProblem(key)` and
+  `storedProblems` (queue), `FoamyPrefs.storedProblem()/storedProblems()`
+  say which stored value is invalid. Other keys still save and carry the
+  stored array over verbatim; invalid scalars and objects, absent and null
+  values, reads and the inline/CLI paths are unchanged.
+
+  After syncing: a plugin whose array settings hold user data should show
+  `storedProblem(key)` (and block the editor, or offer a confirmed "start
+  over" that saves with force), and add the new message to its catalogs if
+  it shows `prefs.error`. foamy-teams will (accounts).
+
+- `sync.sh` refreshes the `kit <version>` line of each `native.pin` whose
+  binaries are still fresh after the sync (the pin's source hash matches),
+  and changes nothing else in it; a stale pin keeps the version that built
+  it until the rebuild. `tests/kit-check.sh`, `check.sh` and `--verify` fail
+  when a fresh pin names another kit version than `foamy-kit.lock`. Before,
+  sync left `kit 0.8.1` in foamy-notification-center's pin after the 0.9.0
+  sync, and nothing noticed. After syncing, commit the refreshed pins.
+
 ### Fixed
 - `process::exit_on_panic` (and `json::run`, `json::serve`, `favicon::run`,
   which install it) kills the process group of every `Bounded` child still
@@ -83,6 +131,88 @@
   m365.cloud.microsoft now get their own icons, www.google.com the Google
   G; teams.microsoft.com and github.com are unchanged. Cached icons in
   `~/.cache/foamy/browser-favicons` refresh within a day.
+- Shared test helpers that plugins import from the kit checkout, like the
+  harness, instead of copying them (three plugins had): `harness/FoamyWait.qml`
+  in every run (`waitFor(condition, timeoutMs, then[, label])`, `after(ms,
+  then)`: condition-driven steps instead of fixed delays, which flaked under
+  load in vitals, bolt and zendesk), `harness.wait_for()` and
+  `Run.wait_for_log()` on the Python side, and `preview/hostenv.py`
+  (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
+  own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
+  helpers for plugins".
+- `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
+  replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
+  the same template: a translated key switching no → da/ar → en live, the
+  English fallback, literal values, one plugin-specific plural). It derives
+  every expectation from the plugin's own catalogs (a translated string, a
+  plural entry's `one` form, right-to-left under Arabic), runs under the
+  isolated harness and waits on conditions, not fixed ticks. After syncing,
+  replace `tests/i18n-runtime.py` with `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .`
+  (foamy-notifications keeps its card checks).
+- `FoamyText` (`kit/FoamyText.js`, a new component): `cap(text, maxLines,
+  maxChars)` and `tooltip(text)` (6 lines of 100 characters) bound text for
+  a sink with no size limit of its own. The host bar tooltip is a PlainText
+  label sized to its text (no width, wrap or line limit), so a long or
+  many-line app-controlled title made a window as large as the text (foamy-tray
+  review; Omarchy's own tray has the same issue). Cut lines and dropped lines
+  end in a visible "…"; characters are code points, so a surrogate pair is
+  never split; `\r\n`, `\r`, U+2028 and U+2029 count as line breaks. Node
+  tests in `tests/text.test.cjs`, engine parity in `tests/qml/Runtime.qml`.
+  After syncing, pass app-controlled text through `FoamyText.tooltip()` at
+  every `bar.showTooltip` call.
+- `kit/FoamyI18nText.js` (part of FoamyI18n, with `node-loader.cjs`):
+  FoamyI18n's value substitution, which the singleton now calls, and
+  `translator(catalog, english, number)` (`t`/`tn` over plain catalogs:
+  the language, English, the key) for node tests. Thirteen plugins'
+  `tests/i18n.cjs` evaluated slices of `FoamyI18n.qml`'s source in a vm, eight
+  of them through the 4.0 English fallback removed below. After syncing,
+  replace that slicing with
+  `require("../kit/node-loader.cjs").load("FoamyI18nText").translator(no, en)`
+  (or `.substitute(text, values)`); until then those node tests fail.
+- REVIEW.md section 5: plain text alone doesn't bound a host tooltip's size,
+  and a line-mode `SplitParser` or a `StdioCollector` is not a memory bound.
+- `FoamySchedule` (opt-in component): `kit/FoamySchedule.js` and
+  `kit/FoamyScheduleDay.qml`, moved from foamy-train's `Schedule.js` and
+  `ScheduleDay.qml`. foamy-zendesk carried byte-identical copies ("keep the
+  two in step until it moves into foamy-kit"); the JS is unchanged apart from
+  `.pragma library`, a null-safe `week()` and more exports (`dayKeys`,
+  `minutes`, `validOverride`, `nextScheduled`). The row's weekday label is
+  injectable (`labelComponent`: any Component whose root has `text`; train
+  passes `TrainText`, zendesk `PlainText`; default a plain-text body label;
+  `labelItem`). Node tests (`tests/schedule.test.cjs`, train's and zendesk's
+  schedule cases) and a row test (`tests/test_schedule.py`).
+
+  After syncing (train, zendesk): `sync.sh <plugin> --add FoamySchedule`,
+  delete `Schedule.js` and `ScheduleDay.qml`, import
+  `"kit/FoamySchedule.js" as Schedule` (Panel, the service/store), use
+  `FoamyScheduleDay { labelComponent: Component { TrainText { } } … }` in the
+  settings page, and point the schedule unit tests at the kit (or drop them:
+  the kit tests cover them).
+
+### Removed
+- Omarchy 4.0 support, which the README no longer promised. The kit
+  components lose their 4.0 branches: `FoamyI18n` uses the shell's
+  `Translations` and `I18n` directly (no English-only fallback; its
+  `translationsAvailable` is always true and kept only for plugins that read
+  it), `FoamyMotion` calls `Style.duration`, `FoamyCursor.emitTextKey` always
+  passes modifiers, `FoamyPopup` leaves RTL mirroring to the host panel, and
+  the IPC, popup and prefs comments describe 4.5 alone. The harness knows
+  only 4.5: `FOAMY_HOST_40` is ignored, `harness.Run("4.0", …)` and
+  `render.py --host 4.0` stop with "Omarchy 4.0 is no longer supported …",
+  `harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a
+  caller still lists (so its 4.5 cases keep running), `--host both` renders
+  4.5 into `<out>/4.5/`, and the preview shell, `ScreenSim` (its
+  `fullScreenBar` property is now ignored, kept so tests that set it load) and the kit tests drop the 4.0 strip bar
+  window. `--trio` renders Before on 4.5 only (`--before-host` and
+  `trio(before_hosts=…)` are gone) and labels a clipped fork or a dev tree
+  that won't render.
+
+  After syncing: drop each plugin test's 4.0 cases (`--host 4.0|both`
+  choices, `FOAMY_HOST_40` checks, `("4.0", …)` case lists,
+  `harness.HOSTS["4.0"]`); until then a listed 4.0 prints SKIP, and a test
+  that calls `harness.Run("4.0")` itself stops with the message above. A
+  node test that evaluated `FoamyI18n.qml`'s source (`tests/i18n.cjs`) moves
+  to `FoamyI18nText.js` (see Added).
 
 ## 0.8.1 — 2026-11-10
 
