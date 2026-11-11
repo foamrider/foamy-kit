@@ -19,7 +19,7 @@ declare -A listed=()
 while read -r hash rel; do
   [[ $hash =~ ^[0-9a-f]{64}$ ]] || continue
   if [[ $rel == /* || /$rel/ == */../* || /$rel/ == */./* || $rel == *//* || $rel == *\\* ]] ||
-     [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != rust-toolchain.toml &&
+     [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != REVIEW.md && $rel != rust-toolchain.toml &&
         $rel != .github/workflows/verify-native.yml ]]; then
     fail "foamy-kit.lock lists $rel, which is not a path foamy-kit owns"; continue
   fi
@@ -36,7 +36,7 @@ while read -r hash rel; do
     fi
   done
   if (( stamp_line == 0 )); then
-    # Notices are copied verbatim, without a stamp line.
+    # Notices and REVIEW.md are copied verbatim, without a stamp line.
     actual=$(sha256sum < "$file" | cut -d' ' -f1)
     [[ $actual == "$hash" ]] || fail "$rel was edited (hash differs from foamy-kit.lock)"
     continue
@@ -52,6 +52,24 @@ if [[ -d $root/kit ]]; then
     rel=${file#"$root"/}
     [[ -n ${listed[$rel]:-} ]] || fail "$rel is not part of foamy-kit (remove it or add it to foamy-kit)"
   done < <(find "$root/kit" \( -type f -o -type l \) -print0)
+fi
+
+# AGENTS.md is the plugin's, apart from one block sync manages: the pointer
+# that makes review agents follow the shared REVIEW.md.
+agents_expected=$(cat <<'FOAMY_AGENTS_BLOCK'
+@AGENTS_BLOCK@
+FOAMY_AGENTS_BLOCK
+)
+agents_begin=${agents_expected%%$'\n'*}
+agents_end=${agents_expected##*$'\n'}
+agents="$root/AGENTS.md"
+if [[ -L $agents || ! -f $agents ]]; then
+  fail "AGENTS.md is missing or not a regular file (run foamy-kit sync.sh)"
+else
+  agents_marks=$(grep -c -F '<!-- foamy-kit review:' "$agents" || true)
+  agents_actual=$(awk -v b="$agents_begin" -v e="$agents_end" '$0 == b { on = 1 } on { print } on && $0 == e { exit }' "$agents")
+  [[ $agents_marks == 2 && $agents_actual == "$agents_expected" ]] ||
+    fail "AGENTS.md lacks the current foamy-kit review block (run foamy-kit sync.sh)"
 fi
 
 # Native helpers (FoamyNative): bin/<arch>/<binary> must match <crate>/native.pin,

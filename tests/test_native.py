@@ -59,7 +59,7 @@ def sync_tests(base):
                           for p in (KIT_ROOT / "kit/rust/foamy-helper/src").rglob("*.rs"))
     expected = sorted(["kit/FoamyNative.js", "kit/node-loader.cjs", "kit/qmldir", "kit/rust/release.toml",
                        "kit/native/native.py", "kit/native/build-native.sh", ".github/workflows/verify-native.yml",
-                       "kit/rust/foamy-helper/Cargo.toml", "rust-toolchain.toml", "tests/kit-check.sh"] + rust_sources)
+                       "kit/rust/foamy-helper/Cargo.toml", "rust-toolchain.toml", "tests/kit-check.sh", "REVIEW.md"] + rust_sources)
     lock = foamykit.read_lock(plugin)
     ok &= report("sync copies the FoamyNative tree (subdirectories, build tool, root rust-toolchain.toml and CI workflow)",
                  code == 0 and sorted(lock["files"]) == expected and lock["components"] == ["FoamyNative"],
@@ -85,6 +85,14 @@ def sync_tests(base):
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
     ok &= report("a leading #![attribute] is not taken for a shebang", attribute[0].startswith("// foamy-kit 0.5.0 "))
     native = foamykit.native
+    ok &= report("bundled build tool reads the shared guide's lock entry", native.read_lock(plugin) == lock
+                 and not native.kit_problems(plugin, lock))
+    guide = plugin / "REVIEW.md"
+    original_guide = guide.read_bytes()
+    guide.write_bytes(original_guide + b"\nLocal edit.\n")
+    ok &= report("bundled build tool rejects an edited shared guide",
+                 any("REVIEW.md was edited" in error for error in native.kit_problems(plugin, lock)))
+    guide.write_bytes(original_guide)
     ok &= report("the build tool's copy of foamy-kit's LICENSE (for kit/rust in the notices) equals LICENSE",
                  native.KIT_LICENSE == (KIT_ROOT / "LICENSE").read_text())
     ok &= report("the embedded musl COPYRIGHT is the v1.2.5 file",

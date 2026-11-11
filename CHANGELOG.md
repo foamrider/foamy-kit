@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0 — unreleased (dev)
+
+### Added
+- `REVIEW.md`: the shared Foamy review standard (blocking checklist,
+  severity, review order, deterministic checks, boundary and process
+  lifecycle rules, security at the sink, tests, review record). `sync.sh`
+  copies it verbatim to each plugin root and records its hash in
+  `foamy-kit.lock`; `tests/kit-check.sh`, `check.sh` and the bundled build
+  tool fail when it is edited.
+- `AGENTS.md`: sync keeps one marked "Code review" block in each plugin's
+  `AGENTS.md` (created when missing) that points review agents at
+  `REVIEW.md`. Text outside the block and the file's mode are preserved;
+  sync refuses a symlink, non-UTF-8 file or broken markers, even with
+  `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
+  missing or stale. foamy-kit has its own `AGENTS.md`.
+
 ## 0.8.1 — 2026-11-10
 
 ### Fixed

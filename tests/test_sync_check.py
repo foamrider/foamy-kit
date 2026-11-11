@@ -33,7 +33,8 @@ def main():
     plugins = []
     for source in sources:
         target = base / source.name
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        # Start from a plugin without the shared guide, whatever its checkout holds.
+        shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git", "__pycache__", "REVIEW.md"))
         plugins.append(target)
     a = plugins[0]
     b = plugins[-1] if len(plugins) > 1 else None
@@ -60,6 +61,113 @@ def main():
     before = snapshot(a)
     code, out = sh(SYNC, str(a))
     ok &= report("second sync is a no-op and keeps the component set", code == 0 and "up to date" in out and snapshot(a) == before, out.strip())
+
+    # The shared guide is always present, including with a component subset.
+    review = a / "REVIEW.md"
+    guide = (KIT_ROOT / "REVIEW.md").read_bytes()
+    ok &= report("review guide is copied verbatim and locked", review.read_bytes() == guide
+                 and foamykit.read_lock(a)["files"]["REVIEW.md"] == foamykit.sha256(guide))
+    review.write_bytes(guide + b"\nLocal review rule.\n")
+    before = snapshot(a)
+    code, out = sh(SYNC, str(a))
+    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
+    code3, out3 = sh(CHECK, "--no-lint", str(a))
+    ok &= report("edited review guide blocks sync and both integrity checks", code != 0 and snapshot(a) == before
+                 and code2 != 0 and "REVIEW.md was edited" in out2 and code3 != 0 and "REVIEW.md was edited" in out3)
+    review.unlink()
+    code, out = sh("bash", str(a / "tests/kit-check.sh"))
+    code2, out2 = sh(CHECK, "--no-lint", str(a))
+    ok &= report("missing review guide fails both integrity checks", code != 0 and "REVIEW.md" in out
+                 and code2 != 0 and "REVIEW.md" in out2)
+    outside_review = base / "outside-review.md"
+    outside_review.write_bytes(guide)
+    review.symlink_to(outside_review)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report("review symlink is refused even with force", code != 0 and "REVIEW.md is a symlink" in out
+                 and review.is_symlink() and outside_review.read_bytes() == guide)
+    review.unlink()
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync restores a missing guide", code == 0 and review.read_bytes() == guide)
+
+    fresh = base / "review-conflict"
+    shutil.copytree(FIXTURES / "demo-plugin", fresh)
+    (fresh / "REVIEW.md").write_text("Plugin-owned review instructions.\n")
+    before = snapshot(fresh)
+    code, out = sh(SYNC, str(fresh))
+    ok &= report("unowned review guide is preserved before any writes", code != 0 and "REVIEW.md" in out
+                 and snapshot(fresh) == before)
+    (fresh / "REVIEW.md").write_bytes(guide)
+    before = snapshot(fresh)
+    code, out = sh(SYNC, str(fresh), "--dry-run")
+    ok &= report("dry-run does not adopt or rewrite an identical guide", code == 0 and snapshot(fresh) == before)
+    code, out = sh(SYNC, str(fresh))
+    ok &= report("identical unowned guide is safely adopted", code == 0 and
+                 foamykit.read_lock(fresh)["files"]["REVIEW.md"] == foamykit.sha256(guide))
+
+    # AGENTS.md: the plugin owns the file; sync manages one review block in it.
+    block = foamykit.AGENTS_BLOCK
+    kit_agents = (KIT_ROOT / "AGENTS.md").read_bytes()
+    ok &= report("foamy-kit's own AGENTS.md carries the current review block",
+                 foamykit.agents_with_review(kit_agents) == kit_agents)
+    agents = a / "AGENTS.md"
+    ok &= report("sync creates AGENTS.md with the review block when it is absent",
+                 agents.read_text() == "# Notes for coding agents\n\n" + block and "[REVIEW.md](REVIEW.md)" in block)
+    own = "# Plugin rules\n\nKeep the queue bounded.\n"
+    agents.write_text(own)
+    agents.chmod(0o600)
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync appends the block to an existing AGENTS.md, keeping its text and mode",
+                 code == 0 and agents.read_text() == own + "\n" + block and agents.stat().st_mode & 0o777 == 0o600, out.strip())
+    before = snapshot(a)
+    code, out = sh(SYNC, str(a))
+    ok &= report("a current block is a no-op", code == 0 and "up to date" in out and snapshot(a) == before, out.strip())
+    tail = "\n## Later rules\n\nStay plain.\n"
+    agents.write_text(own + "\n" + block.replace("Follow [REVIEW.md]", "Ignore [REVIEW.md]") + tail)
+    code, out = sh("bash", str(a / "tests/kit-check.sh"))
+    code2, out2 = sh(CHECK, "--no-lint", str(a))
+    ok &= report("an edited block fails both integrity checks", code != 0 and "AGENTS.md lacks" in out
+                 and code2 != 0 and "AGENTS.md lacks" in out2, (out + out2).strip())
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync refreshes only the block, keeping text on both sides",
+                 code == 0 and agents.read_text() == own + "\n" + block + tail, out.strip())
+    code, out = sh("bash", str(a / "tests/kit-check.sh"))
+    ok &= report("kit-check accepts the refreshed block", code == 0, out.strip())
+    for label, damaged in (("a lone begin marker", own + foamykit.AGENTS_BEGIN + "\n"),
+                           ("a repeated block", own + block + block),
+                           ("an end marker before the begin", own + foamykit.AGENTS_END + "\n" + foamykit.AGENTS_BEGIN + "\n"),
+                           ("an edited marker", own + block.replace(" end -->", " stop -->"))):
+        agents.write_text(damaged)
+        before = snapshot(a)
+        code, out = sh(SYNC, str(a), "--force")
+        code2, out2 = sh(CHECK, "--no-lint", str(a))
+        ok &= report(f"sync refuses {label} without writing, even with --force; check.sh reports it",
+                     code != 0 and "review block is damaged" in out and snapshot(a) == before
+                     and code2 != 0 and "damaged" in out2, out.strip())
+    agents.write_bytes(b"# Rules\n\xff\n")
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync refuses a non-UTF-8 AGENTS.md", code != 0 and "not UTF-8" in out and agents.read_bytes() == b"# Rules\n\xff\n")
+    agents.write_text("No trailing newline")
+    code, out = sh(SYNC, str(a), "--dry-run")
+    ok &= report("dry-run reports AGENTS.md without writing it",
+                 code == 0 and "AGENTS.md" in out and agents.read_text() == "No trailing newline", out.strip())
+    code, out = sh(SYNC, str(a))
+    ok &= report("text without a final newline is kept and separated by a blank line",
+                 code == 0 and agents.read_text() == "No trailing newline\n\n" + block)
+    agents.unlink()
+    code, out = sh("bash", str(a / "tests/kit-check.sh"))
+    code2, out2 = sh(CHECK, "--no-lint", str(a))
+    ok &= report("a missing AGENTS.md fails both integrity checks", code != 0 and "AGENTS.md is missing" in out
+                 and code2 != 0 and "AGENTS.md is missing" in out2)
+    outside_agents = base / "outside-agents.md"
+    outside_agents.write_text(own)
+    agents.symlink_to(outside_agents)
+    code, out = sh(SYNC, str(a))
+    ok &= report("an AGENTS.md symlink is refused and its target untouched", code != 0 and "AGENTS.md is a symlink" in out
+                 and outside_agents.read_text() == own)
+    agents.unlink()
+    code, out = sh(SYNC, str(a))
+    ok &= report("sync recreates a missing AGENTS.md", code == 0 and agents.read_text().endswith(block)
+                 and not list(a.glob(".AGENTS.md.*")))
 
     # 3. Local edits are detected and never overwritten.
     edited = a / "kit/FoamyPopup.qml"
@@ -134,11 +242,13 @@ def main():
         old_kit = base / "old-kit"
         shutil.copytree(KIT_ROOT, old_kit, ignore=shutil.ignore_patterns(".git", "tests", "preview"))
         (old_kit / "VERSION").write_text("0.0.9\n")
+        (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
         code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
         sh(SYNC, str(a), "--components", "FoamyPopup")
         code, out = sh(CHECK, "--no-lint", str(a), str(b))
         ok &= report("check.sh fails when plugins are on different kit versions", code != 0 and "kit versions differ" in out, out.strip().splitlines()[-1])
         sh(SYNC, str(b))
+        ok &= report("sync refreshes an unchanged older guide", (b / "REVIEW.md").read_bytes() == guide)
         code, out = sh(CHECK, "--no-lint", str(a), str(b))
         ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
 

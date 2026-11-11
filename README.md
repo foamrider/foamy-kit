@@ -5,6 +5,9 @@ The canonical source of the components every foamy Omarchy shell plugin shares
 them identical: `sync.sh`, `check.sh`, a design lint, an offscreen preview
 harness for screenshots, and a build tool for plugins' bundled Rust helpers
 that each plugin carries itself ([Native helpers](#native-helpers)). The look and the rules live in [DESIGN.md](DESIGN.md).
+The shared code review standard lives in [REVIEW.md](REVIEW.md): structure,
+simplification, linting and dead-code analysis, defensive programming, security
+and validation evidence. Read it before reviewing kit or plugin changes.
 
 Plugins can't share files at runtime (each is a self-contained directory and
 `omarchy-plugin-validate` rejects symlinks), so the kit is **copied** into
@@ -54,8 +57,9 @@ Each file's header documents its API. Dependencies are in `kit/components.json`.
 ```
 
 Sync writes `kit/` (components, a generated `kit/qmldir` registering the
-singletons, license notices), `tests/kit-check.sh`, and `foamy-kit.lock`
-(version, components, body hashes). Line 1 of every copied file (line 2 after
+singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the review
+block in `AGENTS.md`, and `foamy-kit.lock`
+(version, components, body hashes). Line 1 of every stamped code file (line 2 after
 `pragma`, `.pragma` or a shebang) is
 
     // foamy-kit 0.1.0 <sha256 of the body> — do not edit; change foamy-kit and run sync
@@ -68,6 +72,30 @@ patterns such as `rust/foamy-helper/src/**/*.rs` in `kit/components.json`) and
 may place files at the plugin root (`rootFiles`, e.g. `rust-toolchain.toml`);
 those are stamped, locked and checked like the rest. `optIn` components
 (FoamyNative) are left out of a first sync without `--components`.
+
+`REVIEW.md` is always included, even with a component subset. Like license
+notices, it is copied verbatim and hashed whole instead of carrying a code
+stamp. Sync refuses to overwrite a different unowned guide or a locally edited
+copy. Change the canonical guide here; keep plugin-specific instructions in
+the plugin's own README or `AGENTS.md`. The guide sets the review standard
+and the tooling target; syncing it does not install linters or configure
+plugin CI.
+
+Sync also points review agents at the guide (Codex reads `AGENTS.md`, not
+`REVIEW.md`). It keeps one marked block in the plugin's `AGENTS.md`, creating
+the file when it is absent:
+
+    <!-- foamy-kit review: begin; managed by foamy-kit sync.sh, edit outside this block -->
+    ## Code review
+    …
+    <!-- foamy-kit review: end -->
+
+The rest of `AGENTS.md` belongs to the plugin and is kept byte for byte, with
+its file mode; it is not in `foamy-kit.lock`. Sync replaces only the block
+between the markers, and refuses (even with `--force`) a symlinked or
+non-UTF-8 file or a damaged block: a missing, repeated, reordered or edited
+marker. `check.sh` and `tests/kit-check.sh` fail when the block is missing or
+differs from the current kit's.
 
 Sync is idempotent, refuses to overwrite a stamped file that was edited in the
 plugin (`--force` discards the edit), refuses unknown files or symlinks in

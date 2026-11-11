@@ -42,6 +42,22 @@ STAMP_TAIL = "— do not edit; change foamy-kit and run sync"
 STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 LOCK_NAME = "foamy-kit.lock"
 CHECK_NAME = "tests/kit-check.sh"
+REVIEW_NAME = "REVIEW.md"
+# AGENTS.md belongs to the plugin; sync manages only this marked block, which
+# points review agents (Codex reads AGENTS.md) at the shared REVIEW.md.
+AGENTS_NAME = "AGENTS.md"
+AGENTS_MARK = "<!-- foamy-kit review:"
+AGENTS_BEGIN = AGENTS_MARK + " begin; managed by foamy-kit sync.sh, edit outside this block -->"
+AGENTS_END = AGENTS_MARK + " end -->"
+AGENTS_BLOCK = f"""{AGENTS_BEGIN}
+## Code review
+
+Follow [REVIEW.md](REVIEW.md) when reviewing or preparing a change. It is the
+shared Foamy review standard, synced from foamy-kit. The rest of this file
+adds repository-specific rules.
+{AGENTS_END}
+"""
+AGENTS_PLACEHOLDER = b"@AGENTS_BLOCK@"
 
 
 # --------------------------------------------------------------------- stamps
@@ -55,7 +71,7 @@ def kit_revision():
         out = subprocess.run(["git", "-C", str(KIT_ROOT), "rev-parse", "--short=12", "HEAD"],
                              capture_output=True, text=True, timeout=10)
         rev = out.stdout.strip() if out.returncode == 0 else ""
-        dirty = subprocess.run(["git", "-C", str(KIT_ROOT), "status", "--porcelain", "--", "kit", "VERSION", "tools"],
+        dirty = subprocess.run(["git", "-C", str(KIT_ROOT), "status", "--porcelain", "--", "kit", "VERSION", "tools", REVIEW_NAME],
                                capture_output=True, text=True, timeout=10).stdout.strip()
         return (rev or "unknown") + ("+dirty" if dirty else "")
     except (OSError, subprocess.SubprocessError):
@@ -146,7 +162,7 @@ def component_files(name, spec):
             out.append((f"kit/{pattern}", KIT_DIR / pattern))
     for dest, source in sorted(spec.get("rootFiles", {}).items()):
         parts = Path(dest).parts
-        if Path(dest).is_absolute() or ".." in parts or not parts or parts[0] == "kit" or dest in (LOCK_NAME, CHECK_NAME):
+        if Path(dest).is_absolute() or ".." in parts or not parts or parts[0] == "kit" or dest in (LOCK_NAME, CHECK_NAME, REVIEW_NAME):
             raise KitError(f"components.json: {name}: invalid rootFiles path {dest}")
         out.append((dest, KIT_DIR / source))
     return out
@@ -185,7 +201,7 @@ def qmldir_for(selected, components):
 
 def lock_path_ok(rel, components=None):
     """True for a path foamy-kit can own: a normalised relative path under kit/,
-    tests/kit-check.sh, or a component's rootFiles destination. The lock is
+    tests/kit-check.sh, REVIEW.md, or a component's rootFiles destination. The lock is
     plugin content, so anything else (`../x`, `/etc/x`, `kit/../x`) is refused
     before sync reads, overwrites or deletes it."""
     parts = rel.split("/")
@@ -193,7 +209,7 @@ def lock_path_ok(rel, components=None):
         return False
     if parts[0] == "kit" and len(parts) > 1:
         return True
-    if rel == CHECK_NAME:
+    if rel in (CHECK_NAME, REVIEW_NAME):
         return True
     components = load_components() if components is None else components
     return any(rel in spec.get("rootFiles", {}) for spec in components.values())
@@ -214,7 +230,7 @@ def read_lock(plugin):
         elif len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]):
             if not lock_path_ok(parts[1], components):
                 raise KitError(f"{LOCK_NAME} lists {parts[1]!r}, which is not a path foamy-kit owns "
-                               "(only kit/…, tests/kit-check.sh and component root files); fix or delete the lock")
+                               "(only kit/…, tests/kit-check.sh, REVIEW.md and component root files); fix or delete the lock")
             info["files"][parts[1]] = parts[0]
     return info
 
@@ -242,7 +258,12 @@ def planned_files(selected, components, version):
     for notice in sorted(notices):
         files[f"kit/{notice}"] = (KIT_ROOT / notice).read_bytes()
     template = (KIT_ROOT / "tools/kit-check.sh.in").read_bytes()
+    if template.count(AGENTS_PLACEHOLDER) != 1:
+        raise KitError("tools/kit-check.sh.in must contain @AGENTS_BLOCK@ exactly once")
+    template = template.replace(AGENTS_PLACEHOLDER, AGENTS_BLOCK.rstrip("\n").encode())
     files[CHECK_NAME] = stamped("kit-check.sh", template, version)
+    # Hash the guide whole, like license notices, so it stays valid Markdown.
+    files[REVIEW_NAME] = (KIT_ROOT / REVIEW_NAME).read_bytes()
     return files
 
 
@@ -250,7 +271,7 @@ def lock_bytes(version, selected, files):
     lines = [
         "# foamy-kit.lock: written by foamy-kit sync.sh; do not edit.",
         "# Hashes are of each file's body (the file without its stamp line);",
-        "# notices are hashed whole. tests/kit-check.sh verifies them.",
+        "# notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.",
         f"version {version}",
         f"source {kit_revision()}",
         "components " + ",".join(selected),
@@ -259,6 +280,58 @@ def lock_bytes(version, selected, files):
         info = read_stamp(files[rel])
         lines.append(f"{info[1] if info else sha256(files[rel])}  {rel}")
     return ("\n".join(lines) + "\n").encode()
+
+
+def agents_with_review(current):
+    """AGENTS.md bytes with the managed review block added or refreshed.
+
+    `current` is the existing file (None when absent). Text outside the block
+    is the plugin's and is kept byte for byte. A damaged block (a marker
+    missing, repeated, reordered or edited) raises instead of guessing."""
+    if current is None:
+        return ("# Notes for coding agents\n\n" + AGENTS_BLOCK).encode()
+    try:
+        text = current.decode("utf-8")
+    except UnicodeDecodeError:
+        raise KitError(f"{AGENTS_NAME} is not UTF-8 text") from None
+    marks = [match.start() for match in re.finditer(re.escape(AGENTS_MARK), text)]
+    if not marks:
+        separator = "" if not text else "\n" if text.endswith("\n") else "\n\n"
+        return (text + separator + AGENTS_BLOCK).encode()
+    start, end = text.find(AGENTS_BEGIN), text.find(AGENTS_END)
+    stop = end + len(AGENTS_END)
+    if (len(marks) != 2 or marks != [start, end] or (start and text[start - 1] != "\n")
+            or text[stop:stop + 1] not in ("", "\n")):
+        raise KitError(f"{AGENTS_NAME}: the foamy-kit review block is damaged (expected one begin and one end "
+                       "marker, each on its own line); restore or delete the block, then re-run")
+    return (text[:start] + AGENTS_BLOCK + text[stop + 1:]).encode()
+
+
+def agents_problems(plugin):
+    """Integrity problems with the plugin's AGENTS.md review block."""
+    path = plugin / AGENTS_NAME
+    if path.is_symlink() or not path.is_file():
+        return [f"{AGENTS_NAME} is missing or not a regular file (run sync.sh)"]
+    data = path.read_bytes()
+    try:
+        current = agents_with_review(data) == data
+    except KitError as error:
+        return [str(error)]
+    return [] if current else [f"{AGENTS_NAME} lacks the current foamy-kit review block (run sync.sh)"]
+
+
+def replace_file(path, data):
+    """Atomically replace `path`, keeping its permission bits (0644 if new)."""
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def lock_core(data):
@@ -301,7 +374,7 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
     for rel in sorted(owned | set(files)):
         if not inside(plugin, rel):
             problems.append(f"{rel} resolves outside the plugin (a parent directory is a symlink)")
-    # Components' rootFiles (rust-toolchain.toml), owned now or planned.
+    # Root files (including the shared review guide), owned now or planned.
     for rel in sorted(rel for rel in owned | set(files) if not rel.startswith("kit/") and rel != CHECK_NAME):
         path = plugin / rel
         if path.is_symlink():
@@ -317,11 +390,11 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         info = read_stamp(data)
         if info is None:
             if rel in owned and sha256(data) == lock["files"][rel]:
-                pass  # an unmodified notice
+                pass  # an unmodified notice or shared document
             elif rel in files and data == files[rel]:
                 pass
             elif not force:
-                problems.append(f"{rel} is not a foamy-kit file (or a notice was edited); move it out of kit/ or use --force")
+                problems.append(f"{rel} is not a foamy-kit file (or a copied file was edited); preserve it elsewhere before syncing or use --force")
                 continue
         else:
             if sha256(info[2]) != info[1] and not force:
@@ -329,6 +402,16 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
                 continue
         if rel not in files:
             removals.append(rel)
+    agents_path = plugin / AGENTS_NAME
+    agents_old = agents_new = None
+    if agents_path.is_symlink() or (agents_path.exists() and not agents_path.is_file()):
+        problems.append(f"{AGENTS_NAME} is a symlink or not a regular file")
+    else:
+        try:
+            agents_old = agents_path.read_bytes() if agents_path.exists() else None
+            agents_new = agents_with_review(agents_old)
+        except KitError as error:
+            problems.append(str(error))
     if problems:
         raise KitError(f"{plugin.name}: refusing to sync:\n  " + "\n  ".join(problems))
 
@@ -361,6 +444,10 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         for path in sorted(kit_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
             if path.is_dir() and not path.is_symlink() and not any(path.iterdir()):
                 path.rmdir()
+    if agents_new != agents_old:
+        changed.append(AGENTS_NAME)
+        if not dry_run:
+            replace_file(agents_path, agents_new)
     new_lock = lock_bytes(version, selected, files)
     lock_path = plugin / LOCK_NAME
     old_lock = lock_path.read_bytes() if lock_path.is_file() else b""
@@ -423,6 +510,7 @@ def verify_plugin(plugin, native=True):
             rel = str(path.relative_to(plugin))
             if (path.is_file() or path.is_symlink()) and rel not in lock["files"]:
                 problems.append(f"{rel} is not part of foamy-kit")
+    problems += agents_problems(plugin)
     if native:
         problems += verify_native(plugin, lock)
     return problems

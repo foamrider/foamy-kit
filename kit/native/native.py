@@ -70,11 +70,11 @@ def read_stamp(data):
 
 def lock_path_ok(rel):
     """True for a path foamy-kit can own: a normalised relative path under
-    kit/, tests/kit-check.sh or a component root file."""
+    kit/, tests/kit-check.sh, REVIEW.md or a component root file."""
     parts = rel.split("/")
     if rel.startswith("/") or "\\" in rel or any(part in ("", ".", "..") for part in parts):
         return False
-    return (parts[0] == "kit" and len(parts) > 1) or rel == CHECK_NAME or rel in ROOT_FILES
+    return (parts[0] == "kit" and len(parts) > 1) or rel in (CHECK_NAME, "REVIEW.md") or rel in ROOT_FILES
 
 
 def read_lock(plugin):
