@@ -777,9 +777,14 @@ def cmd_check(args):
             continue
         name = plugin.resolve().name
         problems = []
-        lock = read_lock(plugin)
+        # A lock that names paths foamy-kit doesn't own is this plugin's
+        # problem (verify_plugin reports it), not a reason to stop checking.
+        try:
+            lock, lock_broken = read_lock(plugin), False
+        except KitError:
+            lock, lock_broken = None, True
         if not args.lint_only:
-            if lock is None and args.allow_unsynced:
+            if lock is None and args.allow_unsynced and not lock_broken:
                 pass
             else:
                 problems += verify_plugin(plugin)

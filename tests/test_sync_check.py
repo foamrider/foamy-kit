@@ -222,6 +222,17 @@ def main():
                      code != 0 and code_f != 0 and "not a path foamy-kit owns" in out + out_f and code_c != 0
                      and victim.read_text() == "keep me\n" and (a / "manifest.json").exists(),
                      (out + out_f + out_c).strip()[-300:])
+    # check.sh reports a crafted lock as that plugin's problem and goes on to
+    # the next plugin; --lint-only doesn't need the lock at all.
+    lock_path.write_text(clean_lock + f"{digest}  ../victim.txt\n")
+    others = [str(b)] if b is not None else []
+    code, out = sh(CHECK, "--no-lint", str(a), *others)
+    code_l, out_l = sh(CHECK, "--lint-only", "--quiet", str(a))
+    ok &= report("check.sh reports a lock path outside the plugin and checks the other plugins",
+                 code != 0 and f"{a.name}: kit: " in out and "not a path foamy-kit owns" in out
+                 and "Traceback" not in out + out_l and all(f"{Path(o).name}: " in out for o in others)
+                 and "not a path foamy-kit owns" not in out_l,
+                 (out + out_l).strip()[-300:])
     lock_path.write_text(clean_lock)
     template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
     roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
