@@ -16,6 +16,7 @@ run node prefs.test.cjs
 run node native.test.cjs
 run node text.test.cjs
 run node schedule.test.cjs
+run node i18n.test.cjs
 run python3 -I test_sync_check.py
 run python3 -I test_native.py
 run python3 -I test_geometry.py

@@ -3,7 +3,7 @@
   "FoamyPalette": {"files": ["FoamyPalette.qml"], "singletons": ["FoamyPalette"], "deps": []},
   "FoamyWallClock": {"files": ["FoamyWallClock.qml"], "deps": []},
   "FoamyMotion": {"files": ["FoamyMotion.qml"], "singletons": ["FoamyMotion"], "deps": []},
-  "FoamyI18n": {"files": ["FoamyI18n.qml"], "singletons": ["FoamyI18n"], "deps": []},
+  "FoamyI18n": {"files": ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs"], "singletons": ["FoamyI18n"], "deps": []},
   "FoamyShared": {"files": ["FoamyShared.qml", "FoamyMember.qml"], "singletons": ["FoamyShared"], "deps": []},
   "FoamyIpc": {"files": ["FoamyIpc.qml", "FoamyIpcResolver.js", "FoamyIpcPreference.qml"], "deps": []},
   "FoamyPeerIpc": {"files": ["FoamyPeerIpc.qml"], "deps": ["FoamyIpc"]},

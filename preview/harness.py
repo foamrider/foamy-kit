@@ -460,7 +460,8 @@ class Run:
 
     @property
     def system_bus_address(self):
-        """The system bus address the run's processes see."""
+        """The system bus address the run's processes see (with
+        system_bus="private", the private daemon's once start() ran)."""
         return self.env["DBUS_SYSTEM_BUS_ADDRESS"]
 
     def start(self):

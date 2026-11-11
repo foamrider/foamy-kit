@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick
 import qs.Commons
+import "FoamyI18nText.js" as I18nText
 
 // Plugin strings with the Omarchy language picker.
 //
@@ -30,12 +31,9 @@ QtObject {
   // still read it.
   readonly property bool translationsAvailable: true
 
+  // Node tests reach the same substitution through FoamyI18nText.js.
   function substitute(text, values) {
-    return String(text).replace(/%([1-9][0-9]*)|\{(\w+)\}/g, function(token, index, name) {
-      if (values === undefined || values === null) return token
-      var value = name ? values[name] : Array.isArray(values) ? values[Number(index) - 1] : Number(index) === 1 ? values : undefined
-      return value === undefined ? token : typeof value === "number" ? root.number(value) : String(value)
-    })
+    return I18nText.substitute(text, values, root.number)
   }
 
   function t(key, values) {

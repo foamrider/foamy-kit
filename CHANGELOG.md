@@ -44,6 +44,15 @@
   tests in `tests/text.test.cjs`, engine parity in `tests/qml/Runtime.qml`.
   After syncing, pass app-controlled text through `FoamyText.tooltip()` at
   every `bar.showTooltip` call.
+- `kit/FoamyI18nText.js` (part of FoamyI18n, with `node-loader.cjs`):
+  FoamyI18n's value substitution, which the singleton now calls, and
+  `translator(catalog, english, number)` (`t`/`tn` over plain catalogs:
+  the language, English, the key) for node tests. Thirteen plugins'
+  `tests/i18n.cjs` evaluated slices of `FoamyI18n.qml`'s source in a vm, eight
+  of them through the 4.0 English fallback removed below. After syncing,
+  replace that slicing with
+  `require("../kit/node-loader.cjs").load("FoamyI18nText").translator(no, en)`
+  (or `.substitute(text, values)`); until then those node tests fail.
 - REVIEW.md section 5: plain text alone doesn't bound a host tooltip's size,
   and a line-mode `SplitParser` or a `StdioCollector` is not a memory bound.
 - `FoamySchedule` (opt-in component): `kit/FoamySchedule.js` and
@@ -134,7 +143,9 @@
   After syncing: drop each plugin test's 4.0 cases (`--host 4.0|both`
   choices, `FOAMY_HOST_40` checks, `("4.0", …)` case lists,
   `harness.HOSTS["4.0"]`); until then a listed 4.0 prints SKIP, and a test
-  that calls `harness.Run("4.0")` itself stops with the message above.
+  that calls `harness.Run("4.0")` itself stops with the message above. A
+  node test that evaluated `FoamyI18n.qml`'s source (`tests/i18n.cjs`) moves
+  to `FoamyI18nText.js` (see Added).
 
 ## 0.8.1 — 2026-11-10
 

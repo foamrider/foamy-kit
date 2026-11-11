@@ -22,7 +22,7 @@ edited in a plugin: change it here, then sync.
 | FoamyPalette | `FoamyPalette.qml` (singleton) | Surface tones and theme status colours from colors.toml |
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
 | FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
-| FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations |
+| FoamyI18n | `FoamyI18n.qml` (singleton), `FoamyI18nText.js`, `node-loader.cjs` | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations. `FoamyI18nText.js`: its value substitution, and `translator(catalog, english)` for node tests |
 | FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
 | FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
@@ -850,7 +850,7 @@ tests/run-all.sh
 
 Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
-Runs FoamyPrefs, FoamyText and FoamySchedule unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
+Runs FoamyPrefs, FoamyText, FoamySchedule and FoamyI18nText unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
 on throwaway copies, the FoamyPopup geometry test (4 bar positions, max
 height, menu padding, plus the old fork as a negative control), runtime
 tests of i18n/motion/palette/prefs/cursor/leader election/IPC
