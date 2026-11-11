@@ -16,6 +16,18 @@
   `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
   missing or stale. foamy-kit has its own `AGENTS.md`.
 
+### Fixed
+- `favicon` (foamy-notifications, foamy-notification-center): a host's
+  icon is now the one its root page (`https://<host>/`) maps to, else the
+  one most of its pages map to; size closeness to 32 px and recency only
+  break ties. Before, the newest 32 px bitmap of any page won, so one
+  hidden sign-out frame (`outlook.office.com/mail/logoutFrame.html`, mapped
+  to the Microsoft sign-in logo) replaced Outlook's icon. Checked on copies
+  of real Vivaldi caches: outlook.office.com, entra.microsoft.com and
+  m365.cloud.microsoft now get their own icons, www.google.com the Google
+  G; teams.microsoft.com and github.com are unchanged. Cached icons in
+  `~/.cache/foamy/browser-favicons` refresh within a day.
+
 ## 0.8.1 — 2026-11-10
 
 ### Fixed
