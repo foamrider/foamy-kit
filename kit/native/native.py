@@ -43,6 +43,10 @@ STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 # foamy-kit's tests keep this list, tools/kit-check.sh.in and components.json
 # in step.
 ROOT_FILES = (".github/workflows/verify-native.yml", "rust-toolchain.toml")
+# The tooling sync writes into every plugin outside kit/ (foamy-kit's
+# tools/foamykit.py TOOLING_FILES).
+TOOLING_FILES = (".github/workflows/checks.yml", ".oxlintrc.json", ".qmlformat.ini", "mise.toml", "ruff.toml",
+                 "tests/validate.sh")
 WORKFLOW = ".github/workflows/verify-native.yml"
 
 
@@ -70,11 +74,12 @@ def read_stamp(data):
 
 def lock_path_ok(rel):
     """True for a path foamy-kit can own: a normalised relative path under
-    kit/, tests/kit-check.sh, REVIEW.md or a component root file."""
+    kit/, tests/kit-check.sh, REVIEW.md, a tooling file or a component root file."""
     parts = rel.split("/")
     if rel.startswith("/") or "\\" in rel or any(part in ("", ".", "..") for part in parts):
         return False
-    return (parts[0] == "kit" and len(parts) > 1) or rel in (CHECK_NAME, "REVIEW.md") or rel in ROOT_FILES
+    return ((parts[0] == "kit" and len(parts) > 1) or rel in (CHECK_NAME, "REVIEW.md") or rel in ROOT_FILES
+            or rel in TOOLING_FILES)
 
 
 def read_lock(plugin):

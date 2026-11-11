@@ -25,6 +25,52 @@ def snapshot(plugin):
             for p in sorted(plugin.rglob("*")) if p.is_file() and ".git" not in p.parts}
 
 
+def stamped_intact(path):
+    info = foamykit.read_stamp(path.read_bytes())
+    return info is not None and foamykit.sha256(info[2]) == info[1]
+
+
+def tooling_tests(a, base):
+    """The tooling (tests/validate.sh and its configuration) in every plugin."""
+    ok = True
+    lock = foamykit.read_lock(a)
+    tooling = foamykit.TOOLING_FILES
+    ok &= report("sync writes every tooling file, stamped and locked, even with a component subset",
+                 all(stamped_intact(a / rel) and rel in lock["files"] for rel in tooling),
+                 f"{sorted(set(tooling) - set(lock['files']))}")
+    ok &= report("tooling bodies are the kit's own files",
+                 all(foamykit.read_stamp((a / rel).read_bytes())[2] == (KIT_ROOT / src).read_bytes()
+                     for rel, src in tooling.items()))
+    ok &= report("tests/validate.sh is executable; the configs are not",
+                 os.access(a / "tests/validate.sh", os.X_OK) and not os.access(a / "mise.toml", os.X_OK))
+    first = (a / "kit/tooling/validate.py").read_text().splitlines()
+    ok &= report("validate.py keeps its shebang, stamp on line 2", first[0].startswith("#!") and first[1].startswith("# foamy-kit "))
+    ok &= report("lock_path_ok accepts the tooling paths (sync and the bundled build tool)",
+                 all(foamykit.lock_path_ok(rel) and foamykit.native.lock_path_ok(rel) for rel in tooling))
+    code, out = sh("bash", str(a / "tests/validate.sh"), "--list")
+    ok &= report("the plugin's tests/validate.sh runs from its stamped copy", code == 0 and "qmllint" in out and "suite" in out,
+                 out.strip()[-200:])
+    code, out = sh("bash", str(a / "tests/validate.sh"), "--only", "kit-check")
+    ok &= report("tests/validate.sh --only kit-check passes on the synced plugin", code == 0 and "PASS  kit-check" in out,
+                 out.strip()[-300:])
+    ruff = a / "ruff.toml"
+    data = ruff.read_bytes()
+    ruff.write_bytes(data.replace(b"max-complexity = 15", b"max-complexity = 99"))
+    code, out = sh("bash", str(a / "tests/kit-check.sh"))
+    code2, out2 = sh(SYNC, str(a))
+    ok &= report("an edited shared config fails kit-check and blocks sync", code != 0 and "ruff.toml was edited locally" in out
+                 and code2 != 0 and "ruff.toml was edited locally" in out2, (out + out2).strip()[-300:])
+    ruff.write_bytes(data)
+    own = base / "own-tooling"
+    shutil.copytree(FIXTURES / "demo-plugin", own)
+    (own / "mise.toml").write_text('[tools]\nshellcheck = "0.9.0"\n')
+    before = snapshot(own)
+    code, out = sh(SYNC, str(own))
+    ok &= report("a plugin's own mise.toml is preserved before any writes", code != 0 and "mise.toml is not a foamy-kit file" in out
+                 and snapshot(own) == before, out.strip()[-200:])
+    return ok
+
+
 def main():
     ok = True
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
@@ -43,7 +89,7 @@ def main():
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,SafeTextField")
     files = sorted(p.name for p in (a / "kit").iterdir())
     ok &= report("sync adds the components and their dependencies", code == 0 and files == sorted([
-        "FoamyI18n.qml", "FoamyI18nText.js", "FoamyPalette.qml", "FoamyPopup.qml", "FoamyStyle.qml", "SafeTextField.qml", "clipboard.sh", "node-loader.cjs", "qmldir"]), f"{code} {files}")
+        "FoamyI18n.qml", "FoamyI18nText.js", "FoamyPalette.qml", "FoamyPopup.qml", "FoamyStyle.qml", "SafeTextField.qml", "clipboard.sh", "node-loader.cjs", "qmldir", "tooling"]), f"{code} {files}")
     qmldir = (a / "kit/qmldir").read_text()
     ok &= report("generated qmldir registers singletons", "singleton FoamyStyle 1.0 FoamyStyle.qml" in qmldir and "\nFoamyPopup 1.0 FoamyPopup.qml" in qmldir)
     first = (a / "kit/FoamyStyle.qml").read_text().splitlines()
@@ -59,6 +105,8 @@ def main():
         print("SKIP omarchy-plugin-validate: not installed (an Omarchy host tool)")
     code, out = sh("env", "-i", "PATH=/usr/bin:/bin", "bash", str(a / "tests/kit-check.sh"))
     ok &= report("generated tests/kit-check.sh passes (clean environment)", code == 0 and "OK" in out, out.strip())
+
+    ok &= tooling_tests(a, base)
 
     # 2. Idempotent: nothing rewritten on a second run.
     before = snapshot(a)
@@ -200,7 +248,7 @@ def main():
     # 5. Changing the component set removes files no longer needed.
     code, out = sh(SYNC, str(a), "--components", "FoamyI18n")
     files = sorted(p.name for p in (a / "kit").iterdir())
-    ok &= report("narrowing the components removes unneeded files", code == 0 and files == ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs", "qmldir"], f"{files}")
+    ok &= report("narrowing the components removes unneeded files", code == 0 and files == ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs", "qmldir", "tooling"], f"{files}")
     code, out = sh(SYNC, str(a), "--add", "FoamyPeerIpc")
     files = sorted(p.name for p in (a / "kit").iterdir())
     lock = foamykit.read_lock(a)
@@ -230,7 +278,7 @@ def main():
     lock_path.write_text(clean_lock + f"{digest}  ../victim.txt\n")
     others = [str(b)] if b is not None else []
     code, out = sh(CHECK, "--no-lint", str(a), *others)
-    code_l, out_l = sh(CHECK, "--lint-only", "--quiet", str(a))
+    _, out_l = sh(CHECK, "--lint-only", "--quiet", str(a))
     ok &= report("check.sh reports a lock path outside the plugin and checks the other plugins",
                  code != 0 and f"{a.name}: kit: " in out and "not a path foamy-kit owns" in out
                  and "Traceback" not in out + out_l and all(f"{Path(o).name}: " in out for o in others)

@@ -20,7 +20,9 @@ while read -r hash rel; do
   [[ $hash =~ ^[0-9a-f]{64}$ ]] || continue
   if [[ $rel == /* || /$rel/ == */../* || /$rel/ == */./* || $rel == *//* || $rel == *\\* ]] ||
      [[ $rel != kit/?* && $rel != tests/kit-check.sh && $rel != REVIEW.md && $rel != rust-toolchain.toml &&
-        $rel != .github/workflows/verify-native.yml ]]; then
+        $rel != .github/workflows/verify-native.yml && $rel != .github/workflows/checks.yml &&
+        $rel != .oxlintrc.json && $rel != .qmlformat.ini && $rel != mise.toml && $rel != ruff.toml &&
+        $rel != tests/validate.sh ]]; then
     fail "foamy-kit.lock lists $rel, which is not a path foamy-kit owns"; continue
   fi
   listed[$rel]=1

@@ -82,6 +82,10 @@ def sync_tests(base):
     ok &= report("the build tool's ROOT_FILES, components.json rootFiles and kit-check.sh agree",
                  sorted(foamykit.native.ROOT_FILES) == root_files and all(f"$rel != {rel}" in template for rel in root_files),
                  f"{root_files}")
+    tooling_roots = sorted(rel for rel in foamykit.TOOLING_FILES if not rel.startswith("kit/"))
+    ok &= report("the build tool's TOOLING_FILES, foamykit's and kit-check.sh agree",
+                 sorted(foamykit.native.TOOLING_FILES) == tooling_roots and all(f"$rel != {rel}" in template for rel in tooling_roots),
+                 f"{tooling_roots}")
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
     ok &= report("a leading #![attribute] is not taken for a shebang", attribute[0].startswith("// foamy-kit 0.5.0 "))
     native = foamykit.native

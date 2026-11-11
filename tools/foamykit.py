@@ -39,6 +39,22 @@ STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 LOCK_NAME = "foamy-kit.lock"
 CHECK_NAME = "tests/kit-check.sh"
 REVIEW_NAME = "REVIEW.md"
+# The tooling every plugin carries (README "Tooling"): the one validation
+# command, its engine, the pinned tool versions and the shared linter and
+# formatter configuration. {path in the plugin: source in foamy-kit}. The
+# sources are the kit's own files (foamy-kit validates itself with them), so
+# these are not a component: sync always writes them, stamped like kit code.
+# kit/native/native.py (TOOLING_FILES) and tools/kit-check.sh.in list the
+# same root paths; tests/test_native.py keeps them in step.
+TOOLING_FILES = {
+    ".github/workflows/checks.yml": ".github/workflows/checks.yml",
+    ".oxlintrc.json": ".oxlintrc.json",
+    ".qmlformat.ini": ".qmlformat.ini",
+    "kit/tooling/validate.py": "kit/tooling/validate.py",
+    "mise.toml": "mise.toml",
+    "ruff.toml": "ruff.toml",
+    "tests/validate.sh": "tests/validate.sh",
+}
 # AGENTS.md belongs to the plugin; sync manages only this marked block, which
 # points review agents (Codex reads AGENTS.md) at the shared REVIEW.md.
 AGENTS_NAME = "AGENTS.md"
@@ -67,7 +83,8 @@ def kit_revision():
         out = subprocess.run(["git", "-C", str(KIT_ROOT), "rev-parse", "--short=12", "HEAD"],
                              capture_output=True, text=True, timeout=10)
         rev = out.stdout.strip() if out.returncode == 0 else ""
-        dirty = subprocess.run(["git", "-C", str(KIT_ROOT), "status", "--porcelain", "--", "kit", "VERSION", "tools", REVIEW_NAME],
+        dirty = subprocess.run(["git", "-C", str(KIT_ROOT), "status", "--porcelain", "--", "kit", "VERSION", "tools", REVIEW_NAME,
+                                *TOOLING_FILES.values()],
                                capture_output=True, text=True, timeout=10).stdout.strip()
         return (rev or "unknown") + ("+dirty" if dirty else "")
     except (OSError, subprocess.SubprocessError):
@@ -79,7 +96,7 @@ def sha256(data):
 
 
 def comment_prefix(name):
-    return "#" if name.endswith((".sh", ".toml", ".py", ".yml")) or Path(name).name == "qmldir" else "//"
+    return "#" if name.endswith((".sh", ".toml", ".py", ".yml", ".ini")) or Path(name).name == "qmldir" else "//"
 
 
 def stamp_index(name, lines):
@@ -158,7 +175,8 @@ def component_files(name, spec):
             out.append((f"kit/{pattern}", KIT_DIR / pattern))
     for dest, source in sorted(spec.get("rootFiles", {}).items()):
         parts = Path(dest).parts
-        if Path(dest).is_absolute() or ".." in parts or not parts or parts[0] == "kit" or dest in (LOCK_NAME, CHECK_NAME, REVIEW_NAME):
+        if (Path(dest).is_absolute() or ".." in parts or not parts or parts[0] == "kit"
+                or dest in (LOCK_NAME, CHECK_NAME, REVIEW_NAME, *TOOLING_FILES)):
             raise KitError(f"components.json: {name}: invalid rootFiles path {dest}")
         out.append((dest, KIT_DIR / source))
     return out
@@ -197,7 +215,7 @@ def qmldir_for(selected, components):
 
 def lock_path_ok(rel, components=None):
     """True for a path foamy-kit can own: a normalised relative path under kit/,
-    tests/kit-check.sh, REVIEW.md, or a component's rootFiles destination. The lock is
+    tests/kit-check.sh, REVIEW.md, a tooling file, or a component's rootFiles destination. The lock is
     plugin content, so anything else (`../x`, `/etc/x`, `kit/../x`) is refused
     before sync reads, overwrites or deletes it."""
     parts = rel.split("/")
@@ -205,7 +223,7 @@ def lock_path_ok(rel, components=None):
         return False
     if parts[0] == "kit" and len(parts) > 1:
         return True
-    if rel in (CHECK_NAME, REVIEW_NAME):
+    if rel in (CHECK_NAME, REVIEW_NAME) or rel in TOOLING_FILES:
         return True
     components = load_components() if components is None else components
     return any(rel in spec.get("rootFiles", {}) for spec in components.values())
@@ -226,7 +244,8 @@ def read_lock(plugin):
         elif len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]):
             if not lock_path_ok(parts[1], components):
                 raise KitError(f"{LOCK_NAME} lists {parts[1]!r}, which is not a path foamy-kit owns "
-                               "(only kit/…, tests/kit-check.sh, REVIEW.md and component root files); fix or delete the lock")
+                               "(only kit/…, tests/kit-check.sh, REVIEW.md, the tooling files and component root files); "
+                               "fix or delete the lock")
             info["files"][parts[1]] = parts[0]
     return info
 
@@ -258,6 +277,8 @@ def planned_files(selected, components, version):
         raise KitError("tools/kit-check.sh.in must contain @AGENTS_BLOCK@ exactly once")
     template = template.replace(AGENTS_PLACEHOLDER, AGENTS_BLOCK.rstrip("\n").encode())
     files[CHECK_NAME] = stamped("kit-check.sh", template, version)
+    for rel, source in TOOLING_FILES.items():
+        files[rel] = stamped(rel, (KIT_ROOT / source).read_bytes(), version)
     # Hash the guide whole, like license notices, so it stays valid Markdown.
     files[REVIEW_NAME] = (KIT_ROOT / REVIEW_NAME).read_bytes()
     return files
