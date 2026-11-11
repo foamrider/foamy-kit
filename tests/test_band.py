@@ -18,7 +18,7 @@ def luminance(p):
 
 
 def distance(a, b):
-    return sum(abs(x - y) for x, y in zip(a[:3], b[:3]))
+    return sum(abs(x - y) for x, y in zip(a[:3], b[:3], strict=False))
 
 
 def run(host, theme, rtl, plugin, out_dir):
@@ -33,13 +33,13 @@ def run(host, theme, rtl, plugin, out_dir):
     r.env.update({"FOAMY_RTL": "1" if rtl else "0", "FOAMY_TAG": tag})
     r.run(timeout=40)
     ok = r.ok
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     if not ok:
         report(f"band {tag}", False, detail)
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-20:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-20:])))
         r.cleanup()
         return False
-    info = json.loads(next(l.split("FOAMY BAND ", 1)[1] for l in r.log.splitlines() if "FOAMY BAND " in l))
+    info = json.loads(next(line.split("FOAMY BAND ", 1)[1] for line in r.log.splitlines() if "FOAMY BAND " in line))
     png = out_dir / f"band-{host}-{theme}-{'rtl' if rtl else 'ltr'}.png"
     shutil.copyfile(r.out / "band.png", png)
     only = out_dir / f"band-only-{host}-{theme}-{'rtl' if rtl else 'ltr'}.png"

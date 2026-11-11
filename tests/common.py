@@ -87,9 +87,9 @@ def run_shell(qml_name, host, plugin, tag, env=None, scale=1.0, timeout=60, keep
     )
     r.env.update(env or {})
     r.run(timeout=timeout)
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     # A layout that never settles (an Image in a Layout without preferred size…).
-    loops = [l for l in r.log.splitlines() if "polish() loop" in l]
+    loops = [line for line in r.log.splitlines() if "polish() loop" in line]
     ok = report(
         f"{Path(qml_name).stem.lower()} {tag}",
         r.ok and not loops,
@@ -100,7 +100,7 @@ def run_shell(qml_name, host, plugin, tag, env=None, scale=1.0, timeout=60, keep
             if "FOAMY NOTE" in line:
                 print("    " + line.split("FOAMY NOTE ", 1)[1])
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or loops[:3] or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or loops[:3] or r.log.splitlines()[-30:])))
     if keep_pngs_to:
         keep_pngs_to = Path(keep_pngs_to)
         keep_pngs_to.mkdir(parents=True, exist_ok=True)

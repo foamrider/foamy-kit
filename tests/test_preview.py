@@ -31,7 +31,7 @@ def pixel_differs(png, x, y, other):
     def pixel(path):
         data = path.read_bytes()
         width, height = struct.unpack(">II", data[16:24])
-        depth, colour = data[24], data[25]
+        colour = data[25]
         offset, chunks = 8, b""
         while offset < len(data):
             length = struct.unpack(">I", data[offset : offset + 4])[0]
@@ -42,7 +42,7 @@ def pixel_differs(png, x, y, other):
         raw = zlib.decompress(chunks)
         channels = {6: 4, 2: 3}[colour]
         stride = width * channels
-        rows, previous = [], bytearray(stride)
+        previous = bytearray(stride)
         for row in range(y + 1):
             start = row * (stride + 1)
             kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
@@ -137,7 +137,10 @@ def main():
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-publish-"))
     repo = base / "foamy-example"
     repo.mkdir()
-    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True).stdout
+
+    def git(*a):
+        return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True).stdout
+
     git("init", "-q", "-b", "dev")
     (repo / "README.md").write_text("example\n")
     git("add", "README.md")

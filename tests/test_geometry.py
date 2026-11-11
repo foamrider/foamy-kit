@@ -32,15 +32,15 @@ def run(host, out_dir):
     r.run(timeout=90)
     for png in r.out.glob("*.png"):
         shutil.copyfile(png, out_dir / png.name)
-    result = [l for l in r.log.splitlines() if "FOAMY RESULT" in l or "FOAMY NOTE" in l]
+    result = [line for line in r.log.splitlines() if "FOAMY RESULT" in line or "FOAMY NOTE" in line]
     ok = r.ok
-    detail = "; ".join(l.split("qml: ", 1)[-1] for l in result if "RESULT" in l)
-    notes = [l.split("qml: ", 1)[-1] for l in result if "NOTE" in l]
+    detail = "; ".join(line.split("qml: ", 1)[-1] for line in result if "RESULT" in line)
+    notes = [line.split("qml: ", 1)[-1] for line in result if "NOTE" in line]
     report(f"geometry {host}", ok, detail)
     for note in notes[:2]:
         print("    " + note)
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     else:
         r.cleanup()
         shutil.rmtree(plugin.parent, ignore_errors=True)

@@ -48,11 +48,11 @@ def run(host, lang):
     except ValueError:
         pass
     r.ok = "FOAMY DONE" in r.log and "FOAMY FAIL" not in r.log and not any(m in r.log for m in harness.FAILURE_MARKERS)
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"runtime {host} {lang}", r.ok, detail)
     ok = report(f"qs ipc call foamy.kit-demo status ({host})", ok_ipc, status or "no reply") and ok
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     else:
         r.cleanup()
         shutil.rmtree(plugin.parent, ignore_errors=True)

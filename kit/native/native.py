@@ -54,7 +54,6 @@ TOOLING_FILES = (
     "ruff.toml",
     "tests/validate.sh",
 )
-WORKFLOW = ".github/workflows/verify-native.yml"
 
 
 class KitError(Exception):
@@ -380,7 +379,9 @@ def toolchain_channel(plugin):
     try:
         channel = tomllib.loads(path.read_text())["toolchain"]["channel"]
     except (OSError, KeyError, tomllib.TOMLDecodeError) as error:
-        raise KitError(f"{TOOLCHAIN_FILE}: no toolchain channel ({error}); run sync.sh --add {NATIVE_COMPONENT}")
+        raise KitError(
+            f"{TOOLCHAIN_FILE}: no toolchain channel ({error}); run sync.sh --add {NATIVE_COMPONENT}"
+        ) from error
     return channel
 
 
@@ -391,7 +392,7 @@ def read_toml(path):
     try:
         return tomllib.loads(path.read_text())
     except (OSError, tomllib.TOMLDecodeError) as error:
-        raise KitError(f"{path.name}: {error}")
+        raise KitError(f"{path.name}: {error}") from error
 
 
 def native_preflight(plugin, crate):
@@ -545,7 +546,7 @@ def check_toolchain(env, channel, cwd):
     try:
         out = subprocess.run(["rustc", "--version"], env=env, cwd=cwd, capture_output=True, text=True, timeout=60)
     except OSError:
-        raise KitError("rustc not found; install rustup (https://rustup.rs)")
+        raise KitError("rustc not found; install rustup (https://rustup.rs)") from None
     if out.returncode != 0 or not out.stdout.startswith(f"rustc {channel} "):
         raise KitError(
             f"rustc is {out.stdout.strip() or out.stderr.strip()!r}, expected {channel} "

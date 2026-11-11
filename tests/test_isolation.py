@@ -89,7 +89,7 @@ def main():
         )
 
         run, got, lines = probe()
-        detail = "; ".join(l for l in lines if not l.startswith("PATH="))[:600] or run.log[-400:]
+        detail = "; ".join(line for line in lines if not line.startswith("PATH="))[:600] or run.log[-400:]
         path = got.get("PATH", "").split(":")
         ok &= report("qs ran the probe", "session-bus" in got, detail)
         ok &= report(

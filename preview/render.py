@@ -61,7 +61,7 @@ def render(
     try:
         relative = preview.relative_to(plugin)
     except ValueError:
-        raise SystemExit("the preview file must live inside the plugin directory")
+        raise SystemExit("the preview file must live inside the plugin directory") from None
     shell = (
         (Path(__file__).resolve().parent / "PreviewShell.qml.in").read_text().replace("@PREVIEW@", relative.as_posix())
     )
@@ -204,7 +204,10 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
         views += [v for v in after[host] if v not in views]
     views += [v for v in before if v not in views]
     prefix = url_prefix.rstrip("/") + "/" if url_prefix else ""
-    cell = lambda files, view, alt: f"![{alt}]({prefix}{files[view].name})" if view in files else "—"
+
+    def cell(files, view, alt):
+        return f"![{alt}]({prefix}{files[view].name})" if view in files else "—"
+
     lines = [
         "| View | " + " | ".join([before_label] + [f"After {h}" for h in after_hosts]) + " |",
         "|---" * (2 + len(after_hosts)) + "|",

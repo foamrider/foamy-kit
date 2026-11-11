@@ -154,18 +154,6 @@ def read_stamp(data):
     return None
 
 
-def verify_file(path):
-    """None if intact, else a reason."""
-    data = path.read_bytes()
-    info = read_stamp(data)
-    if info is None:
-        return "not stamped"
-    _, expected, body = info
-    if sha256(body) != expected:
-        return "edited locally (body no longer matches its stamp)"
-    return None
-
-
 # ----------------------------------------------------------------- components
 
 
@@ -237,7 +225,7 @@ def qmldir_for(selected, components):
                 type_name = file[:-4]
                 prefix = "singleton " if type_name in singletons else ""
                 lines.append(f"{prefix}{type_name} 1.0 {file}")
-    return ("\n".join(sorted(lines, key=lambda l: l.split()[-1])) + "\n").encode()
+    return ("\n".join(sorted(lines, key=lambda line: line.split()[-1])) + "\n").encode()
 
 
 def lock_path_ok(rel, components=None):
@@ -389,7 +377,7 @@ def replace_file(path, data):
 
 def lock_core(data):
     """Lock content minus the source line (which changes with every kit commit)."""
-    return b"\n".join(l for l in data.split(b"\n") if not l.startswith(b"source "))
+    return b"\n".join(line for line in data.split(b"\n") if not line.startswith(b"source "))
 
 
 def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print, add=None):
@@ -685,7 +673,7 @@ def lint_text(name, text):
     base = os.path.basename(name)
     is_qml = name.endswith(".qml")
     state = {"block": False}
-    rows = [split_line(l, state) for l in text.splitlines()]
+    rows = [split_line(line, state) for line in text.splitlines()]
     findings = []
 
     def allowed(index, rule):

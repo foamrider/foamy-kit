@@ -51,10 +51,10 @@ def launch(host, plugin, mode, fakebin):
         {"FOAMY_CALLS": str(calls), "FOAMY_BASE": str(r.base), "FOAMY_MODE": mode, "QML_XHR_ALLOW_FILE_READ": "1"}
     )
     r.run(timeout=90)
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"lifecycle {mode} {host}", r.ok, detail)
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     return r, ok
 
 
@@ -62,7 +62,7 @@ def run(host):
     plugin = synced_demo()
     r, ok = launch(host, plugin, "queue", {"omarchy": FAKE_OMARCHY, "omarchy-shell": FAKE_OMARCHY_SHELL})
     # The warning names the cause and carries at most stderrLimit characters.
-    warnings = [l for l in r.log.splitlines() if "foamy-kit: saving" in l]
+    warnings = [line for line in r.log.splitlines() if "foamy-kit: saving" in line]
     causes = [
         "(exit 1): fake failure",
         "(the command couldn't start)",

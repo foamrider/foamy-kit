@@ -171,14 +171,16 @@ def run(plugin, timeout=90, quiet=False):
         r = harness.Run("4.5", SHELL, plugin=copy, language=steps[0]["language"], prefix="foamy-kit-i18n-run-")
         r.env.update(FOAMY_I18N_STEPS=json.dumps(steps), FOAMY_I18N_KEY=key, FOAMY_I18N_PLURAL=plural)
         r.run(timeout=timeout)
-        result = next((l.split("FOAMY RESULT ", 1)[1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+        result = next(
+            (line.split("FOAMY RESULT ", 1)[1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result"
+        )
         detail = f"{result}; {json.dumps(key, ensure_ascii=False)}" + (
             f", plural {json.dumps(plural, ensure_ascii=False)}" if plural else ", no plural entry"
         )
         if not quiet:
             print(f"{'PASS' if r.ok else 'FAIL'} i18n runtime {plugin.name}: {detail}")
             if not r.ok:
-                print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+                print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
         r.cleanup()
         return r.ok
     finally:

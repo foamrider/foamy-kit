@@ -78,7 +78,7 @@ def read_png(path):
 def same_pixel(a, b, tolerance=0):
     if a[3] == 0 and b[3] == 0:
         return True
-    return all(abs(x - y) <= tolerance for x, y in zip(a, b))
+    return all(abs(x - y) <= tolerance for x, y in zip(a, b, strict=False))
 
 
 def compare(a, b, tolerance=0):

@@ -20,7 +20,10 @@ import compare  # noqa: E402
 def write_png(path, pixels, alpha=True):
     height, width = len(pixels), len(pixels[0])
     raw = b"".join(b"\x00" + b"".join(bytes(p if alpha else p[:3]) for p in row) for row in pixels)
-    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+
     header = struct.pack(">IIBBBBB", width, height, 8, 6 if alpha else 2, 0, 0, 0)
     path.write_bytes(
         b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
@@ -35,7 +38,10 @@ def main():
     ok = True
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-compare-"))
     try:
-        p = lambda name: base / name
+
+        def p(name):
+            return base / name
+
         write_png(p("a.png"), grid((10, 20, 30, 255)))
         write_png(p("same.png"), grid((10, 20, 30, 255)))
         rgb = grid((10, 20, 30, 255))
@@ -83,11 +89,14 @@ def main():
         shutil.copyfile(p("a.png"), new / "a.png")
         shutil.copyfile(p("rgb.png"), new / "rgb.png")
         shutil.copyfile(p("a.png"), new / "extra.png")
-        run = lambda *args: subprocess.run(
-            [sys.executable, "-I", str(KIT_ROOT / "preview/compare.py"), *map(str, args)],
-            capture_output=True,
-            text=True,
-        )
+
+        def run(*args):
+            return subprocess.run(
+                [sys.executable, "-I", str(KIT_ROOT / "preview/compare.py"), *map(str, args)],
+                capture_output=True,
+                text=True,
+            )
+
         same = run(p("a.png"), p("same.png"))
         diff = run(old, new)
         ok &= report(

@@ -137,7 +137,7 @@ def _stop_all():
 def install_signal_cleanup():
     """Turn SIGTERM/SIGHUP into SystemExit so finally blocks and atexit run."""
 
-    def handler(signum, frame):
+    def handler(signum, _frame):
         raise SystemExit(128 + signum)
 
     for sig in (signal.SIGTERM, signal.SIGHUP):
@@ -597,7 +597,7 @@ class Run:
     def __enter__(self):
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *_exc):
         self.stop()
         self.cleanup()
         return False

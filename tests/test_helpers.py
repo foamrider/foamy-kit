@@ -76,10 +76,10 @@ def main():
     # FoamyWait in qs.
     run = harness.Run("4.5", WAIT, prefix="foamy-kit-wait-")
     run.run(timeout=30)
-    result = next((l.split("qml: ", 1)[-1] for l in run.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    result = next((line.split("qml: ", 1)[-1] for line in run.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok &= report("FoamyWait.waitFor/after: later, condition-driven, timeouts, throws, pending", run.ok, result)
     if not run.ok:
-        print("\n".join("    " + l for l in run.failures() or run.log.splitlines()[-20:]))
+        print("\n".join("    " + line for line in run.failures() or run.log.splitlines()[-20:]))
     run.cleanup()
     run = harness.Run("4.5", WAIT, prefix="foamy-kit-wait-")
     run.env["FOAMY_LABELLED"] = "1"
@@ -179,8 +179,8 @@ def main():
         ok &= report(
             "other stubs log and succeed; calls() lists them",
             plain.returncode == 0
-            and any(l.endswith("omarchy-shell foamy.helpers ping kit") for l in logged)
-            and any(l.endswith("omarchy-plugin-validate /nowhere") for l in logged),
+            and any(line.endswith("omarchy-shell foamy.helpers ping kit") for line in logged)
+            and any(line.endswith("omarchy-plugin-validate /nowhere") for line in logged),
             str(logged),
         )
         try:

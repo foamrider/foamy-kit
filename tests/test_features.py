@@ -67,10 +67,10 @@ def run(host):
         }
     )
     r.run(timeout=60)
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"features {host}", r.ok, detail)
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     r.cleanup()
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return ok

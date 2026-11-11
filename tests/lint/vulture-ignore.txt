@@ -1,0 +1,2 @@
+# Names Vulture reports as unused that are called from where it can't see.
+_stop_all  # preview/harness.py: an @atexit.register handler, run at interpreter exit

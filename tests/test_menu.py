@@ -45,7 +45,7 @@ def main():
                         1
                         for x in range(w)
                         for y in range(h)
-                        if sum(abs(a - b) for a, b in zip(px(x, y)[:3], base[:3])) > 60
+                        if sum(abs(a - b) for a, b in zip(px(x, y)[:3], base[:3], strict=False)) > 60
                     )
                 results.append(report(f"menu {tag}: re-shown action is drawn", drawn > 10, f"{drawn} icon pixels"))
     shutil.rmtree(plugin.parent, ignore_errors=True)
