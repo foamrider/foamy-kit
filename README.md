@@ -36,7 +36,7 @@ edited in a plugin: change it here, then sync.
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 108 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 113 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
@@ -110,14 +110,16 @@ every stamped file, so a local edit fails the plugin's own test run.
 ## Check
 
 ```bash
-./check.sh ../foamy-*              # versions + stamps + design lint
+./check.sh ../foamy-*              # versions + kit files + design lint
 ./check.sh --lint-only ../foamy-x  # just the lint
 ./check.sh --allow-unsynced …      # don't fail plugins that have no lock yet
 ./check.sh --warn-pua …            # report literal icon-font glyphs as warnings, not errors
 ```
 
-Fails when plugins are on different kit versions, a stamped file was edited,
-or the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
+Fails when plugins are on different kit versions, a stamped file, notice or
+`REVIEW.md` was edited, the `AGENTS.md` review block is missing or stale, a
+native helper doesn't match its pin ([Native helpers](#native-helpers)), or
+the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
 
 ## Native helpers
@@ -255,7 +257,9 @@ Put the exemptions on the `mod` declaration in your own code:
 #[rustfmt::skip]
 #[allow(clippy::all, dead_code, unused)]
 mod vendored_parser;
-``` After changing dependencies run
+```
+
+After changing dependencies run
 `cargo update -p <crate>` (or `cargo generate-lockfile`) in `native/`; after a
 kit sync that changed `foamy-helper`'s dependencies, `cargo update -p
 foamy-helper`. Never run cargo in `kit/rust/`, and never point
@@ -796,7 +800,8 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 
 `VERSION` is the kit version stamped into every copy. Bump it for any change
-under `kit/` or `tools/kit-check.sh.in`, then sync every plugin so `check.sh`
+under `kit/`, `tools/kit-check.sh.in`, `REVIEW.md` or the `AGENTS.md` review
+block, then sync every plugin so `check.sh`
 sees one version everywhere.
 
 ## License
