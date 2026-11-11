@@ -27,11 +27,11 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::ops::ControlFlow;
-use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -102,6 +102,14 @@ enum Input {
     Fd(OwnedFd),
 }
 
+/// An fd the child gets under `number`: the builder's own duplicate, so
+/// the caller's fd may be closed (and its number reused) before the run.
+#[derive(Debug)]
+struct Inherited {
+    number: RawFd,
+    fd: Arc<OwnedFd>,
+}
+
 /// A command with bounds; build it, then [`run`](Bounded::run) it.
 ///
 /// Defaults: standard input `/dev/null`, 10 s deadline, 1 MiB per output
@@ -117,7 +125,9 @@ pub struct Bounded {
     group: Group,
     limits: Vec<(Resource, u64)>,
     priority: Priority,
-    inherit: Vec<RawFd>,
+    inherit: Vec<Inherited>,
+    /// Why the builder can't spawn (an fd could not be duplicated).
+    broken: Option<io::Error>,
     hooks: Hooks,
 }
 
@@ -134,6 +144,7 @@ impl Bounded {
             limits: Vec::new(),
             priority: Priority::default(),
             inherit: Vec::new(),
+            broken: None,
             hooks: Hooks(Vec::new()),
         }
     }
@@ -260,15 +271,29 @@ impl Bounded {
         self
     }
 
-    /// Lets the child inherit `fd` under the same number (clears its
-    /// close-on-exec flag in the child only), like Python's `pass_fds`. The
-    /// fd must stay open until [`run`](Self::run).
+    /// Lets the child inherit `fd` under its number (3 or higher), like
+    /// Python's `pass_fds`, sharing the open file (and its offset). The
+    /// builder keeps a duplicate, so the child gets this file under that
+    /// number even if the caller closes `fd` before [`run`](Self::run)
+    /// (whatever reuses the number here is not passed on). A duplicate that
+    /// can't be made (`EMFILE`) fails the run.
     pub fn inherit_fd(self, fd: impl AsFd) -> Bounded {
-        self.inherit_raw_fd(fd.as_fd().as_raw_fd())
+        let fd = fd.as_fd();
+        match fd.try_clone_to_owned() {
+            Ok(owned) => self.inherit_shared(fd.as_raw_fd(), Arc::new(owned)),
+            Err(error) => self.fail_spawn(error),
+        }
     }
 
-    pub(crate) fn inherit_raw_fd(mut self, fd: RawFd) -> Bounded {
-        self.inherit.push(fd);
+    /// [`inherit_fd`](Self::inherit_fd) with a duplicate made already.
+    pub(crate) fn inherit_shared(mut self, number: RawFd, fd: Arc<OwnedFd>) -> Bounded {
+        self.inherit.push(Inherited { number, fd });
+        self
+    }
+
+    /// Makes [`run`](Self::run) fail with `error` before anything starts.
+    pub(crate) fn fail_spawn(mut self, error: io::Error) -> Bounded {
+        self.broken.get_or_insert(error);
         self
     }
 
@@ -316,9 +341,28 @@ impl Bounded {
             limits,
             priority,
             inherit,
+            broken,
             hooks,
             ..
         } = self;
+        if let Some(error) = broken {
+            return Err(error);
+        }
+        // In the child each fd is put under its number with dup2. First
+        // move every duplicate above all those numbers, so placing one
+        // never overwrites another still to be placed. 0-2 are the child's
+        // standard streams.
+        let floor = inherit.iter().map(|fd| fd.number).max().unwrap_or(0) + 1;
+        let mut placed = Vec::with_capacity(inherit.len());
+        for Inherited { number, fd } in &inherit {
+            if *number < 3 {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "fds 0-2 are the child's standard streams",
+                ));
+            }
+            placed.push((*number, rustix::io::fcntl_dupfd_cloexec(&**fd, floor)?));
+        }
         let feed = match (stdin, input) {
             (Stdin::Pipe, _) => {
                 command.stdin(Stdio::piped());
@@ -345,18 +389,21 @@ impl Bounded {
         let parent = die_with_parent.then(getpid);
         // SAFETY: the closure runs in the forked child before exec. It only
         // makes system calls through rustix (setsid, prctl, getppid,
-        // getrlimit, setrlimit, getpriority, setpriority, fcntl) and libc's
-        // syscall (ioprio_set), and builds io::Errors from raw OS codes, so
-        // it neither allocates nor takes locks; `limits` and `inherit` are
-        // moved in and only read. The hooks are the crate's own (sandbox),
-        // which hold to the same rule.
+        // getrlimit, setrlimit, getpriority, setpriority) and libc
+        // (syscall for ioprio_set, dup2), and builds io::Errors from raw OS
+        // codes, so it neither allocates nor takes locks; `limits` and
+        // `placed` are moved in and only read. The hooks are the crate's
+        // own (sandbox), which hold to the same rule.
         unsafe {
             command.pre_exec(move || {
                 crate::process::child_setup(session, parent, &limits, priority)?;
-                for &fd in &inherit {
-                    // SAFETY: only fcntl on the number; a closed fd is EBADF.
-                    let fd = BorrowedFd::borrow_raw(fd);
-                    rustix::io::fcntl_setfd(fd, rustix::io::FdFlags::empty())?;
+                for (number, fd) in &placed {
+                    // SAFETY: dup2 takes two integers; `fd` is open (owned
+                    // by the closure) and `number` is replaced in the child
+                    // only. The copy at `number` has no close-on-exec flag.
+                    if dup2(fd.as_raw_fd(), *number) < 0 {
+                        return Err(io::Error::last_os_error());
+                    }
                 }
                 for hook in &hooks.0 {
                     hook()?;
@@ -553,6 +600,12 @@ impl Pipeline {
 enum Stdin {
     Own,
     Pipe,
+}
+
+unsafe extern "C" {
+    /// The C library's `dup2(2)` (std links it; async-signal-safe). rustix's
+    /// wants an `OwnedFd` for the target, which in the child may be closed.
+    fn dup2(old: std::ffi::c_int, new: std::ffi::c_int) -> std::ffi::c_int;
 }
 
 /// The children started here and not yet reaped. Each leads its own process
@@ -1170,6 +1223,19 @@ mod tests {
             !closed.success(),
             "without inherit_fd the fd stays close-on-exec"
         );
+        // The builder keeps its own duplicate: the caller may close the fd
+        // (and something else may take its number) before the run.
+        let (read, mut write) = io::pipe().unwrap();
+        write.write_all(b"the pipe").unwrap();
+        drop(write);
+        let script = format!("cat <&{}", read.as_raw_fd());
+        let command = sh(&script).inherit_fd(read);
+        let (_reused, _keep) = io::pipe().unwrap();
+        let output = command.run().unwrap();
+        assert_eq!(output.stdout, b"the pipe", "{output:?}");
+        // 0-2 are the child's own standard streams.
+        let error = sh("true").inherit_fd(io::stdin()).run().unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
 
     #[test]

@@ -154,6 +154,32 @@ fn memfd_holds_the_program_for_bubblewrap() {
     );
 }
 
+/// A stand-in for bubblewrap that copies the fd its `--seccomp` option
+/// names (`$2`) to standard output, as bubblewrap reads it.
+fn fake_bwrap(dir: &Path) -> Bwrap {
+    use std::os::unix::fs::PermissionsExt;
+    let program = dir.join("bwrap");
+    std::fs::write(&program, "#!/bin/sh\nexec cat <&\"$2\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    Bwrap::new(program)
+}
+
+#[test]
+fn bwrap_keeps_its_own_copy_of_the_fds_it_names() {
+    // The memfd is a temporary: closed when `seccomp` returns. Before,
+    // only its number was kept, and the next fd opened (here a file) took
+    // it and went to bubblewrap instead.
+    let dir = crate::fs::tests::TempDir::new("bwrap-fds");
+    let other = dir.0.join("other");
+    std::fs::write(&other, b"some other file").unwrap();
+    let filter = BpfFilter::decoder().unwrap();
+    let sandbox = fake_bwrap(&dir.0).seccomp(filter.memfd().unwrap());
+    let _reused = File::open(&other).unwrap();
+    let output = sandbox.bounded(["--", "true"]).run().unwrap();
+    assert!(output.success(), "{output:?}");
+    assert_eq!(output.stdout, filter.to_bytes());
+}
+
 #[test]
 fn seccomp_in_the_child_denies_processes_and_namespaces() {
     let filter = BpfFilter::decoder().unwrap();

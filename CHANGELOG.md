@@ -42,6 +42,15 @@
   running. The kit keeps a list of unreaped children for this; a child
   leaves it in the same critical section that reaps it, so a recycled pid is
   never killed.
+- `child::Bounded::inherit_fd` and `sandbox::Bwrap`'s fd options
+  (`seccomp`, `ro_bind_fd`, `bind_fd`) keep their own duplicate of the fd
+  instead of its number, and the child gets the duplicate under the
+  original number (`dup2` before exec). Before, an fd closed before the run
+  (`.seccomp(BpfFilter::decoder()?.memfd()?)` compiled and closed the memfd
+  at once) handed bubblewrap whatever fd took the number next. The calls
+  are unchanged (`&OwnedFd` still works). Inheriting fd 0-2 is now
+  `InvalidInput` (it used to be a silent no-op), and a duplicate that can't
+  be made (`EMFILE`) fails the run.
 - `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
   longer panics on `Instant` overflow; it means no deadline of its own.
 - `favicon` (foamy-notifications, foamy-notification-center): a host's

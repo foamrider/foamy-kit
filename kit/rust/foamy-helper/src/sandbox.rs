@@ -47,6 +47,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Duration;
 
 use landlock::{
@@ -535,14 +536,18 @@ pub fn which(name: &str) -> Option<PathBuf> {
 
 /// A bubblewrap command line, built option by option in the order given
 /// (bubblewrap applies mounts in order). File descriptors handed to it
-/// (`--ro-bind-fd`, `--bind-fd`, `--seccomp`) are inherited by bubblewrap
-/// when run through [`bounded`](Self::bounded); they must stay open until
-/// then.
+/// (`--ro-bind-fd`, `--bind-fd`, `--seccomp`) are duplicated: bubblewrap
+/// inherits them under the numbers its options name when run through
+/// [`bounded`](Self::bounded), even if the caller closed them by then
+/// (`.seccomp(BpfFilter::decoder()?.memfd()?)` is fine). A duplicate that
+/// can't be made fails the run.
 #[derive(Debug, Clone)]
 pub struct Bwrap {
     program: PathBuf,
     args: Vec<OsString>,
-    fds: Vec<RawFd>,
+    fds: Vec<(RawFd, Arc<OwnedFd>)>,
+    /// `errno` of a duplicate that could not be made.
+    broken: Option<i32>,
 }
 
 impl Bwrap {
@@ -552,6 +557,7 @@ impl Bwrap {
             program: program.into(),
             args: Vec::new(),
             fds: Vec::new(),
+            broken: None,
         }
     }
 
@@ -584,7 +590,13 @@ impl Bwrap {
     }
 
     fn with_fd(mut self, option: &str, fd: BorrowedFd<'_>, rest: Option<&OsStr>) -> Bwrap {
-        self.fds.push(fd.as_raw_fd());
+        match fd.try_clone_to_owned() {
+            Ok(owned) => self.fds.push((fd.as_raw_fd(), Arc::new(owned))),
+            Err(error) => {
+                let code = error.raw_os_error().unwrap_or(libc::EMFILE);
+                self.broken.get_or_insert(code);
+            }
+        }
         let number = fd.as_raw_fd().to_string();
         self.args.push(option.into());
         self.args.push(number.into());
@@ -746,8 +758,11 @@ impl Bwrap {
         S: AsRef<OsStr>,
     {
         let mut bounded = Bounded::new(&self.program).args(&self.args).args(command);
-        for &fd in &self.fds {
-            bounded = bounded.inherit_raw_fd(fd);
+        for (number, fd) in &self.fds {
+            bounded = bounded.inherit_shared(*number, Arc::clone(fd));
+        }
+        if let Some(code) = self.broken {
+            bounded = bounded.fail_spawn(io::Error::from_raw_os_error(code));
         }
         bounded
     }
