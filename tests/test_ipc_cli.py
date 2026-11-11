@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Why FoamyPrefs sends arrays to setBarWidget with a leading space: probe how
-`qs ipc call --` (the path omarchy-shell takes on 4.0, and on 4.5 when the
-socket is down) passes JSON arguments to a setBarWidget-shaped handler."""
+`qs ipc call --` (the path omarchy-shell takes when its socket is down) passes JSON arguments to a setBarWidget-shaped handler."""
 import json
 import subprocess
 import sys

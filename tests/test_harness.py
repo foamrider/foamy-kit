@@ -77,7 +77,7 @@ def main():
     dead = subprocess.Popen(["true"]); dead.wait()
     stale = tmp / f"foamy-kit-preview-4.5-{dead.pid}-abc123"
     mine = tmp / f"foamy-kit-preview-4.5-{os.getpid()}-def456"
-    busy = tmp / f"foamy-kit-preview-4.0-{dead.pid}-busy99"
+    busy = tmp / f"foamy-kit-preview-4.5-{dead.pid}-busy99"
     legacy = tmp / "foamy-kit-preview-4.5-ky_80jw7"
     for path in (stale, mine, busy, legacy):
         path.mkdir()
@@ -91,24 +91,36 @@ def main():
                  removed == [stale] and mine.exists() and busy.exists() and legacy.exists() and not stale.exists(), str(removed))
     shutil.rmtree(tmp, ignore_errors=True)
 
-    # 5. Hosts: 4.5 defaults to the installed shell, 4.0 exists only with FOAMY_HOST_40.
+    # 5. Hosts: 4.5 only, the installed shell by default; 4.0 is retired with a clear message.
     probe = ("import sys; sys.path.insert(0, sys.argv[1]); import harness; "
              "print(sorted((k, str(v)) for k, v in harness.HOSTS.items())); "
-             "print(harness.available_hosts(require=False))")
+             "print(harness.available_hosts(('4.0', '4.5'), require=False))\n"
+             "try:\n    harness.Run('4.0', '')\nexcept SystemExit as error:\n    print('Run 4.0:', error)")
     env = {k: v for k, v in os.environ.items() if k not in ("FOAMY_HOST_40", "FOAMY_HOST_45")}
     plain = subprocess.run([sys.executable, "-I", "-c", probe, str(KIT_ROOT / "preview")], env=env, capture_output=True, text=True)
-    ok &= report("4.5 defaults to /usr/share/omarchy/shell; 4.0 is unset and skipped, naming FOAMY_HOST_40",
+    retired = "Omarchy 4.0 is no longer supported (foamy-kit 0.9.0 tests 4.5 only"
+    ok &= report("4.5 defaults to /usr/share/omarchy/shell; a listed 4.0 prints SKIP and the 4.5 cases still run",
                  plain.stdout.startswith("[('4.5', '/usr/share/omarchy/shell')]\n")
-                 and "SKIP on 4.0: host 4.0 is opt-in: set FOAMY_HOST_40" in plain.stdout, plain.stdout.strip().replace("\n", "; "))
+                 and f"SKIP on 4.0: {retired}" in plain.stdout and "\n['4.5']\n" in plain.stdout,
+                 plain.stdout.strip().replace("\n", "; ") + plain.stderr[-300:])
+    ok &= report("harness.Run('4.0') stops with the retirement message", f"Run 4.0: {retired}" in plain.stdout,
+                 "; ".join(plain.stdout.strip().splitlines()[-1:]))
     fake = Path(tempfile.mkdtemp(prefix="foamy-kit-host-test-"))
     for name in ("40", "45"):
         (fake / name / "Commons").mkdir(parents=True)
         (fake / name / "Ui").mkdir()
     both = subprocess.run([sys.executable, "-I", "-c", probe, str(KIT_ROOT / "preview")], capture_output=True, text=True,
                           env={**env, "FOAMY_HOST_40": str(fake / "40"), "FOAMY_HOST_45": str(fake / "45")})
-    ok &= report("FOAMY_HOST_40 opts in to 4.0 and FOAMY_HOST_45 overrides 4.5",
-                 both.stdout.splitlines()[-1:] == ["['4.0', '4.5']"] and "SKIP" not in both.stdout, both.stdout.strip().replace("\n", "; "))
+    ok &= report("FOAMY_HOST_45 overrides 4.5; FOAMY_HOST_40 is ignored",
+                 both.stdout.startswith(f"[('4.5', '{fake / '45'}')]\n") and "\n['4.5']\n" in both.stdout
+                 and f"SKIP on 4.0: {retired}" in both.stdout, both.stdout.strip().replace("\n", "; "))
     shutil.rmtree(fake, ignore_errors=True)
+    demo = KIT_ROOT / "tests/fixtures/demo-plugin"
+    rendered = subprocess.run([sys.executable, "-I", str(KIT_ROOT / "preview/render.py"), str(demo), "--host", "4.0"],
+                              capture_output=True, text=True, timeout=60, env=env)
+    ok &= report("render.py --host 4.0 fails with the retirement message (no render)",
+                 rendered.returncode != 0 and retired in rendered.stderr and "Traceback" not in rendered.stderr,
+                 rendered.stderr.strip()[-200:])
     return 0 if ok else 1
 
 

@@ -17,7 +17,6 @@ ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
   readonly property string lang: Quickshell.env("FOAMY_LANG") || "en"
-  readonly property bool v45: host === "4.5"
   property int checks: 0
   property int failures: 0
 
@@ -61,8 +60,8 @@ ShellRoot {
 
   function stepOne() {
     // --- FoamyI18n ------------------------------------------------------------
-    eq(FoamyI18n.translationsAvailable, v45, "translations backend on " + host)
-    if (!v45 || lang === "en") {
+    eq(FoamyI18n.translationsAvailable, true, "translations backend on " + host)
+    if (lang === "en") {
       eq(FoamyI18n.t("Devices"), "Devices", "t English")
       eq(FoamyI18n.tn("%1 devices", 1), "1 device", "tn one (English)")
       eq(FoamyI18n.tn("%1 devices", 3), "3 devices", "tn other (English)")
@@ -75,11 +74,7 @@ ShellRoot {
       eq(FoamyI18n.updatedAgo(nowMs - 1283 * 60000, nowMs), "Updated 21 hours ago", "updatedAgo hours")
       eq(FoamyI18n.updatedAgo(nowMs - 49 * 3600000, nowMs), "Updated 2 days ago", "updatedAgo days")
     }
-    if (!v45) {
-      eq(FoamyI18n.formatLocale, Qt.locale().name, "4.0 keeps the system calendar locale")
-      eq(FoamyI18n.rightToLeft, false, "4.0 left-to-right")
-    }
-    if (v45 && lang === "da") {
+    if (lang === "da") {
       eq(FoamyI18n.language, "da", "language follows the picker")
       eq(FoamyI18n.t("Devices"), "Enheder", "t Danish")
       eq(FoamyI18n.tn("%1 devices", 1), "1 enhed", "tn one (Danish)")
@@ -91,7 +86,7 @@ ShellRoot {
       eq(FoamyI18n.formatLocale, "da-DK", "format locale from the registry")
       eq(FoamyI18n.rightToLeft, false, "Danish is left-to-right")
     }
-    if (v45 && lang === "ar") {
+    if (lang === "ar") {
       eq(FoamyI18n.rightToLeft, true, "Arabic mirrors")
       eq(FoamyI18n.tn("%1 devices", 2), "جهازان", "tn dual (Arabic)")
       eq(FoamyI18n.tn("%1 devices", 5), FoamyI18n.number(5) + " أجهزة", "tn few (Arabic), count in the language's digits")
@@ -105,15 +100,13 @@ ShellRoot {
     eq(FoamyMotion.reduceMotion, false, "motion on by default")
     eq(FoamyMotion.easeOut.length, 6, "easeOut curve")
     check(FoamyMotion.loopAllowed(true), "loops allowed with motion on")
-    if (v45) {
-      Style.reduceMotion = true
-      eq(FoamyMotion.reduceMotion, true, "reduceMotion follows Style.reduceMotion")
-      eq(FoamyMotion.duration(180), 0, "durations collapse under reduced motion")
-      eq(FoamyMotion.fadeIn, 0, "named tokens collapse under reduced motion")
-      check(!FoamyMotion.loopAllowed(true), "loops stop under reduced motion")
-      Style.reduceMotion = false
-      eq(FoamyMotion.fadeIn, 180, "tokens recover")
-    }
+    Style.reduceMotion = true
+    eq(FoamyMotion.reduceMotion, true, "reduceMotion follows Style.reduceMotion")
+    eq(FoamyMotion.duration(180), 0, "durations collapse under reduced motion")
+    eq(FoamyMotion.fadeIn, 0, "named tokens collapse under reduced motion")
+    check(!FoamyMotion.loopAllowed(true), "loops stop under reduced motion")
+    Style.reduceMotion = false
+    eq(FoamyMotion.fadeIn, 180, "tokens recover")
 
     // --- FoamyStyle / FoamyPalette -------------------------------------------------
     Style.cornerRadius = 6
@@ -187,7 +180,7 @@ ShellRoot {
 
       // --- FoamyIpc ---------------------------------------------------------------------
       var registry = IpcResolver.registry(shell)
-      eq(registry !== null, v45, "IpcRegistry fast path present only on 4.5")
+      check(registry !== null, "IpcRegistry fast path present")
       if (registry) {
         var reply = registry.call("foamy.kit-demo", "status", [])
         check(reply.ran === true, "omarchy-shell socket path answers the plugin target")

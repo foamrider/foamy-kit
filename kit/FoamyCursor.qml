@@ -20,10 +20,9 @@ import QtQuick
 // index is -1 until the first move or hover (no highlight on open). reset()
 // on close; clamp happens automatically when count shrinks.
 //
-// PanelKeyCatcher.textKey is textKey(text) on 4.0 and textKey(text, modifiers)
-// on 4.5. Declare handlers as function(text, modifiers): `modifiers` is
-// undefined on 4.0, and plain(modifiers) is true then. Tests that emit the
-// signal must match the host's arity: emitTextKey(catcher, text) does that.
+// PanelKeyCatcher.textKey is textKey(text, modifiers). Declare handlers as
+// function(text, modifiers); plain(modifiers) is true for a missing value
+// too (a synthetic key). Tests emit it with emitTextKey(catcher, text).
 QtObject {
   id: root
 
@@ -40,13 +39,9 @@ QtObject {
     if (modifiers === undefined || modifiers === null) return true
     return (modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier)) === 0
   }
-  // Emit a catcher's textKey with the host's signature (tests, synthetic keys).
+  // Emit a catcher's textKey (tests, synthetic keys); no modifiers by default.
   function emitTextKey(catcher, text, modifiers) {
-    try {
-      catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
-    } catch (error) {
-      catcher.textKey(text)
-    }
+    catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
   }
   function move(delta) {
     if (count <= 0) { index = -1; return }

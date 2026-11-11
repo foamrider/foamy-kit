@@ -42,7 +42,7 @@ QtObject {
   property var fields: []
   property var settings: ({})
   property int reflectTimeoutMs: 10000
-  // A CLI save normally takes well under a second (4.0's `qs ipc call` a few).
+  // A CLI save normally takes well under a second; this is a hang guard.
   property int saveTimeoutMs: 20000
   readonly property int stderrLimit: 4096
 

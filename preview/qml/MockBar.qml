@@ -1,8 +1,8 @@
 import QtQuick
 
-// The `bar` a third-party bar widget receives (Ui/PluginBarApi on 4.0 and
-// 4.5): scalar state plus popout coordination. barSize only; no barSizeFor,
-// exactly like the 4.5 plugin facade. MockFullBar adds barSizeFor.
+// The `bar` a third-party bar widget receives (Ui/PluginBarApi): scalar
+// state plus popout coordination. barSize only; no barSizeFor, exactly like
+// the 4.5 plugin facade. MockFullBar adds barSizeFor.
 QtObject {
   id: bar
   property string pluginId: "foamy.preview"

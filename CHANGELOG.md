@@ -16,6 +16,29 @@
   `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
   missing or stale. foamy-kit has its own `AGENTS.md`.
 
+### Removed
+- Omarchy 4.0 support, which the README no longer promised. The kit
+  components lose their 4.0 branches: `FoamyI18n` uses the shell's
+  `Translations` and `I18n` directly (no English-only fallback; its
+  `translationsAvailable` is always true and kept only for plugins that read
+  it), `FoamyMotion` calls `Style.duration`, `FoamyCursor.emitTextKey` always
+  passes modifiers, `FoamyPopup` leaves RTL mirroring to the host panel, and
+  the IPC, popup and prefs comments describe 4.5 alone. The harness knows
+  only 4.5: `FOAMY_HOST_40` is ignored, `harness.Run("4.0", …)` and
+  `render.py --host 4.0` stop with "Omarchy 4.0 is no longer supported …",
+  `harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a
+  caller still lists (so its 4.5 cases keep running), `--host both` renders
+  4.5 into `<out>/4.5/`, and the preview shell, `ScreenSim` (its
+  `fullScreenBar` property is gone) and the kit tests drop the 4.0 strip bar
+  window. `--trio` renders Before on 4.5 only (`--before-host` and
+  `trio(before_hosts=…)` are gone) and labels a clipped fork or a dev tree
+  that won't render.
+
+  After syncing: drop each plugin test's 4.0 cases (`--host 4.0|both`
+  choices, `FOAMY_HOST_40` checks, `("4.0", …)` case lists,
+  `harness.HOSTS["4.0"]`); until then a listed 4.0 prints SKIP, and a test
+  that calls `harness.Run("4.0")` itself stops with the message above.
+
 ## 0.8.1 — 2026-11-10
 
 ### Fixed

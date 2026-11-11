@@ -16,7 +16,6 @@ import "plugin/kit/FoamyIpcResolver.js" as Resolver
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
-  readonly property bool v45: host === "4.5"
   readonly property string calls: Quickshell.env("FOAMY_CALLS")
   property int checks: 0
   property int failures: 0
@@ -239,12 +238,8 @@ ShellRoot {
     cursor.emitTextKey(catcher, "s")
     eq(catcher.lastText, "s", "emitTextKey reaches a (text, modifiers) handler")
     check(cursor.plain(catcher.lastModifiers), "a plain letter is plain on " + host)
-    if (v45) {
-      cursor.emitTextKey(catcher, "s", Qt.AltModifier)
-      check(!cursor.plain(catcher.lastModifiers), "Alt+S is not plain on 4.5")
-    } else {
-      eq(catcher.lastModifiers, undefined, "4.0 textKey has no modifiers argument")
-    }
+    cursor.emitTextKey(catcher, "s", Qt.AltModifier)
+    check(!cursor.plain(catcher.lastModifiers), "Alt+S is not plain")
     check(cursor.plain(Qt.ShiftModifier) && !cursor.plain(Qt.ControlModifier), "plain() ignores Shift only")
 
     // --- SafeTextField.maximumLength ---------------------------------------------------
@@ -505,23 +500,18 @@ ShellRoot {
 
   function stepThree() {
     // --- IPC: prefer / others / call -----------------------------------------------------
-    if (v45) {
-      check(guardPreference.answering && guardPreference.others === 0, "guarded target settled with no rival")
-      var registry = Resolver.registry(shell)
-      rival = rivalHandler.createObject(shell)
-      registry.handlers.splice(registry.handlers.indexOf(rival), 1)
-      registry.handlers.unshift(rival)          // a later service jumps ahead
-      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "rival", "the rival took the route")
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: true, output: "mine" }, "FoamyIpcPreference puts its handler first")
-      check(preference.answering && preference.others === 1, "preference reports one other handler")
-      late = lateHandler.createObject(shell)
-      Resolver.prefer(shell, late)   // someone else claims the target
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "late", "another prefer() takes over")
-      eq(Resolver.call(shell, "foamy.shared-target", "nope", []), { ran: false }, "undeclared functions don't run")
-    } else {
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: false }, "4.0: no in-process IPC")
-      check(!preference.answering, "4.0: preference is inert")
-    }
+    check(guardPreference.answering && guardPreference.others === 0, "guarded target settled with no rival")
+    var registry = Resolver.registry(shell)
+    rival = rivalHandler.createObject(shell)
+    registry.handlers.splice(registry.handlers.indexOf(rival), 1)
+    registry.handlers.unshift(rival)          // a later service jumps ahead
+    eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "rival", "the rival took the route")
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: true, output: "mine" }, "FoamyIpcPreference puts its handler first")
+    check(preference.answering && preference.others === 1, "preference reports one other handler")
+    late = lateHandler.createObject(shell)
+    Resolver.prefer(shell, late)   // someone else claims the target
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "late", "another prefer() takes over")
+    eq(Resolver.call(shell, "foamy.shared-target", "nope", []), { ran: false }, "undeclared functions don't run")
     peer.call("foamy.shared-target", "who", [], function(ok, output) { shell.peerResult = { ok: ok, output: output } })
     peer.call("foamy.absent", "status", ["[1]"], function(ok, output) { shell.peerFallback = { ok: ok, output: output } })
 
@@ -550,14 +540,10 @@ ShellRoot {
     id: stepFour
     interval: 1200
     onTriggered: {
-      if (v45) {
-        eq(shell.peerResult, { ok: true, output: "late" }, "FoamyPeerIpc answers in-process on 4.5")
-        // Re-claim within the preference interval.
-        eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
-        eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
-      } else {
-        eq(shell.peerResult, { ok: true, output: "cli: foamy.shared-target who" }, "FoamyPeerIpc falls back to omarchy-shell on 4.0")
-      }
+      eq(shell.peerResult, { ok: true, output: "late" }, "FoamyPeerIpc answers in-process")
+      // Re-claim within the preference interval.
+      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
+      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
       eq(shell.peerFallback, { ok: true, output: "cli: foamy.absent status [1]" }, "unknown in-process target uses the CLI")
       console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")

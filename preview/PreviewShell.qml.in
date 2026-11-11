@@ -15,8 +15,6 @@ ShellRoot {
   id: shell
   readonly property string out: Quickshell.env("FOAMY_OUT")
   readonly property string host: Quickshell.env("FOAMY_HOST")
-  // 4.5 bars are full-screen windows; 4.0 bars are the strip itself.
-  readonly property bool fullScreen: host === "4.5"
   readonly property string position: Quickshell.env("FOAMY_POSITION") || "top"
   readonly property int rounding: Number(Quickshell.env("FOAMY_ROUNDING") || 6)
   readonly property var onlyStates: (Quickshell.env("FOAMY_STATES") || "").split(",").filter(function(s) { return s !== "" })
@@ -34,31 +32,10 @@ ShellRoot {
       id: sim
       position: shell.position
       thickness: shell.thickness
-      fullScreenBar: shell.fullScreen
       stripColor: Commons.Color.bar.background
       iconColor: Commons.Color.bar.text
     }
   }
-
-  FloatingWindow {
-    id: stripWindow
-    visible: !shell.fullScreen
-    implicitWidth: sim.vertical ? shell.thickness : 1920
-    implicitHeight: sim.vertical ? 1080 : shell.thickness
-    color: "black"
-    Item {
-      id: stripAnchor
-      width: sim.anchor.width
-      height: sim.anchor.height
-      x: sim.vertical ? (shell.thickness - width) / 2 : sim.anchor.x
-      y: sim.vertical ? sim.anchor.y : (shell.thickness - height) / 2
-    }
-  }
-
-  // The bar window's top-left on the simulated screen (4.0 strips sit on their edge).
-  readonly property point barOrigin: fullScreen ? Qt.point(0, 0)
-    : position === "bottom" ? Qt.point(0, 1080 - thickness)
-    : position === "right" ? Qt.point(1920 - thickness, 0) : Qt.point(0, 0)
 
   MockBar { id: bar; position: shell.position; barSize: shell.thickness }
 
@@ -81,7 +58,7 @@ ShellRoot {
     }
     // `bar` and `anchorItem` are offered to every preview; service-only
     // previews may leave them undeclared.
-    preview = component.createObject(sim.content, { bar: bar, anchorItem: fullScreen ? sim.anchor : stripAnchor })
+    preview = component.createObject(sim.content, { bar: bar, anchorItem: sim.anchor })
     if (!preview) {
       console.log("FOAMY FAIL preview did not instantiate")
       Qt.quit()
@@ -120,8 +97,9 @@ ShellRoot {
     if (!popup || !item || !popup.anchor || !popup.anchor.rect || !popup.visible) { cardCopy.visible = false; done(); return }
     item.grabToImage(function(result) {
       cardCopy.source = result.url
-      cardCopy.x = shell.barOrigin.x + popup.anchor.rect.x
-      cardCopy.y = shell.barOrigin.y + popup.anchor.rect.y
+      // The bar window spans the screen, so its coordinates are the screen's.
+      cardCopy.x = popup.anchor.rect.x
+      cardCopy.y = popup.anchor.rect.y
       cardCopy.visible = true
       Qt.callLater(done)
     })

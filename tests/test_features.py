@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.2.0 features on 4.5 and, with FOAMY_HOST_40, 4.0 (tests/qml/Features.qml): icons,
+"""kit 0.2.0 features on 4.5 (tests/qml/Features.qml): icons,
 tokens, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue inline
 and CLI (fake omarchy / omarchy-shell on PATH, never the real ones), IPC
 prefer/others/call, FoamyIpcPreference, FoamyPeerIpc, FoamySettingsState and

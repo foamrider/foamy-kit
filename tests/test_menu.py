@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""kit 0.4.0 header overflow menu (tests/qml/Menu.qml) on 4.5 (and 4.0 with FOAMY_HOST_40),
+"""kit 0.4.0 header overflow menu (tests/qml/Menu.qml) on 4.5,
 LTR and RTL, at display scale 1.0 and 1.25: at most three buttons top
 right, Settings in the ⋯ menu when overflowing, the in-card menu anchored to
 the ⋯ button's trailing edge, keyboard (single cursor, submenu, Esc), press

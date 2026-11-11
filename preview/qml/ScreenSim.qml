@@ -3,15 +3,13 @@ import qs.Ui
 
 // A simulated 1920x1080 screen: wallpaper, the bar strip on `position`, a
 // few widget icons, and the overlay that FakePanelWindow surfaces draw into.
-// `anchor` is the plugin's bar button. With `fullScreenBar` (4.5) this item
-// lives in the bar's own full-screen window; otherwise (4.0) the button sits
-// in a separate strip window and this only paints a copy for screenshots.
+// `anchor` is the plugin's bar button. This item lives in the bar's own
+// full-screen window, as on Omarchy 4.5.
 Item {
   id: root
   property string position: "top"
   property int thickness: 34
   property real anchorAlong: 0.78
-  property bool fullScreenBar: true
   property color barColor: Qt.alpha(stripColor, 0.96)
   property color stripColor: "black"
   property color iconColor: "white"
@@ -52,8 +50,7 @@ Item {
     }
   }
 
-  // The plugin button. In 4.0 mode the real anchor lives in the strip window;
-  // this one is painted so the screenshot shows where the popup hangs from.
+  // The plugin button the popup hangs from.
   Rectangle {
     id: anchorIcon
     width: 22; height: 22; radius: 5

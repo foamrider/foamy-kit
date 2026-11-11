@@ -6,15 +6,15 @@ import qs.Ui
 // The foamy xdg-popup card (menus, hover cards): the host's qs.Ui.PopupCard
 // with the foamy radius and border applied from outside, the same way
 // FoamyPopup wraps KeyboardPanel. 4.5 places it by bar.barSizeFor/barSize,
-// grows it from 0.97 and mirrors it in RTL; 4.0 keeps its own behaviour.
+// grows it from 0.97 and mirrors it in RTL.
 //
 // API (everything PopupCard has: anchorItem, bar, owner, open, centerOnBar,
 // triggerMode "click"|"hover", containsMouse, fittedContentWidth/Height()), plus:
 //   body: Component, bodyItem, bodyImplicitHeight, ensureBody()   lazy content
 //   cornerRadius, surfaceColor, cardItem
 //   maxHeight                    extra height cap (default 0: the screen's
-//                                available height, measured by the host on
-//                                4.0 and 4.5 alike; a long menu scrolls)
+//                                available height, measured by the host;
+//                                a long menu scrolls)
 // Defaults: contentWidth FoamyStyle.menuWidth, padding FoamyStyle.menuPadding,
 // height fitted to the body.
 PopupCard {

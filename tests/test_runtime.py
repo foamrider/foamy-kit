@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Runtime checks on 4.5 (and 4.0 with FOAMY_HOST_40): FoamyI18n (English on
-4.0; English, Danish and Arabic on 4.5), FoamyMotion, FoamyPalette, FoamyStyle, FoamyPrefs, FoamyCursor,
-FoamyShared leader election across three bar instances, and FoamyIpc over
-both the 4.5 IpcRegistry socket path and `qs ipc` (both versions)."""
+"""Runtime checks on 4.5: FoamyI18n (English, Danish and Arabic), FoamyMotion,
+FoamyPalette, FoamyStyle, FoamyPrefs, FoamyCursor, FoamyShared leader
+election across three bar instances, and FoamyIpc over both the IpcRegistry
+socket path and `qs ipc`."""
 import json
 import shutil
 import subprocess
@@ -57,8 +57,7 @@ def run(host, lang):
 
 
 def main():
-    languages = {"4.0": ("en",), "4.5": ("en", "da", "ar")}
-    results = [run(host, lang) for host in harness.available_hosts(what="runtime") for lang in languages[host]]
+    results = [run(host, lang) for host in harness.available_hosts(what="runtime") for lang in ("en", "da", "ar")]
     return 0 if all(results) else 1
 
 

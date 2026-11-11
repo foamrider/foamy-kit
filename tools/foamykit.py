@@ -521,7 +521,7 @@ RULES = {
     "radius-x2": "use FoamyStyle.radius",
     "hex-colour": "use Commons.Color or FoamyPalette (theme colours), not a hex literal",
     "unguarded-loop": "infinite animations need `running: … && !FoamyMotion.reduceMotion`",
-    "raw-ipc": "use FoamyIpc (4.5 socket fast path, 4.0 fallback)",
+    "raw-ipc": "use FoamyIpc (registers with IpcRegistry for the omarchy-shell socket fast path)",
     "opt-out-reason": "a foamy-lint opt-out needs a reason: // foamy-lint: allow <rule> — <why>",
     "empty-glyph": "a glyph's text is empty (an icon character was lost); write it as an escape like \"\\u{f0e7}\"",
     "pua-literal": "private-use (icon font) character written literally; editors and tools strip them, use an escape like \"\\u{f0e7}\"",

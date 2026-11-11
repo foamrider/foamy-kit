@@ -28,14 +28,7 @@ ShellRoot {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim; fullScreenBar: shell.host === "4.5" }
-  }
-  FloatingWindow {
-    visible: shell.host !== "4.5"
-    implicitWidth: 1920
-    implicitHeight: 34
-    color: "black"
-    Item { id: stripAnchor; x: sim.anchor.x; y: 6; width: 22; height: 22 }
+    ScreenSim { id: sim }
   }
   MockBar { id: bar }
 
@@ -49,7 +42,7 @@ ShellRoot {
 
   FoamyPopup {
     id: popup
-    anchorItem: shell.host === "4.5" ? sim.anchor : stripAnchor
+    anchorItem: sim.anchor
     bar: bar
     open: true
     body: Component {
@@ -124,7 +117,7 @@ ShellRoot {
   // A short popup (band only): the card grows while the menu is open.
   FoamyPopup {
     id: shortPopup
-    anchorItem: shell.host === "4.5" ? sim.anchor : stripAnchor
+    anchorItem: sim.anchor
     bar: bar
     open: true
     centerOnBar: true
@@ -162,8 +155,8 @@ ShellRoot {
     interval: 900; running: true
     onTriggered: {
       Style.cornerRadius = 6
-      // The live panel has the keyboard while open; the harness's 4.0 stand-in
-      // window isn't activated by itself.
+      // The live panel has the keyboard while open; the harness's offscreen
+      // stand-in window isn't activated by itself.
       var w = popup.cardItem.Window.window
       if (w && !w.active) w.requestActivate()
       step1.start()

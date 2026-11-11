@@ -23,7 +23,7 @@
 //   readonly property bool showPercentage: Prefs.value(Schema.fields, root.settings, "showPercentage")
 //
 // Saving prefers the in-process bar.shell.updateEntryInline(moduleName,
-// settings), present on 4.0.6 and 4.5. It REPLACES the entry with
+// settings). It REPLACES the entry with
 // { id: moduleName, ...settings }, so save() always passes the full entry
 // with one key changed, never a partial object. Pass the values saved but not
 // yet reflected in `settings` as `pending` so a second save in a row does not
@@ -31,10 +31,10 @@
 // false both when nothing changed and when the call is not permitted, so
 // save() skips unchanged values itself and treats false as "use the CLI".
 //
-// CLI fallback: `omarchy bar set <id> <key> <json> --json` (same on 4.0 and
-// 4.5). An array value can't go that way: on 4.0 (and whenever the 4.5
-// socket is down) it ends in `qs ipc call`, whose argument parser splits a
-// "[…]" argument into a list, so the call fails. Arrays go straight to the
+// CLI fallback: `omarchy bar set <id> <key> <json> --json`. An array value
+// can't go that way: whenever the omarchy-shell socket is down it ends in
+// `qs ipc call`, whose argument parser splits a "[…]" argument into a list,
+// so the call fails. Arrays go straight to the
 // shell's setBarWidget with a leading space (JSON.parse ignores it), through
 // `sh -c` with positional arguments, which fails unless the shell says "ok".
 // FoamyPrefsQueue runs either through bounded() (own process group, killed

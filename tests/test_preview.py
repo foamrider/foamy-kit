@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demo preview render on 4.5 (and 4.0 with FOAMY_HOST_40), plus publish-screenshots.sh on a
+"""Demo preview render on 4.5, plus publish-screenshots.sh on a
 throwaway git repository (orphan branch, untouched working tree, no push)."""
 import re
 import shutil

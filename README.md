@@ -21,12 +21,12 @@ edited in a plugin: change it here, then sync.
 | FoamyStyle | `FoamyStyle.qml` (singleton) | Radius, border, font family and type scale, widths, spacing, control sizes |
 | FoamyPalette | `FoamyPalette.qml` (singleton) | Surface tones and theme status colours from colors.toml |
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
-| FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration` (4.5), `reduceMotion`, named tokens |
-| FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; 4.5 Translations, English on 4.0 |
+| FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
+| FoamyI18n | `FoamyI18n.qml` (singleton) | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations |
 | FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
-| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with 4.5's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
-| FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process on 4.5, bounded `omarchy-shell` fallback |
+| FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
+| FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
 | FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene |
@@ -648,22 +648,22 @@ empty program and bubblewrap refuses to start it (it fails closed).
 ## Preview
 
 ```bash
-preview/render.py ../foamy-audio --host both --out /tmp/audio-shots
-preview/publish-screenshots.sh ../foamy-audio /tmp/audio-shots/4.5 fix-omarchy-45/audio
+preview/render.py ../foamy-audio --out /tmp/audio-shots
+preview/publish-screenshots.sh ../foamy-audio /tmp/audio-shots fix-omarchy-45/audio
 ```
 
 `render.py` runs Quickshell offscreen (software renderer, temp HOME and XDG
 dirs, no Wayland/Hyprland variables) against a host shell (only its QML is
-loaded, no host script or binary is ever run): `--host 4.5` (the default) is
-the installed Omarchy 4.5 shell, `/usr/share/omarchy/shell` (`FOAMY_HOST_45`
-overrides). 4.0 is opt-in: `--host 4.0` needs `FOAMY_HOST_40` pointing at a 4.0
-shell directory. `--host both`, `--trio` and `--before-host` use the hosts that
-are there and print a `SKIP … set FOAMY_HOST_40` line for 4.0 otherwise
-(`harness.available_hosts()`); with `--host both` the PNGs go to `<out>/<host>/`. Offscreen Qt has no
+loaded, no host script or binary is ever run): the installed Omarchy 4.5
+shell, `/usr/share/omarchy/shell` (`FOAMY_HOST_45` overrides). Omarchy 4.0 is
+not supported since 0.9.0: `--host 4.0` stops with a message, `--host both`
+renders 4.5 into `<out>/4.5/` as it used to, `FOAMY_HOST_40` is ignored, and
+`harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a caller
+still lists. Offscreen Qt has no
 layer shell, so the host's own `Ui/KeyboardPanel.qml` is loaded with its
 `PanelWindow` swapped for an item that draws into a simulated 1920x1080
-screen; its geometry and motion code is the host's. 4.5 runs use a full-screen
-bar window, 4.0 runs a strip window, like the real bars. Each run gets a
+screen; its geometry and motion code is the host's. The bar window spans the
+screen, like the real 4.5 bar. Each run gets a
 private D-Bus session (no service activation: the desktop's MPRIS players
 and notifications are invisible), and `qs` dies with the render, even when
 the render itself is killed; the temp dir is removed (`--keep` keeps it).
@@ -694,7 +694,7 @@ Item {
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
-`--theme dark|light|<colors.toml>`, `--language da` (4.5), `--position`,
+`--theme dark|light|<colors.toml>`, `--language da`, `--position`,
 `--rounding`, `--scale 1.25` (display scale: windows get that device pixel
 ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
 `--timeout`, `--bus private|none`, `--keep`.
@@ -728,20 +728,17 @@ directories). It compares RGB and alpha; never compare one without the other.
 preview/render.py ../foamy-power --trio --url-prefix https://raw.githubusercontent.com/foamrider/foamy-power/pr-assets/fix-omarchy-45/power
 ```
 
-Renders each view per host: `<view>-before.png` (the `origin/dev` tree,
-`--dev-ref`) and `<view>-after-4.5.png` (the working tree; plus
-`<view>-after-4.0.png` with `FOAMY_HOST_40`), and writes `trio.md`, a PR-body
-table with one After column per host. Before comes from `git archive`
+Renders each view: `<view>-before.png` (the `origin/dev` tree,
+`--dev-ref`) and `<view>-after-4.5.png` (the working tree), and writes
+`trio.md`, a PR-body table. Before comes from `git archive`
 (the plugin repo is not touched), with layer-shell windows (pre-kit popup
 forks, overlay windows) swapped for the offscreen stand-in — only the windows
 and their own `anchors { }` blocks are rewritten — and bare `Color.` qualified
 (Qt 6.12 shadows it), so dev looks as it did. Describe the dev UI in
 `preview/Before.qml` in the current tree (or `--before-preview FILE`); else dev's
-own `preview/Preview.qml` is used. Before tries the available hosts of
-`--before-host 4.5,4.0` in order: when dev doesn't render on 4.5, or its popup
-fork is clipped there (the 120 px card the kit fixed), it falls back to the 4.0
-host if `FOAMY_HOST_40` is set, and the column header says so; without it the
-header says the fork is clipped (or that dev did not render). Card images only;
+own `preview/Preview.qml` is used. When dev's popup fork is clipped on 4.5
+(the 120 px card the kit fixed) or dev doesn't render, the column header says
+so. Card images only;
 `--states` limits the views.
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
@@ -750,12 +747,11 @@ branch through a temporary worktree (the working tree is untouched), prints
 
 ## Compatibility
 
-`dev` plugins target Omarchy 4.5, the installed shell; only 4.5 is tested by
-default. The kit keeps its 4.0 code paths (opt-in tests: `FOAMY_HOST_40`), with
-runtime feature detection only: the stock KeyboardPanel and
-PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
-4.5-only singletons through `Qt.createQmlObject`, `FoamyMotion` checks
-`typeof Style.duration`. No dual code paths beyond that.
+Plugins and the kit target Omarchy 4.5, the installed shell, and nothing
+else: 0.9.0 removed the 4.0 code paths, the `--host 4.0` harness option and
+`FOAMY_HOST_40`. The stock KeyboardPanel and PopupCard bring the host's own
+behaviour; `FoamyI18n` uses the shell's `Translations`, `FoamyMotion` its
+`Style.duration`, and `FoamyIpc` registers with its `IpcRegistry`.
 
 ## Tests
 
@@ -763,9 +759,7 @@ PopupCard behave natively on each version, `FoamyI18n`/`FoamyIpc` resolve
 tests/run-all.sh
 ```
 
-Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`)
-and on 4.0 only when `FOAMY_HOST_40` points at a 4.0 shell; otherwise each
-prints `SKIP … on 4.0` and passes.
+Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
 Runs FoamyPrefs unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
 on throwaway copies, the FoamyPopup geometry test (4 bar positions, max

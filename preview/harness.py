@@ -47,14 +47,14 @@ from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = KIT_ROOT / "preview"
-# Host shells. 4.5 is the installed one (FOAMY_HOST_45 overrides). 4.0 is
-# opt-in: it exists only when FOAMY_HOST_40 points at a 4.0 shell directory.
-# Callers that loop over hosts use available_hosts(), which skips the others.
-KNOWN_HOSTS = ("4.0", "4.5")
-HOSTS = {}
-if os.environ.get("FOAMY_HOST_40"):
-    HOSTS["4.0"] = Path(os.environ["FOAMY_HOST_40"])
-HOSTS["4.5"] = Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")
+# Host shells: Omarchy 4.5 only, the installed one (FOAMY_HOST_45 overrides).
+# 4.0 support ended with kit 0.9.0: asking for it fails with a clear message,
+# and available_hosts() prints a SKIP line for it, so a plugin test that still
+# lists 4.0 keeps running its 4.5 cases. FOAMY_HOST_40 is ignored.
+KNOWN_HOSTS = ("4.5",)
+RETIRED_HOSTS = {"4.0": "Omarchy 4.0 is no longer supported (foamy-kit 0.9.0 tests 4.5 only; FOAMY_HOST_40 is ignored); "
+                        "drop the 4.0 case"}
+HOSTS = {"4.5": Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")}
 SCREEN = (1920, 1080)
 FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration",
                    "Cannot assign", "Unable to assign", "Non-existent attached object", "SAVE FAILED")
@@ -126,10 +126,10 @@ def host_variable(name):
 
 def host_problem(name):
     """Why host `name` can't be used, or None when it can."""
+    if name in RETIRED_HOSTS:
+        return RETIRED_HOSTS[name]
     if name not in KNOWN_HOSTS:
         return f"unknown host {name!r}; use one of {', '.join(KNOWN_HOSTS)}"
-    if name not in HOSTS:
-        return f"host {name} is opt-in: set {host_variable(name)} to an Omarchy {name} shell directory"
     path = HOSTS[name]
     if not (path / "Commons").is_dir() or not (path / "Ui").is_dir():
         return f"host {name} not found at {path} (set {host_variable(name)})"
@@ -139,8 +139,8 @@ def host_problem(name):
 def available_hosts(wanted=KNOWN_HOSTS, what="", require=True):
     """The hosts of `wanted` that can be used, in order. Prints a `SKIP` line
     (naming `what`, the check or render being skipped) for each other one, e.g.
-    4.0 unless FOAMY_HOST_40 is set. With `require`, none usable is an error,
-    so a run without any host fails instead of passing on SKIPs."""
+    a retired 4.0. With `require`, none usable is an error, so a run without
+    any host fails instead of passing on SKIPs."""
     usable = []
     for name in wanted:
         problem = host_problem(name)
