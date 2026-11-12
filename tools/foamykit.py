@@ -83,9 +83,12 @@ def kit_version():
 
 
 def kit_revision():
+    """The kit commit sync copies from, for the lock's `source` line: the full
+    id, which checks.yml fetches to run the kit's test helpers and design lint
+    at that commit. "+dirty" marks uncommitted kit changes; CI rejects it."""
     try:
         out = subprocess.run(
-            ["git", "-C", str(KIT_ROOT), "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True, timeout=10
+            ["git", "-C", str(KIT_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10
         )
         rev = out.stdout.strip() if out.returncode == 0 else ""
         dirty = subprocess.run(
@@ -375,11 +378,6 @@ def replace_file(path, data):
         raise
 
 
-def lock_core(data):
-    """Lock content minus the source line (which changes with every kit commit)."""
-    return b"\n".join(line for line in data.split(b"\n") if not line.startswith(b"source "))
-
-
 def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print, add=None):
     plugin = Path(plugin).resolve()
     if not (plugin / "manifest.json").is_file():
@@ -501,7 +499,9 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
     new_lock = lock_bytes(version, selected, files)
     lock_path = plugin / LOCK_NAME
     old_lock = lock_path.read_bytes() if lock_path.is_file() else b""
-    if lock_core(old_lock) != lock_core(new_lock):
+    # The source line too, when every file is current: checks.yml checks the
+    # kit out at that commit, so an older one would run older helpers.
+    if old_lock != new_lock:
         changed.append(LOCK_NAME)
         if not dry_run:
             lock_path.write_bytes(new_lock)

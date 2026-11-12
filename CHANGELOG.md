@@ -240,6 +240,12 @@
   `tests/test_clipboard.py` with `hostenv.clipboard_fakes()` (media already
   has the same stand-ins) and wait as long as a working paste may take
   (media's `pasteWait`, 60 s) in their QML case.
+- `foamy-kit.lock`'s `source` line is the full id of the kit commit sync
+  copied from (it was a 12-character abbreviation), and sync rewrites it
+  whenever the kit commit changed, even when every file is already current
+  (it used to keep the old line then, so `source` could name an older kit
+  than the one the plugin was last synced from). `+dirty` still marks
+  uncommitted kit changes.
 - Docs: `FoamyText.tooltip()`'s comment asks for one item per line (a
   list joined into one line loses whole items past 100 characters). README:
   the preview contract is `readonly property var popup: previewPopup` with

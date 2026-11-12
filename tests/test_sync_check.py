@@ -100,6 +100,75 @@ def tooling_tests(a, base):
     return ok
 
 
+def git(repo, *args):
+    # Throwaway repos: commits need no signature or user identity.
+    return subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "-c", "user.name=test", "-c", "user.email=test@invalid", "-C", str(repo)]
+        + list(args),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    ).stdout.strip()
+
+
+def lock_source(plugin):
+    lines = (plugin / foamykit.LOCK_NAME).read_text().splitlines()
+    return next((line.split()[1] for line in lines if line.startswith("source ")), None)
+
+
+def lock_source_tests(base):
+    """The lock's source line names the full kit commit, and sync refreshes it
+    when every file is already current (checks.yml checks the kit out there)."""
+    ok = True
+    kit = copy_kit(base / "source-kit")
+    git(kit, "init", "-q")
+    git(kit, "add", "-A")
+    git(kit, "commit", "-q", "-m", "kit")
+    first = git(kit, "rev-parse", "HEAD")
+    plugin = base / "source-plugin"
+    shutil.copytree(FIXTURES / "demo-plugin", plugin)
+    code, out = sh(str(kit / "sync.sh"), str(plugin))
+    ok &= report(
+        "the lock's source is the full commit id sync copied from",
+        code == 0 and lock_source(plugin) == first and len(first) == 40,
+        f"{lock_source(plugin)} vs {first}",
+    )
+    # A kit commit that changes nothing sync copies (README.md is not synced).
+    with open(kit / "README.md", "a") as readme:
+        readme.write("\nA later kit commit.\n")
+    git(kit, "commit", "-q", "-am", "docs")
+    second = git(kit, "rev-parse", "HEAD")
+    before = snapshot(plugin)
+    code, out = sh(str(kit / "sync.sh"), str(plugin))
+    after = snapshot(plugin)
+    changed = sorted(
+        rel for rel in set(before) | set(after) if before.get(rel, (None,))[0] != after.get(rel, (None,))[0]
+    )
+    ok &= report(
+        "sync refreshes the source line when every file is up to date",
+        code == 0 and lock_source(plugin) == second and changed == [foamykit.LOCK_NAME] and "foamy-kit.lock" in out,
+        f"{changed} {out.strip()}",
+    )
+    before = snapshot(plugin)
+    code, out = sh(str(kit / "sync.sh"), str(plugin))
+    ok &= report(
+        "a second sync from the same commit is a no-op",
+        code == 0 and "up to date" in out and snapshot(plugin) == before,
+        out.strip(),
+    )
+    (kit / "kit/FoamyStyle.qml").write_text((kit / "kit/FoamyStyle.qml").read_text() + "// uncommitted\n")
+    sh(str(kit / "sync.sh"), str(plugin))
+    ok &= report(
+        "a sync from uncommitted kit changes marks the source +dirty",
+        lock_source(plugin) == second + "+dirty",
+        str(lock_source(plugin)),
+    )
+    git(kit, "checkout", "-q", "--", "kit/FoamyStyle.qml")
+    sh(str(kit / "sync.sh"), str(plugin))
+    return ok
+
+
 def main():
     ok = True
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
@@ -474,7 +543,10 @@ def main():
         code, out = sh(CHECK, "--no-lint", str(a), str(b))
         ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
 
-    # 7. Design lint.
+    # 7. The lock's source line and checks.yml's kit checkout.
+    ok &= lock_source_tests(base)
+
+    # 8. Design lint.
     code, out = sh(
         "python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", str(KIT_ROOT / "tests/lint-cases/Bad.qml")
     )

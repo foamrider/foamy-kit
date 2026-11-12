@@ -65,7 +65,11 @@ singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the
 `mise.toml`, `ruff.toml`, `.oxlintrc.json`, `.qmlformat.ini`,
 `.github/workflows/checks.yml`), the review block in `AGENTS.md`, and
 `foamy-kit.lock`
-(version, components, body hashes). Line 1 of every stamped code file (line 2 after
+(version, `source`, components, body hashes). `source` is the full id of the
+kit commit sync copied from (`+dirty` with uncommitted kit changes); sync
+rewrites it whenever the kit commit changed, even when every file is already
+current, because `checks.yml` checks the kit out at that commit. Line 1 of
+every stamped code file (line 2 after
 `pragma`, `.pragma` or a shebang) is
 
     // foamy-kit 0.1.0 <sha256 of the body> — do not edit; change foamy-kit and run sync
