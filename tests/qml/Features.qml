@@ -922,7 +922,7 @@ ShellRoot {
 
     // --- D-Bus isolation -------------------------------------------------------------------
     var address = Quickshell.env("DBUS_SESSION_BUS_ADDRESS")
-    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_BASE")) !== -1, "private session bus " + address)
+    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_SOCKETS") + "/") === "unix:path=".length, "private session bus " + address)
     eq(Mpris.players.values.length, 0, "no desktop MPRIS players visible")
     stepFour.start()
   }

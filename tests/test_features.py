@@ -61,7 +61,7 @@ def run(host):
     r.env.update(
         {
             "FOAMY_CALLS": str(calls),
-            "FOAMY_BASE": str(r.base),
+            "FOAMY_SOCKETS": str(r.sockets),
             "FOAMY_LIVE_BUS": os.environ.get("DBUS_SESSION_BUS_ADDRESS", ""),
             "QML_XHR_ALLOW_FILE_READ": "1",
         }
