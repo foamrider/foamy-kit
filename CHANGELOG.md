@@ -116,6 +116,13 @@
   sync, and nothing noticed. After syncing, commit the refreshed pins.
 
 ### Fixed
+- `Bwrap`'s fd options (`ro_bind_fd`, `bind_fd`, `seccomp`) name the
+  builder's retained duplicate, not the caller's fd number. Two temporary
+  fds passed one after the other get the same number once the first is
+  dropped, so both options named it and the child got only the second file
+  (both binds showed it). `Bounded` refuses two inherited fds for one number
+  (`InvalidInput`) instead of passing only one. foamy-lock and foamy-github,
+  the only users, rebuild their helpers. Found by Codex review on #10.
 - `process::exit_on_panic` (and `json::run`, `json::serve`, `favicon::run`,
   which install it) kills the process group of every `Bounded` child still
   running before it exits 101. The hook exits without unwinding (the
