@@ -11,7 +11,9 @@ Item {
   required property Item anchorItem
   property var previewStates: ["devices", "empty", "artwork", "settings", "settings-error"]
   property string previewState: "devices"
-  readonly property Item popup: popup
+  // `var`: qmllint types FoamyPopup as the host's PanelWindow, not an Item;
+  // its id isn't `popup`, which would shadow this property.
+  readonly property var popup: previewPopup
 
   readonly property var sample: [
     { name: "MX Master 3S", icon: "laptop", battery: 82 },
@@ -20,7 +22,7 @@ Item {
   ]
 
   FoamyPopup {
-    id: popup
+    id: previewPopup
     anchorItem: preview.anchorItem
     bar: preview.bar
     open: true

@@ -172,7 +172,43 @@ non-ignored files.
   tests. It gets `--ci` (no Quickshell, no Omarchy host: run only node and
   host-free Python tests) and `--fast` (skip the slow runtime tests), and
   must exit nonzero on any failure. `FOAMY_KIT` is set when the kit was found,
-  and the pinned tools (node included) come first on `PATH`.
+  and the pinned tools (node included) come first on `PATH`. Under `--ci`,
+  skip only what needs Quickshell or the host: `kit/clipboard.sh`'s shell
+  cases (through `hostenv.clipboard_fakes()`) need neither, so a clipboard
+  test runs them there and skips only its QML case:
+
+  ```bash
+  #!/bin/bash
+  # tests/suite.sh [--ci] [--fast]: the plugin's own tests.
+  set -uo pipefail
+  cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
+  ci=0
+  fast=0
+  for arg in "$@"; do
+    case $arg in
+      --ci) ci=1 ;;
+      --fast) fast=1 ;;
+      *)
+        echo "suite.sh: unknown argument $arg" >&2
+        exit 2
+        ;;
+    esac
+  done
+  status=0
+  run() {
+    echo "== $*"
+    "$@" || status=1
+  }
+  # test_clipboard.py's QML case skips itself when this is set.
+  if ((ci)); then export FOAMY_SUITE_CI=1; fi
+  run node preferences.test.cjs
+  # kit/clipboard.sh's shell cases (hostenv.clipboard_fakes) need no host.
+  run python3 -I test_clipboard.py
+  if ((! ci && ! fast)); then
+    run python3 -I runtime.py
+  fi
+  exit $status
+  ```
 - `tests/lint/<check>-baseline.txt` (qmllint, oxlint, ruff, vulture,
   shellcheck): the findings that existed when the check was adopted, written
   by `--update-baseline` and reviewed in the commit like code. An entry is
@@ -836,14 +872,20 @@ Item {
   property var previewStates: ["default", "empty", "settings"]
   property string previewState: "default" // set by the harness before each capture
   property int settleMs: 600              // optional
-  readonly property Item popup: popup
+  readonly property var popup: previewPopup   // what the harness captures
   FoamyPopup {
-    id: popup
+    id: previewPopup                          // not `popup`: that id shadows the property
     anchorItem: preview.anchorItem; bar: preview.bar; open: true
     body: Component { Plugin.MyView { /* mock data by preview.previewState */ } }
   }
 }
 ```
+
+Declare `popup` as `var` and give the FoamyPopup another id. qmllint (with
+the real host's imports) types FoamyPopup as a `PanelWindow`, so
+`readonly property Item popup: popup` reports incompatible-type, and the id
+`popup` shadows the property (id-shadows-member, twice), in every preview.
+In the harness the popup is an Item either way; the render is the same.
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
@@ -916,6 +958,12 @@ import harness, hostenv
 
   `then(ok)` is called once and always later; a throwing condition counts as
   false; `pending` counts the waits in flight.
+
+  Quickshell's `FileView.setText()` writes asynchronously (unless
+  `blockWrites: true`): the file still holds the old text on the next line.
+  A test that writes a fake's control file through a FileView waits for it
+  (`onSaved`, or `waitFor` on the file reading back) before the step that
+  makes the fake read it.
 - **`harness.wait_for(condition, timeout, interval=0.05, stop=None)`** polls a
   Python condition and returns its value (or None after the timeout);
   **`Run.wait_for_log(text, timeout)`** waits until the running shell logs

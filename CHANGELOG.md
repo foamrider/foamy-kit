@@ -240,6 +240,19 @@
   `tests/test_clipboard.py` with `hostenv.clipboard_fakes()` (media already
   has the same stand-ins) and wait as long as a working paste may take
   (media's `pasteWait`, 60 s) in their QML case.
+- Docs: `FoamyText.tooltip()`'s comment asks for one item per line (a
+  list joined into one line loses whole items past 100 characters). README:
+  the preview contract is `readonly property var popup: previewPopup` with
+  `id: previewPopup` (qmllint types FoamyPopup as the host's PanelWindow, and
+  the id `popup` shadowed the property: id-shadows-member twice and
+  incompatible-type in every plugin's Preview.qml; the render is the same);
+  `FileView.setText()` writes asynchronously, so a test waits for the file;
+  a `tests/suite.sh` example runs a clipboard test's shell cases under
+  `--ci`, where only its QML case needs skipping.
+
+  After syncing: rename the FoamyPopup id in `preview/Preview.qml` and type
+  `popup` `var`, then shrink the qmllint baseline (`tests/validate.sh
+  --update-baseline qmllint`, review the diff).
 - `render.py --language` names a catalog the plugin has. `--language nb` on
   a plugin whose catalog is `no.json` (Omarchy's Norwegian code; there is
   no `nb`) rendered English without a word; it now renders `no` and says

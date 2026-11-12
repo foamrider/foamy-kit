@@ -8,7 +8,7 @@
 The plugin supplies <plugin>/preview/Preview.qml (see README.md, "Preview"):
 an Item with `required property QtObject bar`, `required property Item
 anchorItem`, `property var previewStates`, `property string previewState`
-and `readonly property Item popup` (its FoamyPopup, fed mock data). For each
+and `readonly property var popup` (its FoamyPopup, fed mock data). For each
 state the harness writes <state>-screen.png (1920x1080: bar strip plus the
 popup where FoamyPopup's real geometry puts it) and <state>.png (the card).
 `popup` may be a FoamyPopup, a FoamyPopupCard (declare it `var`; its card is
