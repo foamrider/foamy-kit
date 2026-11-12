@@ -908,6 +908,20 @@ import harness, hostenv
   - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
     whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
     fake.
+  - `ProcessGroup(argv, **popen)`: a `qs` (or service) the test starts
+    itself, as the leader of its own process group. `stop(grace=2.0)` (or
+    leaving the `with` block) sends SIGTERM to the whole group, SIGKILL to
+    what is left, and reaps the leader, so the scripts its `Process`es
+    started go too; `Popen.terminate()` stopped qs alone and left their
+    children running. `wait(timeout)` returns the exit status, or None while
+    it runs; wait through it, not `.process.wait()`, so the group id stays
+    reserved until `stop()`. A child that makes its own session or group
+    (`setsid`, coreutils `timeout`) is outside it.
+
+    ```python
+    with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:
+        shell.wait(60)
+    ```
 
   It replaces the plugin copies (`tests/hostenv.py` in foamy-notifications and
   foamy-notification-center, the `isolate()`s in foamy-audio and foamy-bolt,

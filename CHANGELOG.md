@@ -175,6 +175,18 @@
   (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
   own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
   helpers for plugins".
+- `hostenv.ProcessGroup(argv, **popen)`: a qs (or service) a test starts
+  itself runs as the leader of its own process group; `stop()` (or the end
+  of its `with` block) signals the whole group and reaps the leader, so the
+  scripts its `Process`es started stop with it. Tests that started qs with
+  `subprocess.Popen` and stopped it with `terminate()` left those scripts
+  running (foamy-power). `hostenv.die_with_parent()` is the parent-death
+  `preexec_fn` the harness uses too.
+
+  Plugins (hostenv comes from the kit checkout, not the sync): a test that
+  starts its own qs (power's `integration.py`, the clipboard QML runs,
+  notifications' and notification-center's dbus-run-session tests) should
+  start it through `hostenv.ProcessGroup`.
 - `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
   replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
   the same template: a translated key switching no → da/ar → en live, the

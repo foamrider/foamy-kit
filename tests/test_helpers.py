@@ -3,10 +3,11 @@
 (harness/FoamyWait.qml: waitFor/after in qs), harness.wait_for and
 Run.wait_for_log, and preview/hostenv.py (isolate, make with an
 omarchy-shell that reaches only the test's own shell, calls, check,
-fake_helper_plugin)."""
+fake_helper_plugin, ProcessGroup)."""
 
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -67,6 +68,103 @@ ShellRoot {
   Timer { interval: 600; running: true; onTriggered: console.log("FOAMY UP") }
 }
 """
+
+# What a plugin's Process runs: a shell whose own child outlives the shell
+# unless the whole process group goes.
+GROUP_SHELL = """import QtQuick
+import Quickshell
+import Quickshell.Io
+ShellRoot {
+  Process {
+    running: true
+    command: ["sh", "-c", "sleep 300 & echo $! > \\"$FOAMY_CHILD\\"; wait"]
+  }
+}
+"""
+
+
+def alive(pid):
+    """True while `pid` runs (a zombie counts as gone)."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (FileNotFoundError, IndexError):
+        return False
+
+
+def child_pid(file, timeout=20):
+    text = harness.wait_for(lambda: file.read_text().strip() if file.exists() else "", timeout)
+    return int(text) if text else None
+
+
+def process_group(base):
+    """hostenv.ProcessGroup against a qs the test starts itself, and its
+    lifecycle on plain shells."""
+    ok = True
+    app = base / "group-app"
+    app.mkdir()
+    (app / "shell.qml").write_text(GROUP_SHELL)
+    runtime = base / "group-runtime"
+    runtime.mkdir(mode=0o700)
+    env = hostenv.isolate(dict(os.environ), base)
+    env.update(
+        QT_QPA_PLATFORM="offscreen",
+        QT_QUICK_BACKEND="software",
+        XDG_RUNTIME_DIR=str(runtime),
+        XDG_STATE_HOME=str(base / "group-state"),
+        XDG_CACHE_HOME=str(base / "group-cache"),
+    )
+    qs = ["qs", "-p", str(app), "--no-color"]
+
+    # Why: stopping only qs leaves what its Process started running.
+    env["FOAMY_CHILD"] = str(base / "child-plain")
+    plain = subprocess.Popen(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    pid = child_pid(base / "child-plain")
+    plain.terminate()
+    plain.wait(10)
+    left = pid is not None and harness.wait_for(lambda: not alive(pid), 1) is None
+    ok &= report("stopping only qs leaves its Process's child running (why ProcessGroup exists)", left, str(pid))
+    if pid is not None and alive(pid):
+        os.kill(pid, signal.SIGKILL)
+
+    env["FOAMY_CHILD"] = str(base / "child-group")
+    with hostenv.ProcessGroup(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as shell:
+        pid = child_pid(base / "child-group")
+        running = shell.wait(0.2) is None
+    gone = pid is not None and harness.wait_for(lambda: not alive(pid), 5) is not None
+    ok &= report("ProcessGroup.stop() takes qs's Process children with it", running and gone, f"child {pid}")
+
+    # A group that ignores SIGTERM (its leader too) gets SIGKILL after the
+    # grace period.
+    marker = base / "stubborn"
+    group = hostenv.ProcessGroup(["sh", "-c", f"trap '' TERM; sleep 300 & echo $! > {marker}; wait"])
+    pid = child_pid(marker, 10)
+    started = time.monotonic()
+    status = group.stop(grace=0.5)
+    elapsed = time.monotonic() - started
+    ok &= report(
+        "a group that ignores SIGTERM is killed after the grace period",
+        pid is not None
+        and status == -signal.SIGKILL
+        and 0.4 <= elapsed < 5
+        and harness.wait_for(lambda: not alive(pid), 5) is not None,
+        f"status {status}, {elapsed:.1f}s",
+    )
+    ok &= report("stop() is idempotent and returns the leader's status", group.stop() == status)
+
+    # A leader that exits by itself leaves its child in the group: stop()
+    # still reaches it (the leader stays unreaped until then, so the group
+    # id can't be reused).
+    marker = base / "orphan"
+    group = hostenv.ProcessGroup(["sh", "-c", f"sleep 300 & echo $! > {marker}"])
+    pid = child_pid(marker, 10)
+    exited = group.wait(10)
+    group.stop()
+    ok &= report(
+        "wait() reports the leader's exit; stop() then kills the child it left",
+        exited == 0 and pid is not None and harness.wait_for(lambda: not alive(pid), 5) is not None,
+        f"exit {exited}, child {pid}",
+    )
+    return ok
 
 
 def main():
@@ -201,6 +299,9 @@ def main():
         ok &= report("check() fails when a host bin is on PATH or a host script ran", failures == 2)
     finally:
         run.cleanup()
+
+    # hostenv: ProcessGroup().
+    ok &= process_group(base)
 
     # hostenv: fake_helper_plugin().
     demo = base / "demo-src"

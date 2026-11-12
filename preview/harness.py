@@ -60,7 +60,6 @@ removes only those whose owner PID is gone and that no process still uses.
 """
 
 import atexit
-import ctypes
 import json
 import os
 import re
@@ -121,17 +120,7 @@ FAILURE_MARKERS = (
 _LIVE = set()
 # PIDs of every qs / dbus-daemon this process started (leak checks in tests).
 STARTED = []
-try:
-    _LIBC = ctypes.CDLL(None, use_errno=True)
-except OSError:
-    _LIBC = None
-PR_SET_PDEATHSIG = 1
-
-
-def _die_with_parent():
-    """preexec_fn: SIGKILL this child when the Python process dies."""
-    if _LIBC is not None:
-        _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+_die_with_parent = hostenv.die_with_parent
 
 
 def _kill_group(process, sig=signal.SIGKILL):

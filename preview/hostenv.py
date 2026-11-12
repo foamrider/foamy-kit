@@ -16,6 +16,8 @@ outside it, or for more than it does:
   …
   hostenv.check(env, log_text, *hostenv.calls(base)) # no host script could run, and none did
   plugin = hostenv.fake_helper_plugin(PLUGIN, work / "plugin", "foamy-x-helper", script)
+  with hostenv.ProcessGroup(["qs", "-p", str(app)], env=env) as shell:  # its own qs, killed with
+      shell.wait(60)                                 # everything its Processes started
 
 The Omarchy tree is the installed /usr/share/omarchy (its shell/ is 4.5):
 OMARCHY_TEST_ROOT (a tree with shell/ and default/) selects another one;
@@ -23,8 +25,12 @@ FOAMY_HOST_45 or OMARCHY_SHELL_PATH (a shell/ directory) select its parent.
 Standard library only.
 """
 
+import ctypes
 import os
 import shutil
+import signal
+import subprocess
+import time
 from pathlib import Path
 
 INSTALLED_BIN = "/usr/share/omarchy/bin"
@@ -32,6 +38,11 @@ ARCHES = ("x86_64", "aarch64")
 CALLS_LOG = "omarchy-calls.log"
 # What fake_helper_plugin() leaves out of the copy by default.
 COPY_IGNORE = (".git", "bin", "target", "tests", "__pycache__", "preview.png")
+try:
+    _LIBC = ctypes.CDLL(None, use_errno=True)
+except OSError:
+    _LIBC = None
+PR_SET_PDEATHSIG = 1
 
 
 def root():
@@ -165,6 +176,82 @@ def check(env, *outputs):
     named = bins | {str(root() / "bin"), INSTALLED_BIN}
     for text in outputs:
         assert not any(b + "/" in str(text) for b in named), "a host script ran"
+
+
+def die_with_parent():
+    """preexec_fn: SIGKILL this child when the Python process dies."""
+    if _LIBC is not None:
+        _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+
+
+class ProcessGroup:
+    """`argv` (a qs or service a test starts itself) as the leader of its own
+    process group; `popen` goes to subprocess.Popen. stop() signals the
+    whole group, so the scripts a shell's `Process`es started go with it:
+    Popen.terminate() reaches qs alone, and a `sh -c` child's own children
+    outlived it. The leader also dies with the Python process (its children
+    then don't). A child that makes its own group or session (setsid,
+    coreutils timeout) leaves this one. Wait through wait(), not
+    `.process.wait()`: the leader stays unreaped until stop(), so its pid,
+    the group id, can't name another group while stop() signals it.
+
+      with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:
+          shell.wait(60)       # None while it still runs
+    """
+
+    def __init__(self, argv, **popen):
+        self.process = subprocess.Popen(argv, start_new_session=True, preexec_fn=die_with_parent, **popen)
+        self.pid = self.process.pid
+        self.returncode = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self.stop()
+        return False
+
+    def exit_status(self):
+        """The leader's exit status (negative: killed by that signal) once
+        it has exited, else None. It is not reaped."""
+        if self.returncode is not None:
+            return self.returncode
+        info = os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        if info is None:
+            return None
+        return info.si_status if info.si_code == os.CLD_EXITED else -info.si_status
+
+    def wait(self, timeout=None):
+        """Wait up to `timeout` seconds (None: as long as it takes) for the
+        leader to exit; its exit_status(), or None when it still runs."""
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while (status := self.exit_status()) is None:
+            if deadline is not None and time.monotonic() >= deadline:
+                return None
+            time.sleep(0.02)
+        return status
+
+    def _signal(self, sig):
+        # Only while the leader is unreaped (running or a zombie): then no
+        # other process group can have its id.
+        if self.returncode is None:
+            try:
+                os.killpg(self.pid, sig)
+            except ProcessLookupError:
+                pass
+
+    def stop(self, grace=2.0):
+        """SIGTERM the group, SIGKILL what is left once the leader has exited
+        or `grace` seconds have passed, then reap the leader. Returns its exit
+        status; later calls return the same."""
+        if self.returncode is not None:
+            return self.returncode
+        self._signal(signal.SIGTERM)
+        self.wait(grace)
+        # Members that ignored SIGTERM, and children the leader left behind.
+        self._signal(signal.SIGKILL)
+        self.returncode = self.process.wait()
+        return self.returncode
 
 
 def fake_helper_plugin(plugin, dest, helper, script, ignore=COPY_IGNORE):
