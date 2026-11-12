@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 — unreleased (dev)
+## 0.9.0 — 2026-11-12
 
 ### Added
 - `tests/validate.sh`: one validation command for foamy-kit and every
