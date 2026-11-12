@@ -4,7 +4,7 @@
 # a kit release that leaves this crate alone needs no new plugin Cargo.lock.
 [package]
 name = "foamy-helper"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 publish = false

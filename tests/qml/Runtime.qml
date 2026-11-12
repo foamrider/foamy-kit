@@ -8,6 +8,7 @@ import "plugin" as Demo
 import "plugin/kit"
 import "plugin/kit/FoamyPrefs.js" as Prefs
 import "plugin/kit/FoamyIpcResolver.js" as IpcResolver
+import "plugin/kit/FoamyText.js" as FoamyText
 
 // Runtime checks for FoamyI18n, FoamyMotion, FoamyPalette, FoamyStyle,
 // FoamyPrefs, FoamyCursor, FoamyShared/FoamyMember and FoamyIpc, and the
@@ -17,13 +18,15 @@ ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
   readonly property string lang: Quickshell.env("FOAMY_LANG") || "en"
-  readonly property bool v45: host === "4.5"
   property int checks: 0
   property int failures: 0
 
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL " + host + "/" + lang + " " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + host + "/" + lang + " " + label)
+    }
   }
   function eq(actual, expected, label) {
     check(actual === expected, label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
@@ -34,7 +37,9 @@ ShellRoot {
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim }
+    ScreenSim {
+      id: sim
+    }
     Row {
       id: barRow
       y: 4
@@ -46,23 +51,38 @@ ShellRoot {
         Demo.Panel {
           bar: mockBar
           moduleName: "foamy.kit-demo"
-          settings: ({ id: "foamy.kit-demo", showCount: true, refreshSeconds: 60, layout: "list", extra: "kept" })
+          settings: ({
+              id: "foamy.kit-demo",
+              showCount: true,
+              refreshSeconds: 60,
+              layout: "list",
+              extra: "kept"
+            })
         }
       }
     }
   }
 
-  MockBar { id: mockBar; moduleName: "foamy.kit-demo" }
-  QtObject { id: shellLessBar; property var shell: null }
+  MockBar {
+    id: mockBar
+    moduleName: "foamy.kit-demo"
+  }
+  QtObject {
+    id: shellLessBar
+    property var shell: null
+  }
 
-  FoamyCursor { id: cursor; count: 3 }
+  FoamyCursor {
+    id: cursor
+    count: 3
+  }
 
   Component.onCompleted: Qt.callLater(stepOne)
 
   function stepOne() {
     // --- FoamyI18n ------------------------------------------------------------
-    eq(FoamyI18n.translationsAvailable, v45, "translations backend on " + host)
-    if (!v45 || lang === "en") {
+    eq(FoamyI18n.translationsAvailable, true, "translations backend on " + host)
+    if (lang === "en") {
       eq(FoamyI18n.t("Devices"), "Devices", "t English")
       eq(FoamyI18n.tn("%1 devices", 1), "1 device", "tn one (English)")
       eq(FoamyI18n.tn("%1 devices", 3), "3 devices", "tn other (English)")
@@ -75,11 +95,7 @@ ShellRoot {
       eq(FoamyI18n.updatedAgo(nowMs - 1283 * 60000, nowMs), "Updated 21 hours ago", "updatedAgo hours")
       eq(FoamyI18n.updatedAgo(nowMs - 49 * 3600000, nowMs), "Updated 2 days ago", "updatedAgo days")
     }
-    if (!v45) {
-      eq(FoamyI18n.formatLocale, Qt.locale().name, "4.0 keeps the system calendar locale")
-      eq(FoamyI18n.rightToLeft, false, "4.0 left-to-right")
-    }
-    if (v45 && lang === "da") {
+    if (lang === "da") {
       eq(FoamyI18n.language, "da", "language follows the picker")
       eq(FoamyI18n.t("Devices"), "Enheder", "t Danish")
       eq(FoamyI18n.tn("%1 devices", 1), "1 enhed", "tn one (Danish)")
@@ -91,13 +107,20 @@ ShellRoot {
       eq(FoamyI18n.formatLocale, "da-DK", "format locale from the registry")
       eq(FoamyI18n.rightToLeft, false, "Danish is left-to-right")
     }
-    if (v45 && lang === "ar") {
+    if (lang === "ar") {
       eq(FoamyI18n.rightToLeft, true, "Arabic mirrors")
       eq(FoamyI18n.tn("%1 devices", 2), "جهازان", "tn dual (Arabic)")
       eq(FoamyI18n.tn("%1 devices", 5), FoamyI18n.number(5) + " أجهزة", "tn few (Arabic), count in the language's digits")
     }
     eq(FoamyI18n.t("%1 and {name}", ["%2{name}"]), "%2{name} and {name}", "values substitute once (user text stays literal)")
-    eq(FoamyI18n.t("Hello {name}", { name: "$&" }), "Hello $&", "replacement patterns stay literal")
+    eq(FoamyI18n.t("Hello {name}", {
+      name: "$&"
+    }), "Hello $&", "replacement patterns stay literal")
+
+    // --- FoamyText (the node tests' cases, in Qt's JavaScript engine) ---------------
+    eq(FoamyText.cap("ab\ud83d\ude00cd", 1, 3), "ab\u2026", "cap never splits a surrogate pair")
+    eq(FoamyText.cap("a\u2028b\r\nc", 2, 5), "a\nb\u2026", "cap counts every Qt line break")
+    eq(FoamyText.tooltip("x".repeat(500)).length, FoamyText.TOOLTIP_CHARS, "tooltip caps a long line")
 
     // --- FoamyMotion ------------------------------------------------------------
     eq(FoamyMotion.duration(180), 180, "duration passes through with motion on")
@@ -105,15 +128,13 @@ ShellRoot {
     eq(FoamyMotion.reduceMotion, false, "motion on by default")
     eq(FoamyMotion.easeOut.length, 6, "easeOut curve")
     check(FoamyMotion.loopAllowed(true), "loops allowed with motion on")
-    if (v45) {
-      Style.reduceMotion = true
-      eq(FoamyMotion.reduceMotion, true, "reduceMotion follows Style.reduceMotion")
-      eq(FoamyMotion.duration(180), 0, "durations collapse under reduced motion")
-      eq(FoamyMotion.fadeIn, 0, "named tokens collapse under reduced motion")
-      check(!FoamyMotion.loopAllowed(true), "loops stop under reduced motion")
-      Style.reduceMotion = false
-      eq(FoamyMotion.fadeIn, 180, "tokens recover")
-    }
+    Style.reduceMotion = true
+    eq(FoamyMotion.reduceMotion, true, "reduceMotion follows Style.reduceMotion")
+    eq(FoamyMotion.duration(180), 0, "durations collapse under reduced motion")
+    eq(FoamyMotion.fadeIn, 0, "named tokens collapse under reduced motion")
+    check(!FoamyMotion.loopAllowed(true), "loops stop under reduced motion")
+    Style.reduceMotion = false
+    eq(FoamyMotion.fadeIn, 180, "tokens recover")
 
     // --- FoamyStyle / FoamyPalette -------------------------------------------------
     Style.cornerRadius = 6
@@ -133,19 +154,50 @@ ShellRoot {
 
     // --- FoamyCursor ------------------------------------------------------------------
     eq(cursor.index, -1, "cursor starts hidden")
-    cursor.move(1); eq(cursor.index, 0, "first move lands on the first stop")
-    cursor.move(1); cursor.move(1); cursor.move(1); eq(cursor.index, 2, "cursor clamps at the end")
-    cursor.hover(1); eq(cursor.index, 1, "hover moves the same cursor")
-    cursor.count = 1; eq(cursor.index, 0, "cursor clamps when the list shrinks")
+    cursor.move(1)
+    eq(cursor.index, 0, "first move lands on the first stop")
+    cursor.move(1)
+    cursor.move(1)
+    cursor.move(1)
+    eq(cursor.index, 2, "cursor clamps at the end")
+    cursor.hover(1)
+    eq(cursor.index, 1, "hover moves the same cursor")
+    cursor.count = 1
+    eq(cursor.index, 0, "cursor clamps when the list shrinks")
 
     // --- FoamyPrefs (QML engine) ---------------------------------------------------------
-    var settings = { id: "foamy.kit-demo", showCount: true, refreshSeconds: 60, extra: "kept" }
-    var fields = [{ key: "showCount", type: "boolean", defaultValue: true }, { key: "refreshSeconds", type: "integer", min: 30, max: 3600, defaultValue: 60 }]
+    var settings = {
+      id: "foamy.kit-demo",
+      showCount: true,
+      refreshSeconds: 60,
+      extra: "kept"
+    }
+    var fields = [
+      {
+        key: "showCount",
+        type: "boolean",
+        defaultValue: true
+      },
+      {
+        key: "refreshSeconds",
+        type: "integer",
+        min: 30,
+        max: 3600,
+        defaultValue: 60
+      }
+    ]
     var unchanged = Prefs.save(mockBar, "foamy.kit-demo", fields, settings, "showCount", true)
     check(unchanged.ok && !unchanged.changed && unchanged.command.length === 0 && mockBar.saved.length === 0, "unchanged value is not written")
     var inline = Prefs.save(mockBar, "foamy.kit-demo", fields, settings, "showCount", false)
     check(inline.ok && inline.inline && inline.command.length === 0, "saves inline through bar.shell.updateEntryInline")
-    eq(JSON.stringify(mockBar.saved[0]), JSON.stringify({ id: "foamy.kit-demo", settings: { showCount: false, refreshSeconds: 60, extra: "kept" } }), "inline save passes the full merged entry")
+    eq(JSON.stringify(mockBar.saved[0]), JSON.stringify({
+      id: "foamy.kit-demo",
+      settings: {
+        showCount: false,
+        refreshSeconds: 60,
+        extra: "kept"
+      }
+    }), "inline save passes the full merged entry")
     var cli = Prefs.save(shellLessBar, "foamy.kit-demo", fields, settings, "refreshSeconds", 300)
     eq(cli.command.join(" "), "omarchy bar set foamy.kit-demo refreshSeconds 300 --json", "falls back to omarchy bar set")
     var bad = Prefs.save(mockBar, "foamy.kit-demo", fields, settings, "refreshSeconds", 5)
@@ -156,19 +208,24 @@ ShellRoot {
 
   readonly property var members: {
     var out = []
-    for (var i = 0; i < panels.count; i++) if (panels.itemAt(i)) out.push(panels.itemAt(i))
+    for (var i = 0; i < panels.count; i++)
+      if (panels.itemAt(i))
+        out.push(panels.itemAt(i))
     return out
   }
 
   function memberOf(panel) {
     for (var i = 0; i < panel.data.length; i++)
-      if (panel.data[i] && panel.data[i].scope === "poller" && "isLeader" in panel.data[i]) return panel.data[i]
+      if (panel.data[i] && panel.data[i].scope === "poller" && "isLeader" in panel.data[i])
+        return panel.data[i]
     return null
   }
 
   function leaders() {
     var count = 0
-    for (var i = 0; i < members.length; i++) if (memberOf(members[i]).isLeader) count++
+    for (var i = 0; i < members.length; i++)
+      if (memberOf(members[i]).isLeader)
+        count++
     return count
   }
 
@@ -187,11 +244,12 @@ ShellRoot {
 
       // --- FoamyIpc ---------------------------------------------------------------------
       var registry = IpcResolver.registry(shell)
-      eq(registry !== null, v45, "IpcRegistry fast path present only on 4.5")
+      check(registry !== null, "IpcRegistry fast path present")
       if (registry) {
         var reply = registry.call("foamy.kit-demo", "status", [])
         check(reply.ran === true, "omarchy-shell socket path answers the plugin target")
-        if (reply.ran) eq(JSON.parse(reply.output).leader, true, "the leader's handler answers")
+        if (reply.ran)
+          eq(JSON.parse(reply.output).leader, true, "the leader's handler answers")
         eq(registry.call("foamy.kit-demo", "destroy", []).ran, false, "undeclared functions are refused")
       }
       stepThree.start()
@@ -214,7 +272,12 @@ ShellRoot {
       panel.save("refreshSeconds", 300)
       eq(mockBar.saved.length, 1, "panel save goes inline")
       if (mockBar.saved.length)
-        eq(JSON.stringify(mockBar.saved[0].settings), JSON.stringify({ showCount: true, refreshSeconds: 300, layout: "list", extra: "kept" }), "panel save keeps every other key")
+        eq(JSON.stringify(mockBar.saved[0].settings), JSON.stringify({
+          showCount: true,
+          refreshSeconds: 300,
+          layout: "list",
+          extra: "kept"
+        }), "panel save keeps every other key")
       panel.close()
       // Unplug the leader's monitor: leadership moves on.
       panels.model = 2
@@ -229,7 +292,8 @@ ShellRoot {
       eq(FoamyShared.memberCount("poller"), 2, "members leave with their instance")
       eq(leaders(), 1, "a new leader takes over")
       var registry = IpcResolver.registry(shell)
-      if (registry) eq(registry.call("foamy.kit-demo", "status", []).ran, true, "IPC follows the new leader")
+      if (registry)
+        eq(registry.call("foamy.kit-demo", "status", []).ran, true, "IPC follows the new leader")
       // The settings IPC on a closed popup lands on Settings (FoamySettingsState).
       var panel = members[0]
       check(!panel.opened, "popup closed before openSettings()")

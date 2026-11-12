@@ -20,25 +20,30 @@ ShellRoot {
   readonly property string tag: host + "/" + (rtl ? "rtl" : "ltr") + "@" + Quickshell.env("FOAMY_SCALE")
   property int checks: 0
   property int failures: 0
-  function check(ok, label) { checks++; if (!ok) { failures++; console.log("FOAMY FAIL " + tag + " " + label) } }
-  function near(a, b, t) { return Math.abs(a - b) <= (t === undefined ? 1.01 : t) }
+  function check(ok, label) {
+    checks++
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + tag + " " + label)
+    }
+  }
+  function near(a, b, t) {
+    return Math.abs(a - b) <= (t === undefined ? 1.01 : t)
+  }
 
   FloatingWindow {
     id: window
     implicitWidth: 1920
     implicitHeight: 1080
     color: "black"
-    ScreenSim { id: sim; fullScreenBar: shell.host === "4.5" }
+    ScreenSim {
+      id: sim
+    }
   }
-  FloatingWindow {
-    visible: shell.host !== "4.5"
-    implicitWidth: 1920
-    implicitHeight: 34
-    color: "black"
-    Item { id: stripAnchor; x: sim.anchor.x; y: 6; width: 22; height: 22 }
+  MockBar {
+    id: bar
   }
-  MockBar { id: bar }
-  readonly property Item anchorButton: shell.host === "4.5" ? sim.anchor : stripAnchor
+  readonly property Item anchorButton: sim.anchor
 
   property int refreshes: 0
   property int calendarClicks: 0
@@ -77,18 +82,43 @@ ShellRoot {
             objectName: "clockTime"
             Layout.alignment: Qt.AlignHCenter
             spacing: FoamyStyle.gapSmall
-            Text { text: "20:32"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.numeral; font.weight: Font.Light }
-            Text { text: ":10"; color: FoamyPalette.secondaryText; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.display; Layout.alignment: Qt.AlignBaseline }
+            Text {
+              text: "20:32"
+              color: FoamyPalette.text
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.numeral
+              font.weight: Font.Light
+            }
+            Text {
+              text: ":10"
+              color: FoamyPalette.secondaryText
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.display
+              Layout.alignment: Qt.AlignBaseline
+            }
           }
         }
-        Item { width: parent.width; height: 120
-          Text { x: FoamyStyle.padding; text: "oktober 2026"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.subtitle } }
+        Item {
+          width: parent.width
+          height: 120
+          Text {
+            x: FoamyStyle.padding
+            text: "oktober 2026"
+            color: FoamyPalette.text
+            font.family: FoamyStyle.fontFamily
+            font.pixelSize: FoamyStyle.font.subtitle
+          }
+        }
         FoamyHeroBand {
           id: hiddenHeroBand
           visible: false
           width: parent.width
           title: "Paused"
-          Text { id: hiddenHero; visible: false; text: "Outside your schedule" }
+          Text {
+            id: hiddenHero
+            visible: false
+            text: "Outside your schedule"
+          }
         }
         FoamyHeroBand {
           id: glyphBand
@@ -140,13 +170,39 @@ ShellRoot {
           RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: FoamyStyle.gapLarge
-            Text { text: "7"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.numeral; font.weight: Font.Light }
-            Text { text: "°C"; color: FoamyPalette.secondaryText; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.display; Layout.alignment: Qt.AlignTop }
-            FoamyIcon { name: "cloud"; Layout.preferredWidth: 28; Layout.preferredHeight: 28; Layout.alignment: Qt.AlignVCenter }
-            Text { text: "Cloudy"; color: FoamyPalette.text; font.family: FoamyStyle.fontFamily; font.pixelSize: FoamyStyle.font.heading; Layout.alignment: Qt.AlignVCenter }
+            Text {
+              text: "7"
+              color: FoamyPalette.text
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.numeral
+              font.weight: Font.Light
+            }
+            Text {
+              text: "°C"
+              color: FoamyPalette.secondaryText
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.display
+              Layout.alignment: Qt.AlignTop
+            }
+            FoamyIcon {
+              name: "cloud"
+              Layout.preferredWidth: 28
+              Layout.preferredHeight: 28
+              Layout.alignment: Qt.AlignVCenter
+            }
+            Text {
+              text: "Cloudy"
+              color: FoamyPalette.text
+              font.family: FoamyStyle.fontFamily
+              font.pixelSize: FoamyStyle.font.heading
+              Layout.alignment: Qt.AlignVCenter
+            }
           }
         }
-        Item { width: parent.width; height: 80 }
+        Item {
+          width: parent.width
+          height: 80
+        }
         FoamyPanelFooter {
           id: footer
           x: FoamyStyle.padding
@@ -165,7 +221,12 @@ ShellRoot {
     anchorItem: shell.anchorButton
     bar: bar
     open: true
-    body: Component { Rectangle { implicitHeight: 1500; color: "transparent" } }
+    body: Component {
+      Rectangle {
+        implicitHeight: 1500
+        color: "transparent"
+      }
+    }
   }
   FoamyPopup {
     id: cappedPopup
@@ -173,14 +234,24 @@ ShellRoot {
     bar: bar
     open: true
     maxHeight: FoamyStyle.popupMaxHeight
-    body: Component { Rectangle { implicitHeight: 1500; color: "transparent" } }
+    body: Component {
+      Rectangle {
+        implicitHeight: 1500
+        color: "transparent"
+      }
+    }
   }
   FoamyPopupCard {
     id: tallCard
     anchorItem: shell.anchorButton
     bar: bar
     open: true
-    body: Component { Rectangle { implicitHeight: 1500; color: "transparent" } }
+    body: Component {
+      Rectangle {
+        implicitHeight: 1500
+        color: "transparent"
+      }
+    }
   }
 
   // --- settings form: buttons and an info note --------------------------------------
@@ -208,16 +279,58 @@ ShellRoot {
           width: parent.width
           title: "Git LFS"
           info: "Automatic checks run Git without a repository's own settings, filters and hooks, so nothing in a repository can run code just by being in these folders. For Git LFS that means files you edited may show as changed until Git refreshes. A trusted repository runs its own Git settings, including LFS, during automatic checks and fetches, so its counts are exact."
-          FoamyToggle { id: toggleA; width: parent.width; label: "Kvale/arca"; description: "/home/tomas/GitHub/Kvale/arca"; divider: true; onClicked: shell.toggleClicks++ }
-          FoamyToggle { id: toggleB; width: parent.width; label: "Compact view"; checked: true }
+          FoamyToggle {
+            id: toggleA
+            width: parent.width
+            label: "Kvale/arca"
+            description: "/home/tomas/GitHub/Kvale/arca"
+            divider: true
+            onClicked: shell.toggleClicks++
+          }
+          FoamyToggle {
+            id: toggleB
+            width: parent.width
+            label: "Compact view"
+            checked: true
+          }
         }
         FoamySettingsSection {
           width: parent.width
           title: "Usage warnings"
           description: "Warns at or above these percentages."
-          FoamyNumberField { id: cpu; width: parent.width; compact: true; label: "CPU"; unit: "%"; value: 95; from: 1; to: 100; onCommitted: function(v) { shell.cpuCommits = shell.cpuCommits.concat([v]) } }
-          FoamyNumberField { id: ram; width: parent.width; compact: true; label: "RAM"; unit: "%"; value: 90; from: 1; to: 100 }
-          FoamyNumberField { id: margin; width: parent.width; compact: true; label: "CPU temperature margin"; unit: "°C"; value: 15; from: 0; to: 40 }
+          FoamyNumberField {
+            id: cpu
+            width: parent.width
+            compact: true
+            label: "CPU"
+            unit: "%"
+            value: 95
+            from: 1
+            to: 100
+            onCommitted: function (v) {
+              shell.cpuCommits = shell.cpuCommits.concat([v])
+            }
+          }
+          FoamyNumberField {
+            id: ram
+            width: parent.width
+            compact: true
+            label: "RAM"
+            unit: "%"
+            value: 90
+            from: 1
+            to: 100
+          }
+          FoamyNumberField {
+            id: margin
+            width: parent.width
+            compact: true
+            label: "CPU temperature margin"
+            unit: "°C"
+            value: 15
+            from: 0
+            to: 40
+          }
         }
         FoamySettingsSection {
           width: parent.width
@@ -225,10 +338,30 @@ ShellRoot {
           RowLayout {
             width: parent.width
             spacing: FoamyStyle.gap
-            FoamyButton { id: secondary; text: "Verify"; iconName: "check"; focusable: true; busy: shell.verifying }
-            FoamyButton { id: primary; text: "Apply"; kind: "primary"; focusable: true; onClicked: shell.applies++ }
-            Item { Layout.fillWidth: true }
-            FoamyButton { id: destructive; text: "Remove"; iconName: "trash"; kind: "destructive"; focusable: true }
+            FoamyButton {
+              id: secondary
+              text: "Verify"
+              iconName: "check"
+              focusable: true
+              busy: shell.verifying
+            }
+            FoamyButton {
+              id: primary
+              text: "Apply"
+              kind: "primary"
+              focusable: true
+              onClicked: shell.applies++
+            }
+            Item {
+              Layout.fillWidth: true
+            }
+            FoamyButton {
+              id: destructive
+              text: "Remove"
+              iconName: "trash"
+              kind: "destructive"
+              focusable: true
+            }
           }
         }
       }
@@ -236,16 +369,20 @@ ShellRoot {
   }
 
   Timer {
-    interval: 900; running: true
+    interval: 900
+    running: true
     onTriggered: {
       Style.cornerRadius = 6
       var w = formPopup.cardItem.Window.window
-      if (w && !w.active) w.requestActivate()
+      if (w && !w.active)
+        w.requestActivate()
       settle.start()
     }
   }
 
-  function centerX(item, ref) { return item.mapToItem(ref, 0, 0).x + item.width / 2 }
+  function centerX(item, ref) {
+    return item.mapToItem(ref, 0, 0).x + item.width / 2
+  }
 
   Timer {
     id: settle
@@ -269,8 +406,10 @@ ShellRoot {
         check(t.children[0].horizontalAlignment === Text.AlignHCenter, "title text centred")
       }
       var s = band.settingsButton.mapToItem(band, 0, 0)
-      if (shell.rtl) check(s.x < FoamyStyle.padding + 2, "RTL: settings in the top left corner " + s.x)
-      else check(s.x + band.settingsButton.width > band.width - FoamyStyle.padding - 2, "LTR: settings in the top right corner " + s.x)
+      if (shell.rtl)
+        check(s.x < FoamyStyle.padding + 2, "RTL: settings in the top left corner " + s.x)
+      else
+        check(s.x + band.settingsButton.width > band.width - FoamyStyle.padding - 2, "LTR: settings in the top right corner " + s.x)
       check(s.y <= FoamyStyle.bandPaddingTop + 1, "settings pinned to the top " + s.y)
       var heroLeft = clock.time.mapToItem(band, 0, 0).x
       check(heroLeft + clock.time.width < s.x || heroLeft > s.x + band.settingsButton.width, "hero keeps clear of the corner buttons")
@@ -323,19 +462,24 @@ ShellRoot {
       check(ta.height >= FoamyStyle.rowHeight && near(page.toggleB.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall, 1), "toggle row heights " + ta.height + " / " + page.toggleB.height)
       check(findByName(ta, "foamyToggleDivider").visible && !findByName(page.toggleB, "foamyToggleDivider").visible, "divider only where asked")
       var sw = ta.switchItem.mapToItem(ta, 0, 0)
-      if (shell.rtl) check(sw.x < 2, "RTL: switch on the left " + sw.x)
-      else check(near(sw.x + ta.switchItem.width, ta.width), "switch on the end " + sw.x)
+      if (shell.rtl)
+        check(sw.x < 2, "RTL: switch on the left " + sw.x)
+      else
+        check(near(sw.x + ta.switchItem.width, ta.width), "switch on the end " + sw.x)
       check(ta.children[1].children[0].font.weight !== Font.Bold && ta.children[1].children[0].font.weight < Font.DemiBold, "label in normal weight")
       // Compact number fields: one row, narrow field, units lined up.
       var cpu = page.cpu, margin = page.margin
       var cf = cpu.field.mapToItem(page, 0, 0), mf = margin.field.mapToItem(page, 0, 0)
       check(cpu.field.width < cpu.width / 3 && cpu.field.width >= cpu.compactFieldWidth - 1, "compact field is narrow " + cpu.field.width + " of " + cpu.width)
-      if (shell.rtl) check(near(cf.x, mf.x), "RTL: stacked compact fields line up at their unit side " + cf.x + " / " + mf.x)
-      else check(near(cf.x + cpu.field.width, mf.x + margin.field.width), "stacked compact fields line up at their unit side "
-                 + (cf.x + cpu.field.width) + " / " + (mf.x + margin.field.width))
+      if (shell.rtl)
+        check(near(cf.x, mf.x), "RTL: stacked compact fields line up at their unit side " + cf.x + " / " + mf.x)
+      else
+        check(near(cf.x + cpu.field.width, mf.x + margin.field.width), "stacked compact fields line up at their unit side " + (cf.x + cpu.field.width) + " / " + (mf.x + margin.field.width))
       check(near(cpu.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall), "label, field and unit on one row, as tall as a toggle row " + cpu.height)
-      if (shell.rtl) check(cf.x < cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "RTL: field toward the left")
-      else check(cf.x > cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "field toward the end")
+      if (shell.rtl)
+        check(cf.x < cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "RTL: field toward the left")
+      else
+        check(cf.x > cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "field toward the end")
       cpu.field.text = "80"
       cpu.dirty = true
       cpu.commitEdit(false)
@@ -353,19 +497,21 @@ ShellRoot {
       check(avail > FoamyStyle.popupMaxHeight, "screen allows more than 640 " + avail)
       check(near(tallPopup.cardItem.height, avail, 2), "tall popup grows to the available height " + tallPopup.cardItem.height + " of " + avail)
       check(near(cappedPopup.cardItem.height, FoamyStyle.popupMaxHeight, 2), "maxHeight still caps when set " + cappedPopup.cardItem.height)
-      check(tallCard.cardItem.height > FoamyStyle.popupMaxHeight && tallCard.cardItem.height <= tallCard.availableCardHeight + 2,
-            "FoamyPopupCard follows the screen " + tallCard.cardItem.height + " of " + tallCard.availableCardHeight)
+      check(tallCard.cardItem.height > FoamyStyle.popupMaxHeight && tallCard.cardItem.height <= tallCard.availableCardHeight + 2, "FoamyPopupCard follows the screen " + tallCard.cardItem.height + " of " + tallCard.availableCardHeight)
       shell.verifying = false
       capture.start()
     }
   }
 
   function findByName(item, name) {
-    if (!item) return null
-    if (item.objectName === name) return item
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
     for (var i = 0; i < item.children.length; i++) {
       var found = findByName(item.children[i], name)
-      if (found) return found
+      if (found)
+        return found
     }
     return null
   }
@@ -378,13 +524,16 @@ ShellRoot {
     onTriggered: {
       if (queue.length === 0) {
         // Pointer checks need the form card on top: close the others first.
-        clockPopup.open = false; weatherPopup.open = false; tallPopup.open = false
-        cappedPopup.open = false; tallCard.open = false
+        clockPopup.open = false
+        weatherPopup.open = false
+        tallPopup.open = false
+        cappedPopup.open = false
+        tallCard.open = false
         pointerStep.start()
         return
       }
       var item = queue.shift()
-      item[1].cardItem.grabToImage(function(result) {
+      item[1].cardItem.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/" + item[0] + ".png")
         capture.start()
       })
@@ -396,8 +545,7 @@ ShellRoot {
     interval: 600
     onTriggered: {
       var info = formPopup.bodyItem.lfs.infoNote
-      check(info.note.mapToItem(formPopup.bodyItem.lfs, 0, 0).y > info.infoButton.mapToItem(formPopup.bodyItem.lfs, 0, 0).y + info.infoButton.height - 1,
-            "note under the title (once laid out)")
+      check(info.note.mapToItem(formPopup.bodyItem.lfs, 0, 0).y > info.infoButton.mapToItem(formPopup.bodyItem.lfs, 0, 0).y + info.infoButton.height - 1, "note under the title (once laid out)")
       var ta = formPopup.bodyItem.toggleA
       var fill = findByName(ta, "foamyToggleFill")
       ev.mouseClick(ta, ta.width / 2, ta.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
@@ -410,5 +558,10 @@ ShellRoot {
     }
   }
 
-  Item { parent: formPopup.bodyItem; TestEvent { id: ev } }
+  Item {
+    parent: formPopup.bodyItem
+    TestEvent {
+      id: ev
+    }
+  }
 }

@@ -44,9 +44,9 @@ Column {
   property alias refreshButton: refreshButton
   default property alias leading: leadingRow.data
 
-  signal refreshClicked()
+  signal refreshClicked
   signal refreshHovered(bool hovered)
-  signal statusClicked()
+  signal statusClicked
 
   spacing: FoamyStyle.gapLarge
   bottomPadding: spacing
@@ -108,7 +108,8 @@ Column {
         anchors.fill: parent
         hoverEnabled: root.statusClickable || root.statusTooltip !== ""
         cursorShape: root.statusClickable ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onClicked: if (root.statusClickable) root.statusClicked()
+        onClicked: if (root.statusClickable)
+          root.statusClicked()
       }
       PanelToolTip {
         visible: statusMouse.containsMouse && root.statusTooltip !== ""

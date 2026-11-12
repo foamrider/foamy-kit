@@ -1,0 +1,7 @@
+# Names Vulture reports as unused that are called from where it can't see.
+_stop_all  # preview/harness.py: an @atexit.register handler, run at interpreter exit
+GetDevices  # preview/fake_nm.py: D-Bus methods dbus-python calls by name for NetworkManager's interface
+GetAllDevices  # preview/fake_nm.py: D-Bus method, called by name over the bus
+CheckConnectivity  # preview/fake_nm.py: D-Bus method, called by name over the bus
+GetAll  # preview/fake_nm.py: org.freedesktop.DBus.Properties method, called by name over the bus
+Get  # preview/fake_nm.py: org.freedesktop.DBus.Properties method, called by name over the bus

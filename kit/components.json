@@ -3,7 +3,7 @@
   "FoamyPalette": {"files": ["FoamyPalette.qml"], "singletons": ["FoamyPalette"], "deps": []},
   "FoamyWallClock": {"files": ["FoamyWallClock.qml"], "deps": []},
   "FoamyMotion": {"files": ["FoamyMotion.qml"], "singletons": ["FoamyMotion"], "deps": []},
-  "FoamyI18n": {"files": ["FoamyI18n.qml"], "singletons": ["FoamyI18n"], "deps": []},
+  "FoamyI18n": {"files": ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs"], "singletons": ["FoamyI18n"], "deps": []},
   "FoamyShared": {"files": ["FoamyShared.qml", "FoamyMember.qml"], "singletons": ["FoamyShared"], "deps": []},
   "FoamyIpc": {"files": ["FoamyIpc.qml", "FoamyIpcResolver.js", "FoamyIpcPreference.qml"], "deps": []},
   "FoamyPeerIpc": {"files": ["FoamyPeerIpc.qml"], "deps": ["FoamyIpc"]},
@@ -24,5 +24,7 @@
   "FoamyWheelScroll": {"files": ["FoamyWheelScroll.qml"], "deps": ["FoamyStyle", "FoamyMotion"]},
   "FoamyCursor": {"files": ["FoamyCursor.qml", "FoamyCursorSurface.qml"], "deps": ["FoamyStyle"]},
   "FoamyPrefs": {"files": ["FoamyPrefs.js", "FoamyPrefsQueue.qml", "node-loader.cjs"], "deps": []},
+  "FoamyText": {"files": ["FoamyText.js", "node-loader.cjs"], "deps": []},
+  "FoamySchedule": {"files": ["FoamySchedule.js", "FoamyScheduleDay.qml", "node-loader.cjs"], "deps": ["SafeTextField", "FoamyStyle", "FoamyPalette", "FoamyI18n"], "optIn": true},
   "FoamyNative": {"files": ["FoamyNative.js", "node-loader.cjs", "native/native.py", "native/build-native.sh", "rust/release.toml", "rust/foamy-helper/Cargo.toml", "rust/foamy-helper/src/**/*.rs"], "rootFiles": {".github/workflows/verify-native.yml": "native/verify-native.yml", "rust-toolchain.toml": "rust/rust-toolchain.toml"}, "deps": [], "optIn": true}
 }

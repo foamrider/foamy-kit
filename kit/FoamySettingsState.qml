@@ -21,17 +21,19 @@ QtObject {
   property bool editing: false
   property bool holdOnClose: false
 
-  signal shown()
-  signal hidden()
+  signal shown
+  signal hidden
 
   function show() {
     editing = true
-    if (panel && !panel.opened) panel.open()
+    if (panel && !panel.opened)
+      panel.open()
     shown()
   }
 
   function hide() {
-    if (!editing) return
+    if (!editing)
+      return
     editing = false
     hidden()
   }
@@ -40,7 +42,8 @@ QtObject {
     target: state.panel
     ignoreUnknownSignals: true
     function onOpenedChanged() {
-      if (state.panel && !state.panel.opened && !state.holdOnClose) state.hide()
+      if (state.panel && !state.panel.opened && !state.holdOnClose)
+        state.hide()
     }
   }
 }

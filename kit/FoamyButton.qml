@@ -41,10 +41,9 @@ Rectangle {
   readonly property bool destructive: kind === "destructive"
   readonly property bool hot: active && (hasCursor || mouse.containsMouse)
 
-  signal clicked()
+  signal clicked
 
-  readonly property color foreground: primary ? FoamyPalette.onAccent
-    : destructive ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
+  readonly property color foreground: primary ? FoamyPalette.onAccent : destructive ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight
@@ -57,24 +56,28 @@ Rectangle {
     }
     if (destructive)
       return Qt.alpha(Commons.Color.urgent, root.pressed && root.active ? 0.26 : root.hot ? 0.2 : 0.12)
-    return root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14)
-      : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
+    return root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14) : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
   }
   border.width: activeFocus && focusable ? 2 : FoamyStyle.borderWidth
-  border.color: activeFocus && focusable ? (primary ? FoamyPalette.text : Commons.Color.accent)
-    : primary ? "transparent"
-    : destructive ? Qt.alpha(Commons.Color.urgent, root.hot ? 0.7 : 0.45)
-    : Qt.alpha(FoamyPalette.text, root.hot ? 0.3 : 0.18)
+  border.color: activeFocus && focusable ? (primary ? FoamyPalette.text : Commons.Color.accent) : primary ? "transparent" : destructive ? Qt.alpha(Commons.Color.urgent, root.hot ? 0.7 : 0.45) : Qt.alpha(FoamyPalette.text, root.hot ? 0.3 : 0.18)
   activeFocusOnTab: focusable && active
 
-  Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+  Behavior on color {
+    ColorAnimation {
+      duration: FoamyMotion.hover
+    }
+  }
 
   Accessible.role: Accessible.Button
   Accessible.name: text || tooltipText
-  Accessible.onPressAction: if (root.active) root.clicked()
-  Keys.onReturnPressed: if (root.active) root.clicked()
-  Keys.onEnterPressed: if (root.active) root.clicked()
-  Keys.onSpacePressed: if (root.active) root.clicked()
+  Accessible.onPressAction: if (root.active)
+    root.clicked()
+  Keys.onReturnPressed: if (root.active)
+    root.clicked()
+  Keys.onEnterPressed: if (root.active)
+    root.clicked()
+  Keys.onSpacePressed: if (root.active)
+    root.clicked()
   Keys.forwardTo: keyTarget ? [keyTarget] : []
 
   Row {
@@ -115,7 +118,8 @@ Rectangle {
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.active ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: if (root.active) root.clicked()
+    onClicked: if (root.active)
+      root.clicked()
   }
 
   PanelToolTip {

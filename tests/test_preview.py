@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Demo preview render on 4.5 (and 4.0 with FOAMY_HOST_40), plus publish-screenshots.sh on a
+"""Demo preview render on 4.5, plus publish-screenshots.sh on a
 throwaway git repository (orphan branch, untouched working tree, no push)."""
+
 import re
 import shutil
 import struct
@@ -30,34 +31,37 @@ def pixel_differs(png, x, y, other):
     def pixel(path):
         data = path.read_bytes()
         width, height = struct.unpack(">II", data[16:24])
-        depth, colour = data[24], data[25]
+        colour = data[25]
         offset, chunks = 8, b""
         while offset < len(data):
-            length = struct.unpack(">I", data[offset:offset + 4])[0]
-            kind = data[offset + 4:offset + 8]
+            length = struct.unpack(">I", data[offset : offset + 4])[0]
+            kind = data[offset + 4 : offset + 8]
             if kind == b"IDAT":
-                chunks += data[offset + 8:offset + 8 + length]
+                chunks += data[offset + 8 : offset + 8 + length]
             offset += 12 + length
         raw = zlib.decompress(chunks)
         channels = {6: 4, 2: 3}[colour]
         stride = width * channels
-        rows, previous = [], bytearray(stride)
+        previous = bytearray(stride)
         for row in range(y + 1):
             start = row * (stride + 1)
-            kind, line = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+            kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
             for i in range(stride):
                 left = line[i - channels] if i >= channels else 0
                 up = previous[i]
                 corner = previous[i - channels] if i >= channels else 0
-                if kind == 1: line[i] = (line[i] + left) & 255
-                elif kind == 2: line[i] = (line[i] + up) & 255
-                elif kind == 3: line[i] = (line[i] + (left + up) // 2) & 255
+                if kind == 1:
+                    line[i] = (line[i] + left) & 255
+                elif kind == 2:
+                    line[i] = (line[i] + up) & 255
+                elif kind == 3:
+                    line[i] = (line[i] + (left + up) // 2) & 255
                 elif kind == 4:
                     p = left + up - corner
                     pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
                     line[i] = (line[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
             previous = line
-        return bytes(previous[x * channels:(x + 1) * channels])
+        return bytes(previous[x * channels : (x + 1) * channels])
 
     try:
         return pixel(png) != pixel(other)
@@ -65,8 +69,52 @@ def pixel_differs(png, x, y, other):
         return False
 
 
-def main():
+def languages():
+    """--language names a catalog the plugin has: nb (no such Omarchy code)
+    is read as no when only no.json exists, and a language without a
+    catalog stops the render instead of silently rendering English."""
     ok = True
+    with tempfile.TemporaryDirectory(prefix="foamy-kit-language-") as work:
+        plugin = Path(work) / "foamy-norsk"
+        (plugin / "i18n").mkdir(parents=True)
+        for name in ("en", "no", "pt"):
+            (plugin / "i18n" / f"{name}.json").write_text("{}")
+        cases = (
+            (None, None),
+            ("en", "en"),
+            ("no", "no"),
+            ("nb", "no"),
+            ("pt-BR", "pt-BR"),
+            ("da", "render: --language da: foamy-norsk has no i18n/da.json"),
+        )
+        for asked, expected in cases:
+            try:
+                got = render.catalog_language(plugin, asked)
+            except SystemExit as error:
+                got = str(error)
+            ok &= report(
+                f"--language {asked}: {expected}",
+                got == expected or (expected and str(got).startswith(expected)),
+                str(got),
+            )
+        (plugin / "i18n/nb.json").write_text("{}")
+        ok &= report("--language nb stays nb when nb.json exists", render.catalog_language(plugin, "nb") == "nb")
+        cli = subprocess.run(
+            [sys.executable, "-I", str(KIT_ROOT / "preview/render.py"), str(plugin), "--language", "da"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        ok &= report(
+            "render.py --language da on a plugin without da.json fails before rendering",
+            cli.returncode != 0 and "has no i18n/da.json" in cli.stderr and "PNGs" not in cli.stdout,
+            cli.stderr.strip()[-200:],
+        )
+    return ok
+
+
+def main():
+    ok = languages()
     out_root = KIT_ROOT / "tests/out/preview"
     plugin = synced_demo()
     for host in harness.available_hosts(what="preview render"):
@@ -81,13 +129,25 @@ def main():
         ok &= report(f"preview render {host}: all states captured", names == expected, ", ".join(names))
         screen = size(out / "devices-screen.png")
         card = size(out / "devices.png")
-        ok &= report(f"preview render {host}: screen 1920x1080, card 420 wide", screen == (1920, 1080) and card and card[0] == 420, f"{screen} {card}")
+        ok &= report(
+            f"preview render {host}: screen 1920x1080, card 420 wide",
+            screen == (1920, 1080) and card and card[0] == 420,
+            f"{screen} {card}",
+        )
         placed = dict((p.name, info) for p, info in shots)["devices.png"]
-        ok &= report(f"preview render {host}: card hangs under the top bar (y = 34 + gap)", re.search(r" at \d+,39\b", placed) is not None, placed)
+        ok &= report(
+            f"preview render {host}: card hangs under the top bar (y = 34 + gap)",
+            re.search(r" at \d+,39\b", placed) is not None,
+            placed,
+        )
         log = (out / "render.log").read_text()
-        ok &= report(f"preview render {host}: plugin subdirectory types load without a qmldir",
-                     "Demo" in (plugin / "DemoView.qml").read_text() and "DemoTag is not a type" not in log
-                     and "DemoBadge is not a type" not in log and not (plugin / "components/qmldir").exists())
+        ok &= report(
+            f"preview render {host}: plugin subdirectory types load without a qmldir",
+            "Demo" in (plugin / "DemoView.qml").read_text()
+            and "DemoTag is not a type" not in log
+            and "DemoBadge is not a type" not in log
+            and not (plugin / "components/qmldir").exists(),
+        )
 
         # A FoamyPopupCard menu: its card is copied onto the screen at its anchor.
         card_out = out_root / host / "menu"
@@ -97,22 +157,36 @@ def main():
         found = re.search(r" at (-?\d+),(-?\d+)", at)
         x, y = (int(found.group(1)), int(found.group(2))) if found else (-1, -1)
         # PopupCard hangs from the anchor item (stock geometry), not the strip edge.
-        ok &= report(f"card preview {host}: menu card captured and placed below the bar button", shots is not None
-                     and size(card_out / "menu.png") is not None and 1300 < x < 1700 and 28 < y < 80, at)
-        ok &= report(f"card preview {host}: the screen shot shows the card", shots is not None
-                     and pixel_differs(card_out / "menu-screen.png", x + 20, y + 20, out / "devices-screen.png"))
+        ok &= report(
+            f"card preview {host}: menu card captured and placed below the bar button",
+            shots is not None and size(card_out / "menu.png") is not None and 1300 < x < 1700 and 28 < y < 80,
+            at,
+        )
+        ok &= report(
+            f"card preview {host}: the screen shot shows the card",
+            shots is not None
+            and pixel_differs(card_out / "menu-screen.png", x + 20, y + 20, out / "devices-screen.png"),
+        )
 
         # A service-only preview: no bar or anchor declared, toast in screen coordinates.
         service_out = out_root / host / "service"
         shots = render.render(plugin, host, service_out, preview=plugin / "preview/ServicePreview.qml")
-        ok &= report(f"service preview {host}: toast captured", shots is not None and size(service_out / "toast.png") == (420, 72))
+        ok &= report(
+            f"service preview {host}: toast captured",
+            shots is not None and size(service_out / "toast.png") == (420, 72),
+        )
     shutil.rmtree(plugin.parent, ignore_errors=True)
 
     # publish-screenshots.sh
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-publish-"))
     repo = base / "foamy-example"
     repo.mkdir()
-    git = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True).stdout
+
+    def git(*a):
+        return subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", "-C", str(repo), *a], capture_output=True, text=True, check=True
+        ).stdout
+
     git("init", "-q", "-b", "dev")
     (repo / "README.md").write_text("example\n")
     git("add", "README.md")
@@ -122,19 +196,38 @@ def main():
     status_before = git("status", "--porcelain")
     pngs = out_root / "4.5"
     script = KIT_ROOT / "preview/publish-screenshots.sh"
-    result = subprocess.run(["bash", str(script), str(repo), str(pngs), "fix-omarchy-45/demo"], capture_output=True, text=True)
-    ok &= report("publish-screenshots commits to an orphan pr-assets branch", result.returncode == 0
-                 and git("rev-list", "--count", "pr-assets").strip() == "1"
-                 and "fix-omarchy-45/demo/devices.png" in git("ls-tree", "-r", "--name-only", "pr-assets"), result.stderr.strip())
-    ok &= report("publish-screenshots leaves the working tree and branch alone",
-                 git("status", "--porcelain") == status_before and git("branch", "--show-current").strip() == "dev"
-                 and "README.md" not in git("ls-tree", "-r", "--name-only", "pr-assets"))
-    ok &= report("publish-screenshots prints raw URLs and the push command, without pushing",
-                 "https://raw.githubusercontent.com/foamrider/foamy-example/pr-assets/fix-omarchy-45/demo/devices.png" in result.stdout
-                 and f"git -C {repo} push origin pr-assets" in result.stdout and not git("worktree", "list").count("\n") > 1)
-    again = subprocess.run(["bash", str(script), str(repo), str(pngs), "fix-omarchy-45/demo"], capture_output=True, text=True)
-    ok &= report("publish-screenshots is idempotent", again.returncode == 0 and "already up to date" in again.stdout
-                 and git("rev-list", "--count", "pr-assets").strip() == "1")
+    result = subprocess.run(
+        ["bash", str(script), str(repo), str(pngs), "fix-omarchy-45/demo"], capture_output=True, text=True
+    )
+    ok &= report(
+        "publish-screenshots commits to an orphan pr-assets branch",
+        result.returncode == 0
+        and git("rev-list", "--count", "pr-assets").strip() == "1"
+        and "fix-omarchy-45/demo/devices.png" in git("ls-tree", "-r", "--name-only", "pr-assets"),
+        result.stderr.strip(),
+    )
+    ok &= report(
+        "publish-screenshots leaves the working tree and branch alone",
+        git("status", "--porcelain") == status_before
+        and git("branch", "--show-current").strip() == "dev"
+        and "README.md" not in git("ls-tree", "-r", "--name-only", "pr-assets"),
+    )
+    ok &= report(
+        "publish-screenshots prints raw URLs and the push command, without pushing",
+        "https://raw.githubusercontent.com/foamrider/foamy-example/pr-assets/fix-omarchy-45/demo/devices.png"
+        in result.stdout
+        and f"git -C {repo} push origin pr-assets" in result.stdout
+        and not git("worktree", "list").count("\n") > 1,
+    )
+    again = subprocess.run(
+        ["bash", str(script), str(repo), str(pngs), "fix-omarchy-45/demo"], capture_output=True, text=True
+    )
+    ok &= report(
+        "publish-screenshots is idempotent",
+        again.returncode == 0
+        and "already up to date" in again.stdout
+        and git("rev-list", "--count", "pr-assets").strip() == "1",
+    )
     shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1
 

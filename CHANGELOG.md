@@ -1,5 +1,439 @@
 # Changelog
 
+## 0.9.0 — 2026-11-12
+
+### Added
+- `tests/validate.sh`: one validation command for foamy-kit and every
+  plugin (README "Tooling", REVIEW.md section 3). It runs kit-check,
+  omarchy-plugin-validate, the kit's `check.sh`, Qt 6 qmllint (with the
+  Omarchy shell as `qs`, unused imports as errors), qmlformat, Oxlint (over
+  QML-loaded files too, their `.pragma`/`.import` read as comments), Ruff
+  lint and format, Vulture, `bash -n` with ShellCheck, shfmt,
+  `build-native.sh --test` and then the plugin's own `tests/suite.sh`; it
+  exits nonzero on any failure. `--ci` skips the host checks with a reason,
+  `--fast` the native tests. Existing findings live in reviewed
+  `tests/lint/<check>-baseline.txt` files that match on file, rule, message
+  and source text; only new findings (or a baselined function grown more
+  complex) fail. `--update-baseline` rewrites them. Kit-owned files are never
+  linted or reformatted in a plugin.
+- Pinned tools and shared configuration: `mise.toml` (node 26.13.0, ruff
+  0.17.3, oxlint 1.91.0, vulture 2.16, shfmt 3.14.1, shellcheck 0.11.0;
+  `mise install`), `ruff.toml` (E, F, W, B, C901 at 15), `.oxlintrc.json`,
+  `.qmlformat.ini` (2-space indent, no reordering). A missing or other
+  version fails validate.
+- `.github/workflows/checks.yml`: `tests/validate.sh --ci` on ubuntu-24.04
+  for pushes and pull requests (actions pinned by commit, read-only, no
+  secrets). foamy-kit runs it too.
+- Sync writes all of these into every plugin, whatever its component set:
+  stamped, locked and checked like kit code (INI files take a `#` stamp).
+  `kit/native/native.py` and `tests/kit-check.sh` accept the new lock paths.
+  A plugin adds `tests/suite.sh` and, when adopting, its baselines.
+- `REVIEW.md`: the shared Foamy review standard (blocking checklist,
+  severity, review order, deterministic checks, boundary and process
+  lifecycle rules, security at the sink, tests, review record). `sync.sh`
+  copies it verbatim to each plugin root and records its hash in
+  `foamy-kit.lock`; `tests/kit-check.sh`, `check.sh` and the bundled build
+  tool fail when it is edited.
+- `AGENTS.md`: sync keeps one marked "Code review" block in each plugin's
+  `AGENTS.md` (created when missing) that points review agents at
+  `REVIEW.md`. Text outside the block and the file's mode are preserved;
+  sync refuses a symlink, non-UTF-8 file or broken markers, even with
+  `--force`. `tests/kit-check.sh` and `check.sh` fail when the block is
+  missing or stale. foamy-kit has its own `AGENTS.md`.
+- `process::set_run_budget(budget)` and `process::run_deadline()`: one
+  deadline for a helper's whole run. Every `Bounded` child and `Pipeline`
+  started afterwards ends by then (each with the shorter of its own timeout
+  and the time left); one that would start later is not started and reports
+  `timed_out` (status `SIGKILL`, no output). Without a call nothing changes.
+  A helper the QML side wraps in `timeout` (FoamyNative.js's example: 30 s)
+  sets a budget below it first thing in `main`, as foamy-power did locally:
+  `timeout` signals only the helper's own process group, so children whose
+  own deadlines added up to more than the wrapper outlived it, grandchildren
+  included, and the widget got no reply. Documented in FoamyNative.js,
+  `json::run` and the README.
+
+### Changed
+- foamy-kit's own Python, QML and shell scripts are formatted with ruff
+  format, qmlformat and shfmt (separate commits, no behaviour change);
+  qmlformat-displaced end-of-line comments sit above their statement. The
+  four unused QML imports qmllint found in kit components are gone
+  (FoamyAction, FoamyPopup, FoamyPopupCard, FoamyStyle), as are native.py's unused
+  `WORKFLOW` and foamykit.py's unused `verify_file`. Plugins get the
+  reformatted kit files on their next sync; their stamped copies change,
+  nothing else does.
+- `test_sync_check.py` prints a SKIP line instead of failing when
+  omarchy-plugin-validate is not installed (CI).
+- `foamy-helper` is 0.1.2 (new public API). A plugin that syncs 0.9.0 runs
+  `cargo update -p foamy-helper` (in `native/`, or its crate dir) and
+  rebuilds; no call site changes.
+
+- `preview/harness.py` isolates every run by default (render.py and every
+  plugin runtime test that uses `harness.Run`). Reviews found runtime tests
+  running the real host tools (`omarchy-audio-*`, `pactl`, `omarchy bar
+  set`) and reaching the machine's system bus (foamy-train's test called the
+  real Entur API through NetworkManager's online state). Now Omarchy's bin
+  directories and an AppImage's `$APPDIR` entries leave `PATH`, every other
+  `omarchy`/`omarchy-*` on `PATH` is a stub that exits 127 and logs to
+  `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`), `$APPDIR` entries
+  leave `LD_LIBRARY_PATH`, `PULSE_SERVER`/`PIPEWIRE_REMOTE` name dead
+  sockets, and `DBUS_SYSTEM_BUS_ADDRESS` is a dead address. The private
+  session bus is unchanged. `Run(…, system_bus="private")` gives a test its
+  own system bus (`Run.system_bus_address`); `system_bus="unix:path=…"`
+  uses one the test provides. `tests/test_isolation.py` checks each from
+  inside qs.
+
+  After syncing: a plugin test whose QML runs a host command now gets exit
+  127 and a `host-commands.log` line; give it a `fakebin` stand-in (or `hostenv.make()` stubs).
+  Plugin-local `isolate()`/`library_path()` copies are redundant.
+
+- `FoamyPrefs`/`FoamyPrefsQueue` (behaviour change, kit-wide): an invalid
+  stored array is no longer replaced by the next save of that key. An array
+  setting holds user data (accounts, folders); one invalid item (a hand edit,
+  an older shape) makes the whole value read as the default, so a save built
+  from what the panel showed wiped every other entry (foamy-teams D1,
+  REVIEW item 7). Now `save(key, value)` refuses when the stored array
+  (present, not null) fails the schema: `FoamyPrefs.save()` returns
+  `storedInvalid: true` with `STORED_INVALID` ("The saved list in shell.json
+  isn't valid, so it wasn't replaced."), nothing is written, `failed()` fires
+  and it isn't retryable. `save(key, value, true)` (and `FoamyPrefs.save(…,
+  pending, true)`) replaces it on purpose. `storedProblem(key)` and
+  `storedProblems` (queue), `FoamyPrefs.storedProblem()/storedProblems()`
+  say which stored value is invalid. Other keys still save and carry the
+  stored array over verbatim; invalid scalars and objects, absent and null
+  values, reads and the inline/CLI paths are unchanged.
+
+  After syncing: a plugin whose array settings hold user data should show
+  `storedProblems.<key>` (and block the editor, or offer a confirmed "start
+  over" that saves with force), and add the new message to its catalogs if
+  it shows `prefs.error`. foamy-teams will (accounts).
+
+- `sync.sh` refreshes the `kit <version>` line of each `native.pin` whose
+  binaries are still fresh after the sync (the pin's source hash matches),
+  and changes nothing else in it; a stale pin keeps the version that built
+  it until the rebuild. `tests/kit-check.sh`, `check.sh` and `--verify` fail
+  when a fresh pin names another kit version than `foamy-kit.lock`. Before,
+  sync left `kit 0.8.1` in foamy-notification-center's pin after the 0.9.0
+  sync, and nothing noticed. After syncing, commit the refreshed pins.
+
+### Fixed
+- `Bwrap`'s fd options (`ro_bind_fd`, `bind_fd`, `seccomp`) name the
+  builder's retained duplicate, not the caller's fd number. Two temporary
+  fds passed one after the other get the same number once the first is
+  dropped, so both options named it and the child got only the second file
+  (both binds showed it). `Bounded` refuses two inherited fds for one number
+  (`InvalidInput`) instead of passing only one. foamy-lock and foamy-github,
+  the only users, rebuild their helpers. Found by Codex review on #10.
+- `process::exit_on_panic` (and `json::run`, `json::serve`, `favicon::run`,
+  which install it) kills the process group of every `Bounded` child still
+  running before it exits 101. The hook exits without unwinding (the
+  release profile aborts on panic), so no drop killed them, and
+  `PR_SET_PDEATHSIG` reaches only the child: a panic mid-run (in a
+  `run_with_progress` callback or another thread) left grandchildren
+  running. The kit keeps a list of unreaped children for this; a child
+  leaves it in the same critical section that reaps it, so a recycled pid is
+  never killed.
+- `child::Bounded::inherit_fd` and `sandbox::Bwrap`'s fd options
+  (`seccomp`, `ro_bind_fd`, `bind_fd`) keep their own duplicate of the fd
+  instead of its number, and the child gets the duplicate under the
+  original number (`dup2` before exec). Before, an fd closed before the run
+  (`.seccomp(BpfFilter::decoder()?.memfd()?)` compiled and closed the memfd
+  at once) handed bubblewrap whatever fd took the number next. The calls
+  are unchanged (`&OwnedFd` still works). Inheriting fd 0-2 is now
+  `InvalidInput` (it used to be a silent no-op), and a duplicate that can't
+  be made (`EMFILE`) fails the run.
+- `sandbox::Bwrap::seccomp`: the filter memfd is sought back to its start
+  in the child before every exec. Bubblewrap reads it from the offset all
+  copies share, so a second run with the same memfd or builder (`works()`
+  and then the real run) found it at the end and failed closed with a
+  misleading "requires a kernel configured with CONFIG_SECCOMP". Runs that
+  overlap in time still need a memfd each. The live bubblewrap test now
+  checks its second run really ran under the filter.
+- `json::run`: a panic in another thread after the reply no longer prints
+  a second, `INTERNAL` reply; the helper still exits 101.
+- `favicon`: a crafted record header whose column sizes add up past 2^64
+  is a broken record instead of a debug-build overflow panic (release
+  builds wrapped and rejected it later).
+- `lock::FileLock::exclusive_within(path, Duration::MAX)` waits as long as
+  it takes instead of panicking on `Instant` overflow.
+- Docs: `ExecOnly` says what Landlock's execute right covers (an allowed
+  dynamic loader can still run other binaries handed to it); the decoder
+  filters deny the classic `mount` call only (not the new mount API, which
+  needs privileges the decoder lacks without namespaces); the `net` example
+  bounds the connect too and says that DNS and connect are outside
+  `DeadlineStream`; a lock file is 0600 only when the lock creates it.
+- `child`: `Bounded::timeout(Duration::MAX)` (or a pipeline stage's) no
+  longer panics on `Instant` overflow; it means no deadline of its own.
+- `favicon` (foamy-notifications, foamy-notification-center): a host's
+  icon is now the one its root page (`https://<host>/`) maps to, else the
+  one most of its pages map to; size closeness to 32 px and recency only
+  break ties. Before, the newest 32 px bitmap of any page won, so one
+  hidden sign-out frame (`outlook.office.com/mail/logoutFrame.html`, mapped
+  to the Microsoft sign-in logo) replaced Outlook's icon. Checked on copies
+  of real Vivaldi caches: outlook.office.com, entra.microsoft.com and
+  m365.cloud.microsoft now get their own icons, www.google.com the Google
+  G; teams.microsoft.com and github.com are unchanged. Cached icons in
+  `~/.cache/foamy/browser-favicons` refresh within a day.
+- Shared test helpers that plugins import from the kit checkout, like the
+  harness, instead of copying them (three plugins had): `harness/FoamyWait.qml`
+  in every run (`waitFor(condition, timeoutMs, then[, label])`, `after(ms,
+  then)`: condition-driven steps instead of fixed delays, which flaked under
+  load in vitals, bolt and zendesk), `harness.wait_for()` and
+  `Run.wait_for_log()` on the Python side, and `preview/hostenv.py`
+  (`isolate`, `make` with an `omarchy-shell` that reaches only the test's
+  own shell, `calls`, `check`, `fake_helper_plugin`). See README, "Test
+  helpers for plugins".
+- `hostenv.ProcessGroup(argv, **popen)`: a qs (or service) a test starts
+  itself runs as the leader of its own process group; `stop()` (or the end
+  of its `with` block) signals the whole group and reaps the leader, so the
+  scripts its `Process`es started stop with it. Tests that started qs with
+  `subprocess.Popen` and stopped it with `terminate()` left those scripts
+  running (foamy-power). `hostenv.die_with_parent()` is the parent-death
+  `preexec_fn` the harness uses too.
+
+  Plugins (hostenv comes from the kit checkout, not the sync): a test that
+  starts its own qs (power's `integration.py`, the clipboard QML runs,
+  notifications' and notification-center's dbus-run-session tests) should
+  start it through `hostenv.ProcessGroup`.
+- `hostenv.isolate(env, base, session_bus=None, display=False)` no longer
+  hands the caller's session bus and display to the test's process. It
+  kept `DBUS_SESSION_BUS_ADDRESS`, `WAYLAND_DISPLAY`,
+  `HYPRLAND_INSTANCE_SIGNATURE` and `DISPLAY`, so a test run from a
+  terminal gave its own qs or `notify-send` the desktop's notification
+  daemon and media players, unlike `harness.Run` (its documented model).
+  The session bus is now a dead address (also when none was set: an unset
+  address falls back to the login bus) unless `session_bus` names the
+  test's own, and the display variables leave unless `display=True`.
+
+  Plugins (hostenv comes from the kit checkout): a test that calls
+  `isolate()` inside `dbus-run-session` passes
+  `session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`: notifications'
+  `tests/testhost.py`, notification-center's `stock-runtime.py`,
+  `settings-ui.py`, `browser-ui.py`, `motion.py` and `images-ui.py`. One that
+  sets `WAYLAND_DISPLAY` before the call to use the live compositor
+  (notifications' `features-runtime.py` wayland mode, through `testhost.make`)
+  passes `display=True`; github's and bolt's clipboard wayland mode set it
+  after the call and need no change. Tests that used the caller's session
+  bus (bolt and syncthing clipboard, idle-suspend runtime,
+  notification-center `scrolling.py`, `rtl-rows.py`, `settings-number.py`)
+  now get a dead one; one that needs a bus runs under `dbus-run-session`.
+  An offscreen qs needs `QT_QPA_PLATFORMTHEME` set (`basic`): without a
+  display the desktop's `gtk3` theme stops it.
+- Live-desktop use in tests is the user's opt-in: `hostenv.isolate(display=True)`
+  raises RuntimeError, and `harness.Run.start()` refuses a `run.env` with
+  `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or `DISPLAY` put back,
+  unless `FOAMY_TEST_DESKTOP=1` is set. Plugin tests put real surfaces on
+  the user's desktop during validate runs. `hostenv.desktop_problem(env,
+  what)` gives the same verdict for a test's own checks. README "Test
+  helpers" and REVIEW.md section 6 state the rule: tests never show anything
+  on the live desktop unless the user opts in.
+
+  Plugins (hostenv comes from the kit checkout): the clipboard wayland modes
+  of bolt, github and weather (`display=True`) now need
+  `FOAMY_TEST_DESKTOP=1` as well as their platform switch. A test that puts
+  `WAYLAND_DISPLAY` into its environment itself after `isolate()`
+  (syncthing's clipboard wayland mode) checks
+  `hostenv.desktop_problem(env, …)` before it starts qs, or passes
+  `display=True` instead. notifications' own `desktop_opt_in()` gate can
+  rely on the kit's.
+- `preview/fake_nm.py`: a shared stand-in NetworkManager for the run's
+  private system bus (from foamy-github's `tests/fake_nm.py`): no devices,
+  the connectivity a state file names (`set_connectivity(file, value)`,
+  written atomically), PropertiesChanged on a change. `fake_nm.start(address,
+  state)` returns its `hostenv.ProcessGroup` once it owns the name, or raises
+  with its output. `harness.Run.start_buses()` brings the private buses up
+  before qs: Quickshell looks for NetworkManager only once, when it starts,
+  so a fake started after qs (as github's `runtime-lifecycle.py` does) leaves
+  `Networking` with "Could not find an available backend".
+
+  Plugins: github replaces `tests/fake_nm.py` with the kit's and starts it
+  between `run.start_buses()` and `run.start()`; weather and train, whose
+  runtime tests assume offline because the system bus is dead, can test the
+  online and offline paths with it.
+- `fake_nm`: an empty, unreadable or invalid state file keeps the
+  connectivity the service reports; only a missing file means full. It read
+  all of them as full, so a test that wrote the file in place (truncate, then
+  write) could look online for a moment (the weather sync). `connectivity()`
+  takes the last value as a second argument. `set_connectivity()` writes a
+  unique temporary file and renames it (it used a fixed `.partial` name).
+
+  Plugins: write the state file with `fake_nm.set_connectivity()`.
+- Docs: README "Test helpers": the fake NetworkManager changes only what
+  the shell sees; it does not cut a helper off from the Internet. Plugins
+  point their helpers at a loopback stand-in and fail a test on any outside
+  request (found in the weather sync).
+- `hostenv.clipboard_fakes(folder)`: the load-proof stand-ins for
+  `kit/clipboard.sh` tests, from foamy-media's f7de0ac: a bash-builtin
+  `wl-paste`/`clipboard-fixture` and a `timeout` that keeps the real 2 s for
+  the deadline modes and gives a paste that ends by itself 60 s.
+  clipboard.sh's fixed 2 s for the whole six-process paste made every
+  plugin's copied clipboard tests fail under load (media: 6 of 12 runs at
+  load 36-50); its runtime behaviour is unchanged and it has no test switch.
+  `tests/test_clipboard.py` is the kit's first test of clipboard.sh (shell
+  only, so `tests/suite.sh --ci` runs it).
+
+  Plugins (hostenv comes from the kit checkout): bolt, github, media,
+  syncthing and weather replace the wl-paste mock in their
+  `tests/test_clipboard.py` with `hostenv.clipboard_fakes()` (media already
+  has the same stand-ins) and wait as long as a working paste may take
+  (media's `pasteWait`, 60 s) in their QML case.
+- `foamy-kit.lock`'s `source` line is the full id of the kit commit sync
+  copied from (it was a 12-character abbreviation), and sync rewrites it
+  whenever the kit commit changed, even when every file is already current
+  (it used to keep the old line then, so `source` could name an older kit
+  than the one the plugin was last synced from). `+dirty` still marks
+  uncommitted kit changes.
+- `checks.yml` checks foamy-kit out at the lock's `source` commit and exports
+  `FOAMY_KIT` for `tests/validate.sh --ci`. The kit's test helpers
+  (`hostenv.clipboard_fakes()`) and design lint are not synced, and the
+  runner had no kit checkout: since bolt, github, media, syncthing and
+  weather moved their clipboard mocks to hostenv, their clipboard shell cases
+  skipped in CI, and design-lint always skipped there. The step fetches over
+  public https into `$RUNNER_TEMP` (outside the checkout), keeps the job
+  read-only and fails, before validate, when `source` is not a full commit
+  id or github.com does not have that commit yet. Under `--ci`, design-lint's
+  SKIP now says `FOAMY_KIT is unset` (it said "no foamy-kit checkout"), and
+  a `FOAMY_KIT` that is not a kit checkout fails instead of skipping.
+
+  Plugins: re-sync (`./sync.sh ../foamy-*`) from a committed foamy-kit that
+  is pushed to github.com, and commit `checks.yml` and `foamy-kit.lock`
+  together; push the kit before the plugin, or the job fails at the kit
+  checkout. Until the re-sync, the old `checks.yml` keeps skipping those
+  cases. Later kit commits change `source` on the next sync: commit the lock
+  with it. The design lint now runs in CI, so `check.sh <plugin>` must pass
+  there too.
+- Docs: `FoamyText.tooltip()`'s comment asks for one item per line (a
+  list joined into one line loses whole items past 100 characters). README:
+  the preview contract is `readonly property var popup: previewPopup` with
+  `id: previewPopup` (qmllint types FoamyPopup as the host's PanelWindow, and
+  the id `popup` shadowed the property: id-shadows-member twice and
+  incompatible-type in every plugin's Preview.qml; the render is the same);
+  `FileView.setText()` writes asynchronously, so a test waits for the file;
+  a `tests/suite.sh` example runs a clipboard test's shell cases under
+  `--ci`, where only its QML case needs skipping.
+
+  After syncing: rename the FoamyPopup id in `preview/Preview.qml` and type
+  `popup` `var`, then shrink the qmllint baseline (`tests/validate.sh
+  --update-baseline qmllint`, review the diff). Reads of `popup.…` then
+  reach the root property: in a child object (a Timer) qualify them as
+  `preview.popup.…` (unqualified, they are new `unqualified` entries); on
+  the root's own bindings either form is clean; inside the `body` Component
+  leave them as they are, since qmllint reports every outer read there and
+  the baselined line still matches (README, "Preview").
+- `render.py --language` names a catalog the plugin has. `--language nb` on
+  a plugin whose catalog is `no.json` (Omarchy's Norwegian code; there is
+  no `nb`) rendered English without a word; it now renders `no` and says
+  so. A language with no catalog (nor its base language's) stops the render
+  with the catalogs it has, before qs starts.
+- `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
+  replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
+  the same template: a translated key switching no → da/ar → en live, the
+  English fallback, literal values, one plugin-specific plural). It derives
+  every expectation from the plugin's own catalogs (a translated string, a
+  plural entry's `one` form, right-to-left under Arabic), runs under the
+  isolated harness and waits on conditions, not fixed ticks. After syncing,
+  replace `tests/i18n-runtime.py` with `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .`
+  (foamy-notifications keeps its card checks).
+- `FoamyText` (`kit/FoamyText.js`, a new component): `cap(text, maxLines,
+  maxChars)` and `tooltip(text)` (6 lines of 100 characters) bound text for
+  a sink with no size limit of its own. The host bar tooltip is a PlainText
+  label sized to its text (no width, wrap or line limit), so a long or
+  many-line app-controlled title made a window as large as the text (foamy-tray
+  review; Omarchy's own tray has the same issue). Cut lines and dropped lines
+  end in a visible "…"; characters are code points, so a surrogate pair is
+  never split; `\r\n`, `\r`, U+2028 and U+2029 count as line breaks. Node
+  tests in `tests/text.test.cjs`, engine parity in `tests/qml/Runtime.qml`.
+  After syncing, pass app-controlled text through `FoamyText.tooltip()` at
+  every `bar.showTooltip` call.
+- `kit/FoamyI18nText.js` (part of FoamyI18n, with `node-loader.cjs`):
+  FoamyI18n's value substitution, which the singleton now calls, and
+  `translator(catalog, english, number)` (`t`/`tn` over plain catalogs:
+  the language, English, the key) for node tests. Thirteen plugins'
+  `tests/i18n.cjs` evaluated slices of `FoamyI18n.qml`'s source in a vm, eight
+  of them through the 4.0 English fallback removed below. After syncing,
+  replace that slicing with
+  `require("../kit/node-loader.cjs").load("FoamyI18nText").translator(no, en)`
+  (or `.substitute(text, values)`); until then those node tests fail.
+- REVIEW.md section 5: plain text alone doesn't bound a host tooltip's size,
+  and a line-mode `SplitParser` or a `StdioCollector` is not a memory bound.
+- `FoamySchedule` (opt-in component): `kit/FoamySchedule.js` and
+  `kit/FoamyScheduleDay.qml`, moved from foamy-train's `Schedule.js` and
+  `ScheduleDay.qml`. foamy-zendesk carried byte-identical copies ("keep the
+  two in step until it moves into foamy-kit"); the JS is unchanged apart from
+  `.pragma library`, a null-safe `week()` and more exports (`dayKeys`,
+  `minutes`, `validOverride`, `nextScheduled`). The row's weekday label is
+  injectable (`labelComponent`: any Component whose root has `text`; train
+  passes `TrainText`, zendesk `PlainText`; default a plain-text body label;
+  `labelItem`). Node tests (`tests/schedule.test.cjs`, train's and zendesk's
+  schedule cases) and a row test (`tests/test_schedule.py`).
+
+  After syncing (train, zendesk): `sync.sh <plugin> --add FoamySchedule`,
+  delete `Schedule.js` and `ScheduleDay.qml`, import
+  `"kit/FoamySchedule.js" as Schedule` (Panel, the service/store), use
+  `FoamyScheduleDay { labelComponent: Component { TrainText { } } … }` in the
+  settings page, and point the schedule unit tests at the kit (or drop them:
+  the kit tests cover them).
+- `FoamyPrefsQueue` reads `settings` through a plain JSON copy
+  (`storedSettings`, `FoamyPrefs.plain()`). A list that reaches the queue
+  as a QML sequence wrapper (settings passed through `createObject`, as the
+  bar and plugin tests do) fails `Array.isArray`, so it read as an invalid
+  stored array: the setting showed its default, `storedProblem()` named it
+  and, with the stored-array rule above, every save of it was refused
+  (foamy-github). A reflected wrapper also never settled its pending value.
+  An invalid stored array is still refused. Code that calls `FoamyPrefs.js`
+  directly passes `Prefs.plain(settings)` the same way.
+
+  After syncing: a plugin's own JSON copy in front of the queue
+  (foamy-github's `settings: JSON.parse(JSON.stringify(root.settings || {}))`)
+  is redundant and can go.
+- `preview/harness.py`: each run's runtime dir (`XDG_RUNTIME_DIR`) and its
+  private bus sockets live in a short socket dir, `Run.sockets`
+  (`foamy-kit-s-<pid>-<random>`, in the temp dir when it fits, else
+  `/tmp`), removed with the run and found by `--gc`. A long `TMPDIR` plus
+  the run prefix put qs's IPC socket past the 107-byte unix limit: qs only
+  logged "Failed to start IPC server", `qs ipc` found no instance and the
+  private bus never came up (six plugins' agents hit it).
+  "Failed to start IPC server" is a `FAILURE_MARKERS` entry, and
+  `Run.start()` stops with the reason when a test's `XDG_RUNTIME_DIR` would
+  still be too long. Plugin tests that read `run.env["XDG_RUNTIME_DIR"]`
+  need no change; one that built `run.base / "runtime"` or
+  `run.base / "bus"` reads `run.sockets` (or the env) instead.
+- `harness.Run.start()` stops with the reason when a test's
+  `run.env["PATH"]` would let a host command run: the harness's
+  `host-bin` stubs are gone (PATH rebuilt from `os.environ`), a directory
+  holding a host `omarchy*` command (`/usr/bin` has `omarchy-shell`,
+  `~/.local/bin` a wrapper) comes before them, or an Omarchy bin directory is
+  back. The isolation only held while the stubs came first, and nothing
+  said when a test dropped them (tray and monitor reviews).
+
+  After syncing: foamy-menu's `tests/runtime.py` sets
+  `PATH=f"{stubs}:{os.environ['PATH']}"`, which `start()` now refuses;
+  it puts its stubs in front of `run.env['PATH']` instead.
+
+### Removed
+- Omarchy 4.0 support, which the README no longer promised. The kit
+  components lose their 4.0 branches: `FoamyI18n` uses the shell's
+  `Translations` and `I18n` directly (no English-only fallback; its
+  `translationsAvailable` is always true and kept only for plugins that read
+  it), `FoamyMotion` calls `Style.duration`, `FoamyCursor.emitTextKey` always
+  passes modifiers, `FoamyPopup` leaves RTL mirroring to the host panel, and
+  the IPC, popup and prefs comments describe 4.5 alone. The harness knows
+  only 4.5: `FOAMY_HOST_40` is ignored, `harness.Run("4.0", …)` and
+  `render.py --host 4.0` stop with "Omarchy 4.0 is no longer supported …",
+  `harness.available_hosts()` prints a `SKIP … on 4.0` line for a 4.0 a
+  caller still lists (so its 4.5 cases keep running), `--host both` renders
+  4.5 into `<out>/4.5/`, and the preview shell, `ScreenSim` (its
+  `fullScreenBar` property is now ignored, kept so tests that set it load) and the kit tests drop the 4.0 strip bar
+  window. `--trio` renders Before on 4.5 only (`--before-host` and
+  `trio(before_hosts=…)` are gone) and labels a clipped fork or a dev tree
+  that won't render.
+
+  After syncing: drop each plugin test's 4.0 cases (`--host 4.0|both`
+  choices, `FOAMY_HOST_40` checks, `("4.0", …)` case lists,
+  `harness.HOSTS["4.0"]`); until then a listed 4.0 prints SKIP, and a test
+  that calls `harness.Run("4.0")` itself stops with the message above. A
+  node test that evaluated `FoamyI18n.qml`'s source (`tests/i18n.cjs`) moves
+  to `FoamyI18nText.js` (see Added).
+
 ## 0.8.1 — 2026-11-10
 
 ### Fixed

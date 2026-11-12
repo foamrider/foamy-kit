@@ -16,7 +16,8 @@ ShellRoot {
 
   function check(ok, label) {
     checks++
-    if (!ok) console.log("FOAMY FAIL " + label)
+    if (!ok)
+      console.log("FOAMY FAIL " + label)
   }
 
   function start(name, args) {
@@ -27,13 +28,17 @@ ShellRoot {
   }
 
   function settle() {
-    if (exitCode === null || text === null) return
+    if (exitCode === null || text === null)
+      return
     if (stage === 0) {
       check(exitCode === 0, "helper exits 0 (got " + exitCode + ")")
       var reply = {}
-      try { reply = JSON.parse(text) } catch (error) { check(false, "helper reply is JSON: " + text) }
-      check(reply.ok === true && JSON.stringify(reply.args) === JSON.stringify(["two words", "", "$HOME"]),
-            "arguments arrive verbatim: " + text)
+      try {
+        reply = JSON.parse(text)
+      } catch (error) {
+        check(false, "helper reply is JSON: " + text)
+      }
+      check(reply.ok === true && JSON.stringify(reply.args) === JSON.stringify(["two words", "", "$HOME"]), "arguments arrive verbatim: " + text)
       check(!FoamyNative.unavailable(exitCode), "a running helper is available")
       stage = 1
       start("foamy-missing-helper", ["x"])
@@ -49,8 +54,16 @@ ShellRoot {
 
   Process {
     id: proc
-    stdout: StdioCollector { onStreamFinished: { root.text = this.text; root.settle() } }
-    onExited: function(exitCode) { root.exitCode = exitCode; root.settle() }
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.text = this.text
+        root.settle()
+      }
+    }
+    onExited: function (exitCode) {
+      root.exitCode = exitCode
+      root.settle()
+    }
   }
 
   Timer {

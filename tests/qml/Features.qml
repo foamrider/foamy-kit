@@ -16,14 +16,16 @@ import "plugin/kit/FoamyIpcResolver.js" as Resolver
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
-  readonly property bool v45: host === "4.5"
   readonly property string calls: Quickshell.env("FOAMY_CALLS")
   property int checks: 0
   property int failures: 0
 
   function check(ok, label) {
     checks++
-    if (!ok) { failures++; console.log("FOAMY FAIL " + host + " " + label) }
+    if (!ok) {
+      failures++
+      console.log("FOAMY FAIL " + host + " " + label)
+    }
   }
   function eq(actual, expected, label) {
     check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
@@ -37,46 +39,101 @@ ShellRoot {
     Column {
       PanelKeyCatcher {
         id: catcher
-        width: 100; height: 20
+        width: 100
+        height: 20
         property var lastText: null
         property var lastModifiers: "unset"
-        onTextKey: function(text, modifiers) { lastText = text; lastModifiers = modifiers }
+        onTextKey: function (text, modifiers) {
+          lastText = text
+          lastModifiers = modifiers
+        }
       }
-      SafeTextField { id: field; width: 200; maximumLength: 5 }
-      FoamyCursorSurface { id: row; width: 100; height: 20 }
-      FoamyIcon { id: icon; width: 16; height: 16 }
-      FoamyHeroBand { id: coverBand; width: 400; title: "Covers" }
+      SafeTextField {
+        id: field
+        width: 200
+        maximumLength: 5
+      }
+      FoamyCursorSurface {
+        id: row
+        width: 100
+        height: 20
+      }
+      FoamyIcon {
+        id: icon
+        width: 16
+        height: 16
+      }
+      FoamyHeroBand {
+        id: coverBand
+        width: 400
+        title: "Covers"
+      }
       FoamyNumberField {
         id: numberField
         width: 300
         label: "Refresh every"
         value: shell.numberSetting
-        from: 1; to: 100; stepSize: 5
-        onCommitted: function(v) { shell.numberCommits = shell.numberCommits.concat([v]) }
+        from: 1
+        to: 100
+        stepSize: 5
+        onCommitted: function (v) {
+          shell.numberCommits = shell.numberCommits.concat([v])
+        }
       }
       FoamyTextSettingField {
         id: textSetting
         width: 300
         value: shell.textSetting
-        validate: function(text) { return text.length <= 5 || "Too long" }
-        onCommitted: function(v) { shell.textCommits = shell.textCommits.concat([v]) }
+        validate: function (text) {
+          return text.length <= 5 || "Too long"
+        }
+        onCommitted: function (v) {
+          shell.textCommits = shell.textCommits.concat([v])
+        }
       }
       Column {
         id: unitStack
         width: 300
-        FoamyNumberField { id: percentField; width: parent.width; unit: "%"; value: 95 }
-        FoamyNumberField { id: celsiusField; width: parent.width; unit: "°C"; value: 15 }
-        FoamyNumberField { id: plainField; width: parent.width; reserveUnit: true; value: 3 }
+        FoamyNumberField {
+          id: percentField
+          width: parent.width
+          unit: "%"
+          value: 95
+        }
+        FoamyNumberField {
+          id: celsiusField
+          width: parent.width
+          unit: "°C"
+          value: 15
+        }
+        FoamyNumberField {
+          id: plainField
+          width: parent.width
+          reserveUnit: true
+          value: 3
+        }
       }
       FoamyNumberField {
         id: retryField
         width: 300
         value: 20
-        from: 1; to: 100
-        onCommitted: function(v) { shell.retryCommits = shell.retryCommits.concat([v]) }
-        onPasteFailed: function(message) { shell.pasteMessage = message }
+        from: 1
+        to: 100
+        onCommitted: function (v) {
+          shell.retryCommits = shell.retryCommits.concat([v])
+        }
+        onPasteFailed: function (message) {
+          shell.pasteMessage = message
+        }
       }
-      FoamyNumberField { id: decimalField; width: 300; value: 2.5; from: 0; to: 10; decimals: 1 }
+      FoamyNumberField {
+        id: decimalField
+        width: 300
+        value: 2.5
+        from: 0
+        to: 10
+        decimals: 1
+      }
       // Text inset must not depend on how a field is sized (Column `width:`
       // vs RowLayout fillWidth), in LTR and RTL; kit fields included.
       Repeater {
@@ -92,13 +149,37 @@ ShellRoot {
           width: 300
           LayoutMirroring.enabled: index === 1
           LayoutMirroring.childrenInherit: true
-          SafeTextField { id: byWidth; width: parent.width; text: "Calendar app" }
-          RowLayout { width: parent.width; SafeTextField { id: byLayout; Layout.fillWidth: true; text: "Calendar app" } }
-          FoamyTextSettingField { id: textSettingInset; width: parent.width; value: "Calendar app" }
-          FoamyNumberField { id: numberInset; width: parent.width; value: 30; reserveUnit: true }
+          SafeTextField {
+            id: byWidth
+            width: parent.width
+            text: "Calendar app"
+          }
+          RowLayout {
+            width: parent.width
+            SafeTextField {
+              id: byLayout
+              Layout.fillWidth: true
+              text: "Calendar app"
+            }
+          }
+          FoamyTextSettingField {
+            id: textSettingInset
+            width: parent.width
+            value: "Calendar app"
+          }
+          FoamyNumberField {
+            id: numberInset
+            width: parent.width
+            value: 30
+            reserveUnit: true
+          }
         }
       }
-      SafeTextField { id: longField; width: 120; text: "a long value that cannot fit in the field at all" }
+      SafeTextField {
+        id: longField
+        width: 120
+        text: "a long value that cannot fit in the field at all"
+      }
       // Switching between settings states (train: settings -> settings-schedule)
       // destroys and builds pages with text and number fields.
       Loader {
@@ -114,12 +195,17 @@ ShellRoot {
         pickHoldMs: 400
         value: shell.dropdownSetting
         options: ["a", "b", "c"]
-        onChanged: function(v) { shell.dropdownChanges = shell.dropdownChanges.concat([v]) }
+        onChanged: function (v) {
+          shell.dropdownChanges = shell.dropdownChanges.concat([v])
+        }
       }
     }
   }
 
-  FoamyCursor { id: cursor; count: 2 }
+  FoamyCursor {
+    id: cursor
+    count: 2
+  }
   property string dropdownSetting: "a"
   Component {
     id: pageA
@@ -127,8 +213,16 @@ ShellRoot {
       height: 300
       FoamySettingsSection {
         width: parent.width
-        FoamyNumberField { width: parent.width; unit: "%"; value: 50 }
-        SafeTextField { width: parent.width; maximumLength: 5; text: "abcdefgh" }
+        FoamyNumberField {
+          width: parent.width
+          unit: "%"
+          value: 50
+        }
+        SafeTextField {
+          width: parent.width
+          maximumLength: 5
+          text: "abcdefgh"
+        }
       }
     }
   }
@@ -138,11 +232,23 @@ ShellRoot {
       height: 300
       FoamySettingsSection {
         width: parent.width
-        FoamyTextSettingField { width: parent.width; value: "schedule" }
-        SafeTextField { width: parent.width; maximumLength: 3; text: "06:00-18:00" }
+        FoamyTextSettingField {
+          width: parent.width
+          value: "schedule"
+        }
+        SafeTextField {
+          width: parent.width
+          maximumLength: 3
+          text: "06:00-18:00"
+        }
         Repeater {
           model: 7
-          SafeTextField { required property int index; width: 80; maximumLength: 5; text: "06:00" }
+          SafeTextField {
+            required property int index
+            width: 80
+            maximumLength: 5
+            text: "06:00"
+          }
         }
       }
     }
@@ -152,41 +258,177 @@ ShellRoot {
   property string textSetting: "abc"
   property var textCommits: []
   property int coverIndex: 0
-  function coverUrl(i) { return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png") }
+  function coverUrl(i) {
+    return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png")
+  }
   function coverSurface() {
     for (var i = 0; i < coverBand.children.length; i++)
-      if (coverBand.children[i].objectName === "foamyHeroBandSurface") return coverBand.children[i]
+      if (coverBand.children[i].objectName === "foamyHeroBandSurface")
+        return coverBand.children[i]
     return null
   }
   property var dropdownChanges: []
 
   // --- prefs fixtures -------------------------------------------------------------
   readonly property var fields: [
-    { key: "a", type: "string", defaultValue: "" },
-    { key: "b", type: "string", defaultValue: "" },
-    { key: "list", type: "array", maxItems: 3, defaultValue: [] }
+    {
+      key: "a",
+      type: "string",
+      defaultValue: ""
+    },
+    {
+      key: "b",
+      type: "string",
+      defaultValue: ""
+    },
+    {
+      key: "list",
+      type: "array",
+      maxItems: 3,
+      defaultValue: []
+    }
   ]
   QtObject {
     id: inlineBar
     property var saved: []
     property QtObject shell: QtObject {
-      function updateEntryInline(id, settings) { inlineBar.saved = inlineBar.saved.concat([JSON.parse(JSON.stringify(settings))]); return true }
+      function updateEntryInline(id, settings) {
+        inlineBar.saved = inlineBar.saved.concat([JSON.parse(JSON.stringify(settings))])
+        return true
+      }
     }
   }
-  QtObject { id: cliBar; property var shell: null }
-  FoamyPrefsQueue { id: inlineQueue; bar: inlineBar; moduleName: "foamy.test"; fields: shell.fields; settings: ({ id: "foamy.test", a: "", b: "", keep: 1 }) }
-  FoamyPrefsQueue { id: cliQueue; bar: cliBar; moduleName: "foamy.test"; fields: shell.fields; settings: ({}) }
+  QtObject {
+    id: cliBar
+    property var shell: null
+  }
+  FoamyPrefsQueue {
+    id: inlineQueue
+    bar: inlineBar
+    moduleName: "foamy.test"
+    fields: shell.fields
+    settings: ({
+        id: "foamy.test",
+        a: "",
+        b: "",
+        keep: 1
+      })
+  }
+  FoamyPrefsQueue {
+    id: cliQueue
+    bar: cliBar
+    moduleName: "foamy.test"
+    fields: shell.fields
+    settings: ({})
+  }
+  // The stored list has four items (maxItems 3): user data the schema rejects.
+  QtObject {
+    id: storedBar
+    property var saved: []
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) {
+        storedBar.saved = storedBar.saved.concat([JSON.parse(JSON.stringify(settings))])
+        return true
+      }
+    }
+  }
+  FoamyPrefsQueue {
+    id: storedQueue
+    bar: storedBar
+    moduleName: "foamy.stored"
+    fields: shell.fields
+    settings: ({
+        id: "foamy.stored",
+        list: [1, 2, 3, 4],
+        a: ""
+      })
+  }
+  // A panel handed its settings through createObject (as the bar and the
+  // plugin tests do) sees each list as a QML sequence wrapper, which fails
+  // Array.isArray.
+  Component {
+    id: wrappedQueueComponent
+    FoamyPrefsQueue {
+      bar: storedBar
+      fields: shell.fields
+    }
+  }
+  Component {
+    id: settingsHolder
+    QtObject {
+      property var settings: ({})
+    }
+  }
+  function wrappedSettings(settings) {
+    return settingsHolder.createObject(shell, {
+      settings: settings
+    }).settings
+  }
+  property var storedFailures: []
+  // The documented bindings: both follow the queue's settings.
+  readonly property string storedListProblem: storedQueue.storedProblems.list || ""
+  readonly property string storedListProblemCall: storedQueue.storedProblem("list")
+  Connections {
+    target: storedQueue
+    function onFailed(key, value, error) {
+      shell.storedFailures = shell.storedFailures.concat([error])
+    }
+  }
 
   // --- IPC fixtures -----------------------------------------------------------------
-  FoamyIpc { id: first; target: "foamy.shared-target"; function who(): string { return "first" } }
-  FoamyIpc { id: mine; target: "foamy.shared-target"; function who(): string { return "mine" } }
-  FoamyIpcPreference { id: preference; handler: mine; interval: 300 }
-  Component { id: lateHandler; FoamyIpc { target: "foamy.shared-target"; function who(): string { return "late" } } }
-  FoamyPeerIpc { id: peer }
+  FoamyIpc {
+    id: first
+    target: "foamy.shared-target"
+    function who(): string {
+      return "first"
+    }
+  }
+  FoamyIpc {
+    id: mine
+    target: "foamy.shared-target"
+    function who(): string {
+      return "mine"
+    }
+  }
+  FoamyIpcPreference {
+    id: preference
+    handler: mine
+    interval: 300
+  }
+  Component {
+    id: lateHandler
+    FoamyIpc {
+      target: "foamy.shared-target"
+      function who(): string {
+        return "late"
+      }
+    }
+  }
+  FoamyPeerIpc {
+    id: peer
+  }
   // foamy-lock's scenario: the rival arrives after the preference settled.
-  FoamyIpc { id: guarded; target: "foamy.guarded"; function who(): string { return "guarded" } }
-  FoamyIpcPreference { id: guardPreference; handler: guarded; interval: 300 }
-  Component { id: rivalHandler; FoamyIpc { target: "foamy.guarded"; function who(): string { return "rival" } } }
+  FoamyIpc {
+    id: guarded
+    target: "foamy.guarded"
+    function who(): string {
+      return "guarded"
+    }
+  }
+  FoamyIpcPreference {
+    id: guardPreference
+    handler: guarded
+    interval: 300
+  }
+  Component {
+    id: rivalHandler
+    FoamyIpc {
+      target: "foamy.guarded"
+      function who(): string {
+        return "rival"
+      }
+    }
+  }
   property var rival: null
 
   // 4.5 reflects inline saves synchronously (persistShellConfig -> settings).
@@ -196,33 +438,50 @@ ShellRoot {
     property QtObject shell: QtObject {
       function updateEntryInline(id, settings) {
         syncBar.written = syncBar.written.concat([JSON.parse(JSON.stringify(settings))])
-        var next = JSON.parse(JSON.stringify(settings)); next.id = id
+        var next = JSON.parse(JSON.stringify(settings))
+        next.id = id
         syncQueue.settings = next
         return true
       }
     }
   }
-  FoamyPrefsQueue { id: syncQueue; bar: syncBar; moduleName: "foamy.sync"; fields: shell.fields; settings: ({ id: "foamy.sync", a: "", b: "" }) }
+  FoamyPrefsQueue {
+    id: syncQueue
+    bar: syncBar
+    moduleName: "foamy.sync"
+    fields: shell.fields
+    settings: ({
+        id: "foamy.sync",
+        a: "",
+        b: ""
+      })
+  }
   property var retryCommits: []
   property string pasteMessage: ""
 
   QtObject {
     id: fakePanel
     property bool opened: false
-    function open() { opened = true }
-    function close() { opened = false }
+    function open() {
+      opened = true
+    }
+    function close() {
+      opened = false
+    }
   }
-  FoamySettingsState { id: settingsState; panel: fakePanel }
+  FoamySettingsState {
+    id: settingsState
+    panel: fakePanel
+  }
 
   Component.onCompleted: Qt.callLater(stepOne)
 
   function stepOne() {
     // --- icons -----------------------------------------------------------------------------
-    var wanted = ["github", "git-branch", "arrow-up", "arrow-down", "eye", "chevron-left", "calendar", "bell", "bell-off",
-                  "search", "x", "ellipsis", "mouse", "keyboard", "message-square", "message", "chat", "users", "battery",
-                  "battery-low", "battery-medium", "battery-full", "battery-charging", "plug", "zap", "skip-back",
-                  "skip-forward", "play", "pause", "shuffle", "repeat", "repeat-1", "music", "megaphone", "info"]
-    var missing = wanted.filter(function(name) { return !icon.paths.hasOwnProperty(name) })
+    var wanted = ["github", "git-branch", "arrow-up", "arrow-down", "eye", "chevron-left", "calendar", "bell", "bell-off", "search", "x", "ellipsis", "mouse", "keyboard", "message-square", "message", "chat", "users", "battery", "battery-low", "battery-medium", "battery-full", "battery-charging", "plug", "zap", "skip-back", "skip-forward", "play", "pause", "shuffle", "repeat", "repeat-1", "music", "megaphone", "info"]
+    var missing = wanted.filter(function (name) {
+      return !icon.paths.hasOwnProperty(name)
+    })
     eq(missing, [], "requested Lucide icons present")
     eq(icon.paths.info, '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "info is Lucide info, not a megaphone")
     icon.name = "chevron-left"
@@ -239,12 +498,8 @@ ShellRoot {
     cursor.emitTextKey(catcher, "s")
     eq(catcher.lastText, "s", "emitTextKey reaches a (text, modifiers) handler")
     check(cursor.plain(catcher.lastModifiers), "a plain letter is plain on " + host)
-    if (v45) {
-      cursor.emitTextKey(catcher, "s", Qt.AltModifier)
-      check(!cursor.plain(catcher.lastModifiers), "Alt+S is not plain on 4.5")
-    } else {
-      eq(catcher.lastModifiers, undefined, "4.0 textKey has no modifiers argument")
-    }
+    cursor.emitTextKey(catcher, "s", Qt.AltModifier)
+    check(!cursor.plain(catcher.lastModifiers), "Alt+S is not plain")
     check(cursor.plain(Qt.ShiftModifier) && !cursor.plain(Qt.ControlModifier), "plain() ignores Shift only")
 
     // --- SafeTextField.maximumLength ---------------------------------------------------
@@ -262,14 +517,16 @@ ShellRoot {
     eq([dropdown.value, dropdown.shownValue], ["b", "b"], "the binding follows the setting")
     shell.dropdownSetting = "c"
     eq([dropdown.value, dropdown.shownValue], ["c", "c"], "a later external change still shows (binding intact)")
-    dropdown.select("a")   // a save that never lands
+    // a save that never lands
+    dropdown.select("a")
     dropdownRevert.start()
 
     // --- FoamyNumberField: binding-safe numeric settings ------------------------------------
     eq(numberField.field.text, "5", "shows the bound value")
     shell.numberSetting = 7
     eq(numberField.field.text, "7", "follows an external change while not editing")
-    numberField.field.text = "9"; numberField.field.textEdited()
+    numberField.field.text = "9"
+    numberField.field.textEdited()
     check(numberField.editing, "typing starts a draft")
     shell.numberSetting = 8
     eq(numberField.field.text, "9", "an external change doesn't overwrite the draft")
@@ -282,14 +539,19 @@ ShellRoot {
     eq(numberField.field.text, "9", "shows the saved value")
     shell.numberSetting = 12
     eq(numberField.field.text, "12", "binding still drives the field after a commit")
-    numberField.field.text = "12"; numberField.field.textEdited(); numberField.commitEdit(false)
+    numberField.field.text = "12"
+    numberField.field.textEdited()
+    numberField.commitEdit(false)
     eq(shell.numberCommits, [9], "an unchanged draft doesn't commit")
-    numberField.field.text = "abc"; numberField.field.textEdited()
+    numberField.field.text = "abc"
+    numberField.field.textEdited()
     check(!numberField.commitEdit(false) && numberField.error !== "" && numberField.field.text === "abc", "Enter on invalid input keeps the draft and says why")
-    numberField.field.text = "500"; numberField.field.textEdited()
+    numberField.field.text = "500"
+    numberField.field.textEdited()
     check(numberField.commitEdit(true) && numberField.field.text === "12" && numberField.error !== "", "focus-out on an out-of-range draft restores the value")
     eq(shell.numberCommits, [9], "invalid drafts never commit")
-    numberField.field.text = "33"; numberField.field.textEdited()
+    numberField.field.text = "33"
+    numberField.field.textEdited()
     check(numberField.handleKey(Qt.Key_Escape) && numberField.field.text === "12" && !numberField.editing, "Escape restores the value and is consumed (page stays)")
     check(numberField.handleKey(Qt.Key_Up) && numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize")
     check(!numberField.handleKey(Qt.Key_A), "other keys pass through")
@@ -308,13 +570,15 @@ ShellRoot {
     eq(textSetting.field.text, "abc", "text field shows the bound value")
     shell.textSetting = "xyz"
     eq(textSetting.field.text, "xyz", "text field follows an external change")
-    textSetting.field.text = " new "; textSetting.field.textEdited()
+    textSetting.field.text = " new "
+    textSetting.field.textEdited()
     shell.textSetting = "other"
     eq(textSetting.field.text, " new ", "draft survives an external change")
     check(textSetting.commitEdit(false) && JSON.stringify(shell.textCommits) === JSON.stringify(["new"]), "commits the trimmed draft once")
     textSetting.field.editingFinished()
     eq(shell.textCommits, ["new"], "no second commit on focus-out")
-    textSetting.field.text = "toolong"; textSetting.field.textEdited()
+    textSetting.field.text = "toolong"
+    textSetting.field.textEdited()
     check(!textSetting.commitEdit(false) && textSetting.error === "Too long", "validate() message on Enter")
     check(textSetting.handleKey(Qt.Key_Escape) && textSetting.field.text === "other" && !textSetting.editing, "Escape restores the bound value")
     shell.textSetting = "later"
@@ -323,18 +587,32 @@ ShellRoot {
     // --- FoamyPrefsQueue with a synchronously reflecting host (4.5) ---------------------------
     syncQueue.save("a", "one")
     eq(Object.keys(syncQueue.pending), [], "a save the host reflects at once doesn't stay pending")
-    syncQueue.settings = ({ id: "foamy.sync", a: "external", b: "" })   // another monitor changes a
+    syncQueue.settings = ({
+        id: "foamy.sync",
+        a: "external",
+        b: ""
+      // another monitor changes a
+      })
     eq(syncQueue.value("a"), "external", "an outside change after the save shows")
     syncQueue.save("b", "two")
-    eq(syncBar.written[1], { a: "external", b: "two" }, "the next save keeps the outside change (no stale write-back)")
+    eq(syncBar.written[1], {
+      a: "external",
+      b: "two"
+    }, "the next save keeps the outside change (no stale write-back)")
 
     // --- FoamyNumberField: retry after a failed save; paste errors ------------------------------
-    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
-    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
+    retryField.field.text = "30"
+    retryField.field.textEdited()
+    retryField.commitEdit(false)
+    retryField.field.text = "30"
+    retryField.field.textEdited()
+    retryField.commitEdit(false)
     eq(shell.retryCommits, [30, 30], "retyping the same value after a failed save commits again")
     retryField.saveFailed()
     eq(retryField.field.text, "20", "saveFailed() shows the saved value again")
-    retryField.field.text = "30"; retryField.field.textEdited(); retryField.commitEdit(false)
+    retryField.field.text = "30"
+    retryField.field.textEdited()
+    retryField.commitEdit(false)
     eq(shell.retryCommits, [30, 30, 30], "and the same input can be committed after saveFailed()")
     retryField.field.pasteError = "Clipboard paste timed out. Copy the text again."
     eq(shell.pasteMessage, "Clipboard paste timed out. Copy the text again.", "a refused paste is reported (pasteFailed)")
@@ -350,12 +628,97 @@ ShellRoot {
     check(inlineQueue.save("a", "one"), "inline save a")
     check(inlineQueue.save("b", "two"), "inline save b")
     eq(inlineBar.saved.length, 2, "two inline writes")
-    eq(inlineBar.saved[1], { a: "one", b: "two", keep: 1 }, "second save merges over the pending first, not the stale entry")
+    eq(inlineBar.saved[1], {
+      a: "one",
+      b: "two",
+      keep: 1
+    }, "second save merges over the pending first, not the stale entry")
     eq(inlineQueue.value("a"), "one", "effective settings show the pending value")
-    inlineQueue.settings = ({ id: "foamy.test", a: "one", b: "two", keep: 1 })
+    inlineQueue.settings = ({
+        id: "foamy.test",
+        a: "one",
+        b: "two",
+        keep: 1
+      })
     eq(Object.keys(inlineQueue.pending), [], "pending settles once the host reflects it")
     check(!inlineQueue.save("list", [1, 2, 3, 4]), "array maxItems is enforced")
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
+
+    // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
+    eq(storedQueue.storedProblem("list"), "That value isn't allowed.", "storedProblem names the invalid stored list")
+    eq(storedQueue.storedProblem("a"), "", "a valid stored value has no problem")
+    eq(Object.keys(storedQueue.storedProblems), ["list"], "storedProblems lists it")
+    eq(storedQueue.value("list"), [], "it still reads as the default")
+    eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
+    check(!storedQueue.save("list", [9]), "a save over the invalid stored list is refused")
+    eq(storedQueue.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with its own message")
+    eq(storedFailures, ["The saved list in shell.json isn't valid, so it wasn't replaced."], "failed() reports it")
+    check(!storedQueue.saving && !storedQueue.canRetry, "nothing runs and nothing to retry")
+    eq(storedBar.saved.length, 0, "nothing was written")
+    check(storedQueue.save("a", "x"), "another key still saves")
+    eq(storedBar.saved[0], {
+      list: [1, 2, 3, 4],
+      a: "x"
+    }, "carrying the stored list over verbatim")
+    check(storedQueue.save("list", [9], true), "a forced save replaces it")
+    eq(storedBar.saved[1], {
+      list: [9],
+      a: "x"
+    }, "the forced value is written")
+    eq([storedListProblem, storedListProblemCall], ["", ""], "and both bindings clear once the forced list is in effect")
+
+    // --- FoamyPrefsQueue: a list passed in as a QML sequence wrapper -----------------
+    var wrappedList = shell.wrappedSettings({
+      list: [1, 2]
+    }).list
+    check(!Array.isArray(wrappedList) && wrappedList.length === 2, "createObject hands a list over as a sequence wrapper")
+    var wrappedQueue = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped",
+      settings: {
+        id: "foamy.wrapped",
+        list: [1, 2],
+        a: ""
+      }
+    })
+    eq(wrappedQueue.storedProblem("list"), "", "a wrapped valid list has no stored problem")
+    eq(wrappedQueue.storedProblems, {}, "storedProblems is empty")
+    eq(wrappedQueue.value("list"), [1, 2], "it reads as stored, not as the default")
+    check(Array.isArray(wrappedQueue.value("list")), "as a real Array")
+    var savedBefore = storedBar.saved.length
+    check(wrappedQueue.save("list", [1, 2, 3]), "a save of the wrapped list isn't refused")
+    eq(wrappedQueue.error, "", "and sets no error")
+    var wrappedWrite = storedBar.saved[savedBefore] || {}
+    eq([wrappedWrite.list, wrappedWrite.a], [[1, 2, 3], ""], "the new list is written")
+    // No list stored yet, so the save goes through either way; the host then
+    // reflects it as a wrapper.
+    var wrappedNew = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped-new",
+      settings: {
+        id: "foamy.wrapped-new",
+        a: ""
+      }
+    })
+    check(wrappedNew.save("list", [5]), "a first list saves")
+    check("list" in wrappedNew.pending, "and is pending until the host reflects it")
+    wrappedNew.settings = shell.wrappedSettings({
+      id: "foamy.wrapped-new",
+      list: [5],
+      a: ""
+    })
+    eq(Object.keys(wrappedNew.pending), [], "pending settles when the host reflects the list as a wrapper")
+    eq(wrappedNew.storedProblems, {}, "and the reflected list is no stored problem")
+    var wrappedInvalid = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped-invalid",
+      settings: {
+        id: "foamy.wrapped-invalid",
+        list: [1, 2, 3, 4],
+        a: ""
+      }
+    })
+    eq(wrappedInvalid.storedProblem("list"), "That value isn't allowed.", "a wrapped invalid list is still a stored problem")
+    check(!wrappedInvalid.save("list", [9]), "and a save over it is still refused")
+    eq(wrappedInvalid.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with the stored-invalid message")
+    eq(storedBar.saved.length, savedBefore + 2, "nothing more was written")
 
     // --- FoamyPrefsQueue: CLI, newest value per key, failure + retry ------------------
     cliQueue.save("a", "first")
@@ -367,7 +730,10 @@ ShellRoot {
     stepTwo.start()
   }
 
-  FileViewProbe { id: callLog; path: shell.calls }
+  FileViewProbe {
+    id: callLog
+    path: shell.calls
+  }
 
   function glyphEdges(field) {
     var ed = field.editorItem
@@ -401,19 +767,24 @@ ShellRoot {
   }
 
   function checkUnitStack(label) {
-    var fields = [percentField, celsiusField, plainField].map(function(f) {
+    var fields = [percentField, celsiusField, plainField].map(function (f) {
       var p = f.field.mapToItem(unitStack, 0, 0)
       return [Math.round(p.x), Math.round(f.field.width)]
     })
     eq(fields[1], fields[0], label + ": % and °C fields have the same x and width")
     eq(fields[2], fields[0], label + ": a unitless field with reserveUnit lines up too")
-    if (label === "RTL") check(fields[0][0] > 0, "RTL: the unit column is on the left, the field after it")
-    else eq(fields[0][0], 0, "LTR: fields start at the row's start")
+    if (label === "RTL")
+      check(fields[0][0] > 0, "RTL: the unit column is on the left, the field after it")
+    else
+      eq(fields[0][0], 0, "LTR: fields start at the row's start")
   }
   Timer {
     id: unitStackRtl
     interval: 200
-    onTriggered: { shell.checkUnitStack("RTL"); unitStack.LayoutMirroring.enabled = false }
+    onTriggered: {
+      shell.checkUnitStack("RTL")
+      unitStack.LayoutMirroring.enabled = false
+    }
   }
 
   Timer {
@@ -449,7 +820,9 @@ ShellRoot {
     onTriggered: {
       var surface = shell.coverSurface()
       var stale = 0
-      for (var i = 0; i < 49; i++) if (surface.isImageLoaded(shell.coverUrl(i))) stale++
+      for (var i = 0; i < 49; i++)
+        if (surface.isImageLoaded(shell.coverUrl(i)))
+          stale++
       shell.eq(stale, 0, "50 covers cycled: no earlier cover stays decoded")
       shell.check(coverBand.loadedImage === String(shell.coverUrl(49)) && surface.isImageLoaded(shell.coverUrl(49)), "only the current cover is loaded")
       coverBand.visible = false
@@ -472,8 +845,7 @@ ShellRoot {
     interval: 2500
     onTriggered: {
       var lines = callLog.lines()
-      eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json",
-                 "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
+      eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
       check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
       // Array values go to setBarWidget with a leading space (qs ipc splits "[…]").
       cliQueue.save("list", [1, 2])
@@ -487,7 +859,8 @@ ShellRoot {
     onTriggered: {
       var lines = callLog.lines()
       eq(lines[lines.length - 1], "omarchy-shell shell setBarWidget foamy.test list | [1,2]| {}", "arrays bypass qs ipc list parsing")
-      cliQueue.save("b", "boom")   // the fake omarchy fails on "boom"
+      // the fake omarchy fails on "boom"
+      cliQueue.save("b", "boom")
       afterFail.start()
     }
   }
@@ -505,25 +878,37 @@ ShellRoot {
 
   function stepThree() {
     // --- IPC: prefer / others / call -----------------------------------------------------
-    if (v45) {
-      check(guardPreference.answering && guardPreference.others === 0, "guarded target settled with no rival")
-      var registry = Resolver.registry(shell)
-      rival = rivalHandler.createObject(shell)
-      registry.handlers.splice(registry.handlers.indexOf(rival), 1)
-      registry.handlers.unshift(rival)          // a later service jumps ahead
-      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "rival", "the rival took the route")
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: true, output: "mine" }, "FoamyIpcPreference puts its handler first")
-      check(preference.answering && preference.others === 1, "preference reports one other handler")
-      late = lateHandler.createObject(shell)
-      Resolver.prefer(shell, late)   // someone else claims the target
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "late", "another prefer() takes over")
-      eq(Resolver.call(shell, "foamy.shared-target", "nope", []), { ran: false }, "undeclared functions don't run")
-    } else {
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []), { ran: false }, "4.0: no in-process IPC")
-      check(!preference.answering, "4.0: preference is inert")
-    }
-    peer.call("foamy.shared-target", "who", [], function(ok, output) { shell.peerResult = { ok: ok, output: output } })
-    peer.call("foamy.absent", "status", ["[1]"], function(ok, output) { shell.peerFallback = { ok: ok, output: output } })
+    check(guardPreference.answering && guardPreference.others === 0, "guarded target settled with no rival")
+    var registry = Resolver.registry(shell)
+    rival = rivalHandler.createObject(shell)
+    registry.handlers.splice(registry.handlers.indexOf(rival), 1)
+    // a later service jumps ahead
+    registry.handlers.unshift(rival)
+    eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "rival", "the rival took the route")
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []), {
+      ran: true,
+      output: "mine"
+    }, "FoamyIpcPreference puts its handler first")
+    check(preference.answering && preference.others === 1, "preference reports one other handler")
+    late = lateHandler.createObject(shell)
+    // someone else claims the target
+    Resolver.prefer(shell, late)
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "late", "another prefer() takes over")
+    eq(Resolver.call(shell, "foamy.shared-target", "nope", []), {
+      ran: false
+    }, "undeclared functions don't run")
+    peer.call("foamy.shared-target", "who", [], function (ok, output) {
+      shell.peerResult = {
+        ok: ok,
+        output: output
+      }
+    })
+    peer.call("foamy.absent", "status", ["[1]"], function (ok, output) {
+      shell.peerFallback = {
+        ok: ok,
+        output: output
+      }
+    })
 
     // --- FoamySettingsState ---------------------------------------------------------------
     settingsState.show()
@@ -537,7 +922,7 @@ ShellRoot {
 
     // --- D-Bus isolation -------------------------------------------------------------------
     var address = Quickshell.env("DBUS_SESSION_BUS_ADDRESS")
-    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_BASE")) !== -1, "private session bus " + address)
+    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_SOCKETS") + "/") === "unix:path=".length, "private session bus " + address)
     eq(Mpris.players.values.length, 0, "no desktop MPRIS players visible")
     stepFour.start()
   }
@@ -550,15 +935,17 @@ ShellRoot {
     id: stepFour
     interval: 1200
     onTriggered: {
-      if (v45) {
-        eq(shell.peerResult, { ok: true, output: "late" }, "FoamyPeerIpc answers in-process on 4.5")
-        // Re-claim within the preference interval.
-        eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
-        eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
-      } else {
-        eq(shell.peerResult, { ok: true, output: "cli: foamy.shared-target who" }, "FoamyPeerIpc falls back to omarchy-shell on 4.0")
-      }
-      eq(shell.peerFallback, { ok: true, output: "cli: foamy.absent status [1]" }, "unknown in-process target uses the CLI")
+      eq(shell.peerResult, {
+        ok: true,
+        output: "late"
+      }, "FoamyPeerIpc answers in-process")
+      // Re-claim within the preference interval.
+      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
+      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
+      eq(shell.peerFallback, {
+        ok: true,
+        output: "cli: foamy.absent status [1]"
+      }, "unknown in-process target uses the CLI")
       console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")
       Qt.quit()

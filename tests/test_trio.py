@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """render.py --trio on a throwaway git repo: `dev` holds a pre-kit popup (the
 old KeyboardPanel fork, bare Color), the working tree the kit demo. Before
-renders from `git archive dev` (the repo is not touched); with FOAMY_HOST_40 it
-falls back to the 4.0 host when dev won't render on 4.5 (else that is labelled
-and the fallback checks print SKIP), and a missing ref."""
+renders from `git archive dev` (the repo is not touched) on 4.5; a clipped
+pre-kit fork, a dev tree that won't render and a missing ref are labelled."""
+
 import shutil
 import subprocess
 import sys
@@ -44,7 +44,9 @@ Item {
 
 
 def git(repo, *args):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "-C", str(repo), *args], capture_output=True, text=True, check=True
+    ).stdout
 
 
 def make_repo(base, fail_on_45=False):
@@ -74,9 +76,7 @@ def make_repo(base, fail_on_45=False):
 def main():
     harness.install_signal_cleanup()
     ok = True
-    # The 4.0 fallback needs a 4.0 host (opt-in: FOAMY_HOST_40).
-    has_40 = bool(harness.available_hosts(("4.0",), what="trio 4.0 fallback checks", require=False))
-    hosts = [h for h in harness.KNOWN_HOSTS if harness.host_problem(h) is None]
+    hosts = ["4.5"]
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-trio-test-"))
     try:
         repo = make_repo(base / "a")
@@ -85,51 +85,70 @@ def main():
         out = base / "out"
         lines, label = render.trio(repo, out, dev_ref="dev", url_prefix="https://example.invalid/assets")
         names = sorted(p.name for p in out.glob("*.png"))
-        expected = ("Before (dev, 4.0 host; popup fork clipped on 4.5)" if has_40
-                    else "Before (dev, 4.5 host; popup fork clipped)")
-        ok &= report("a pre-kit fork clipped on 4.5 falls back to the 4.0 host, labelled" if has_40
-                     else "without a 4.0 host, a pre-kit fork clipped on 4.5 is shown on 4.5, labelled", label == expected, label)
+        expected = "Before (dev, 4.5 host; popup fork clipped)"
+        ok &= report("a pre-kit fork clipped on 4.5 is shown as it is, labelled", label == expected, label)
         for view in ("devices", "settings"):
-            ok &= report(f"trio {view}: before, after {', after '.join(hosts)}",
-                         {f"{view}-before.png"} | {f"{view}-after-{h}.png" for h in hosts} <= set(names))
-        ok &= report("trio covers every after view", {f"{v}-after-{h}.png" for v in ("empty", "artwork") for h in hosts} <= set(names))
+            ok &= report(
+                f"trio {view}: before, after {', after '.join(hosts)}",
+                {f"{view}-before.png"} | {f"{view}-after-{h}.png" for h in hosts} <= set(names),
+            )
+        ok &= report(
+            "trio covers every after view",
+            {f"{v}-after-{h}.png" for v in ("empty", "artwork") for h in hosts} <= set(names),
+        )
         table = (out / "trio.md").read_text()
         header = "| View | " + " | ".join([expected] + [f"After {h}" for h in hosts]) + " |"
-        ok &= report("trio.md is a PR table with prefixed image URLs, one After column per host",
-                     table.startswith(header + "\n" + "|---" * (2 + len(hosts)) + "|\n")
-                     and "![devices before](https://example.invalid/assets/devices-before.png)" in table
-                     and "| empty | — |" in table and "4.0.6" not in table,
-                     table.splitlines()[0] if table else table)
-        ok &= report("the plugin repo is untouched (no worktree, clean tree)",
-                     git(repo, "status", "--porcelain") == status and git(repo, "worktree", "list") == worktrees)
+        ok &= report(
+            "trio.md is a PR table with prefixed image URLs, one After column per host",
+            table.startswith(header + "\n" + "|---" * (2 + len(hosts)) + "|\n")
+            and "![devices before](https://example.invalid/assets/devices-before.png)" in table
+            and "| empty | — |" in table
+            and "4.0.6" not in table,
+            table.splitlines()[0] if table else table,
+        )
+        ok &= report(
+            "the plugin repo is untouched (no worktree, clean tree)",
+            git(repo, "status", "--porcelain") == status and git(repo, "worktree", "list") == worktrees,
+        )
         from common import read_png
+
         width, height, _ = read_png(out / "devices-before.png")
         ok &= report("the dev fork's card is captured", (width, height) == (400, 160), f"{width}x{height}")
         _, _, px = read_png(out / "devices-before.png")
-        ok &= report("a dev file with anchors blocks and an overlay PanelWindow renders (monitor case)",
-                     px(200, 80)[3] == 255 and px(200, 80)[:3] != (0, 0, 0), str(px(200, 80)))
-
-        lines, label = render.trio(repo, base / "out-45", dev_ref="dev", before_hosts=("4.5",), states=["devices"])
-        ok &= report("--before-host 4.5 alone renders dev on 4.5 as it is, labelled clipped",
-                     label == "Before (dev, 4.5 host; popup fork clipped)"
-                     and (base / "out-45/devices-before.png").is_file(), label)
+        ok &= report(
+            "a dev file with anchors blocks and an overlay PanelWindow renders (monitor case)",
+            px(200, 80)[3] == 255 and px(200, 80)[:3] != (0, 0, 0),
+            str(px(200, 80)),
+        )
 
         repo = make_repo(base / "b", fail_on_45=True)
         out = base / "out-b"
         lines, label = render.trio(repo, out, dev_ref="dev", states=["devices"])
-        if has_40:
-            ok &= report("dev that won't render on 4.5 falls back to the 4.0 host, labelled",
-                         label == "Before (dev, 4.0 host; did not render on 4.5)" and (out / "devices-before.png").is_file(), label)
-        else:
-            ok &= report("without a 4.0 host, dev that won't render on 4.5 is labelled, After still renders",
-                         label == "Before (dev did not render)" and not (out / "devices-before.png").exists()
-                         and (out / "devices-after-4.5.png").is_file() and "| devices | — |" in lines[2], label)
+        ok &= report(
+            "dev that won't render on 4.5 is labelled, After still renders",
+            label == "Before (dev did not render)"
+            and not (out / "devices-before.png").exists()
+            and (out / "devices-after-4.5.png").is_file()
+            and "| devices | — |" in lines[2],
+            label,
+        )
 
         lines, label = render.trio(repo, base / "out-c", dev_ref="no-such-ref", states=["devices"])
-        ok &= report("a missing dev ref still renders After, labelled",
-                     "not found" in label and (base / "out-c/devices-after-4.5.png").is_file() and "| devices | — |" in lines[2], label)
-        alive = [pid for pid in harness.STARTED if Path(f"/proc/{pid}").exists() and "zombie" not in Path(f"/proc/{pid}/status").read_text().lower()]
-        ok &= report("no qs or dbus-daemon from these renders is left", harness.STARTED and not alive, f"{len(harness.STARTED)} started, alive {alive}")
+        ok &= report(
+            "a missing dev ref still renders After, labelled",
+            "not found" in label and (base / "out-c/devices-after-4.5.png").is_file() and "| devices | — |" in lines[2],
+            label,
+        )
+        alive = [
+            pid
+            for pid in harness.STARTED
+            if Path(f"/proc/{pid}").exists() and "zombie" not in Path(f"/proc/{pid}/status").read_text().lower()
+        ]
+        ok &= report(
+            "no qs or dbus-daemon from these renders is left",
+            harness.STARTED and not alive,
+            f"{len(harness.STARTED)} started, alive {alive}",
+        )
     finally:
         shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1

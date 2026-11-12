@@ -21,31 +21,41 @@ QtObject {
 
   function _scope(name) {
     var key = String(name || "default")
-    if (!scopes[key]) scopes[key] = { members: [], demand: [] }
+    if (!scopes[key])
+      scopes[key] = {
+        members: [],
+        demand: []
+      }
     return scopes[key]
   }
 
   function join(name, member) {
     var scope = _scope(name)
-    if (scope.members.indexOf(member) === -1) scope.members.push(member)
+    if (scope.members.indexOf(member) === -1)
+      scope.members.push(member)
     revision++
   }
 
   function leave(name, member) {
     var scope = _scope(name)
     var index = scope.members.indexOf(member)
-    if (index !== -1) scope.members.splice(index, 1)
+    if (index !== -1)
+      scope.members.splice(index, 1)
     var demandIndex = scope.demand.indexOf(member)
-    if (demandIndex !== -1) scope.demand.splice(demandIndex, 1)
+    if (demandIndex !== -1)
+      scope.demand.splice(demandIndex, 1)
     revision++
   }
 
   function setDemand(name, member, wanted) {
     var scope = _scope(name)
     var index = scope.demand.indexOf(member)
-    if (wanted && index === -1 && scope.members.indexOf(member) !== -1) scope.demand.push(member)
-    else if (!wanted && index !== -1) scope.demand.splice(index, 1)
-    else return
+    if (wanted && index === -1 && scope.members.indexOf(member) !== -1)
+      scope.demand.push(member)
+    else if (!wanted && index !== -1)
+      scope.demand.splice(index, 1)
+    else
+      return
     revision++
   }
 

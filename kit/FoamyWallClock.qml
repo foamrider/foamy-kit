@@ -15,7 +15,8 @@ Timer {
 
   function refresh() {
     stop()
-    if (!enabled) return
+    if (!enabled)
+      return
     date = new Date()
     interval = msUntilNextTick(Date.now())
     start()

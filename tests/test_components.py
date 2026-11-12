@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""kit 0.4.0 components (tests/qml/Components.qml) on 4.5 (and 4.0 with FOAMY_HOST_40), LTR
+"""kit 0.4.0 components (tests/qml/Components.qml) on 4.5, LTR
 and RTL, at display scale 1.0 and 1.25: centred hero band, FoamyPanelFooter,
 FoamyButton, FoamyInfoNote, popup height following the screen. Card
 screenshots: tests/out/components/."""
+
 import shutil
 import sys
 from pathlib import Path
@@ -20,9 +21,18 @@ def main():
         for rtl in (False, True):
             for scale in (1.0, 1.25):
                 direction = "rtl" if rtl else "ltr"
-                results.append(run_shell("Components.qml", host, plugin, f"{host}/{direction}@{scale}",
-                                         {"FOAMY_RTL": "1" if rtl else "0"}, scale=scale, keep_pngs_to=out,
-                                         suffix=f"{host}-{direction}-{scale}"))
+                results.append(
+                    run_shell(
+                        "Components.qml",
+                        host,
+                        plugin,
+                        f"{host}/{direction}@{scale}",
+                        {"FOAMY_RTL": "1" if rtl else "0"},
+                        scale=scale,
+                        keep_pngs_to=out,
+                        suffix=f"{host}-{direction}-{scale}",
+                    )
+                )
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

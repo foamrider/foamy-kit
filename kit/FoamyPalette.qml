@@ -32,7 +32,8 @@ QtObject {
   // text and background on a light accent, the lighter on a dark one.
   readonly property color onAccent: {
     var backgroundIsDark = luminance(background) < luminance(text)
-    if (luminance(accent) > 0.55) return backgroundIsDark ? background : text
+    if (luminance(accent) > 0.55)
+      return backgroundIsDark ? background : text
     return backgroundIsDark ? text : background
   }
 
@@ -61,7 +62,8 @@ QtObject {
   function pick(keys, fallback) {
     for (var i = 0; i < keys.length; i++) {
       var value = theme[keys[i]]
-      if (typeof value === "string" && /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) return value
+      if (typeof value === "string" && /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value))
+        return value
     }
     return fallback
   }
@@ -72,7 +74,8 @@ QtObject {
     var lines = String(raw || "").split("\n")
     for (var i = 0; i < lines.length; i++) {
       var match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]*)"\s*(#.*)?$/.exec(lines[i])
-      if (match) out[match[1]] = match[2]
+      if (match)
+        out[match[1]] = match[2]
     }
     return out
   }

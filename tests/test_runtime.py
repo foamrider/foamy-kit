@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Runtime checks on 4.5 (and 4.0 with FOAMY_HOST_40): FoamyI18n (English on
-4.0; English, Danish and Arabic on 4.5), FoamyMotion, FoamyPalette, FoamyStyle, FoamyPrefs, FoamyCursor,
-FoamyShared leader election across three bar instances, and FoamyIpc over
-both the 4.5 IpcRegistry socket path and `qs ipc` (both versions)."""
+"""Runtime checks on 4.5: FoamyI18n (English, Danish and Arabic), FoamyMotion,
+FoamyPalette, FoamyStyle, FoamyPrefs, FoamyCursor, FoamyShared leader
+election across three bar instances, and FoamyIpc over both the IpcRegistry
+socket path and `qs ipc`."""
+
 import json
 import shutil
 import subprocess
@@ -23,7 +24,9 @@ def qs_ipc(run, *call):
         time.sleep(0.1)
     else:
         return None
-    result = subprocess.run(["qs", "ipc", "-i", ids[0], "call", *call], env=run.env, capture_output=True, text=True, timeout=10)
+    result = subprocess.run(
+        ["qs", "ipc", "-i", ids[0], "call", *call], env=run.env, capture_output=True, text=True, timeout=10
+    )
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -45,11 +48,11 @@ def run(host, lang):
     except ValueError:
         pass
     r.ok = "FOAMY DONE" in r.log and "FOAMY FAIL" not in r.log and not any(m in r.log for m in harness.FAILURE_MARKERS)
-    detail = next((l.split("qml: ", 1)[-1] for l in r.log.splitlines() if "FOAMY RESULT" in l), "no result")
+    detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"runtime {host} {lang}", r.ok, detail)
     ok = report(f"qs ipc call foamy.kit-demo status ({host})", ok_ipc, status or "no reply") and ok
     if not ok:
-        print("\n".join("    " + l for l in (r.failures() or r.log.splitlines()[-30:])))
+        print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     else:
         r.cleanup()
         shutil.rmtree(plugin.parent, ignore_errors=True)
@@ -57,8 +60,7 @@ def run(host, lang):
 
 
 def main():
-    languages = {"4.0": ("en",), "4.5": ("en", "da", "ar")}
-    results = [run(host, lang) for host in harness.available_hosts(what="runtime") for lang in languages[host]]
+    results = [run(host, lang) for host in harness.available_hosts(what="runtime") for lang in ("en", "da", "ar")]
     return 0 if all(results) else 1
 
 

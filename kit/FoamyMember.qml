@@ -28,13 +28,15 @@ QtObject {
   property string _joinedScope: ""
 
   function _sync() {
-    if (!_joined) return
+    if (!_joined)
+      return
     FoamyShared.setDemand(scope, member, demanding)
   }
 
   onDemandingChanged: _sync()
   onScopeChanged: {
-    if (!_joined) return
+    if (!_joined)
+      return
     FoamyShared.leave(_joinedScope, member)
     _joinedScope = scope
     FoamyShared.join(scope, member)

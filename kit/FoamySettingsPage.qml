@@ -35,40 +35,55 @@ FocusScope {
   property real maxHeight: FoamyStyle.popupMaxHeight
   default property alias content: body.data
 
-  signal back()
-  signal retry()
+  signal back
+  signal retry
 
   LayoutMirroring.enabled: FoamyI18n.rightToLeft
   LayoutMirroring.childrenInherit: true
   implicitHeight: header.implicitHeight + column.implicitHeight
 
-  function focusBack() { header.backButton.forceActiveFocus() }
-  function resetScroll() { scroll.contentY = 0 }
+  function focusBack() {
+    header.backButton.forceActiveFocus()
+  }
+  function resetScroll() {
+    scroll.contentY = 0
+  }
 
   // The page's scroll view and its wheel/ensureVisible helper.
   readonly property alias flickable: scroll
-  readonly property alias wheel: wheel
+  readonly property alias wheel: wheelScroll
 
-  function ensureVisible(item, margin) { wheel.ensureVisible(item, margin) }
+  function ensureVisible(item, margin) {
+    wheelScroll.ensureVisible(item, margin)
+  }
 
   // Focus follow: the least scroll that shows the focused control.
   function keepVisible(item) {
     var ancestor = item
-    while (ancestor && ancestor !== scroll.contentItem) ancestor = ancestor.parent
-    if (!ancestor) return
+    while (ancestor && ancestor !== scroll.contentItem)
+      ancestor = ancestor.parent
+    if (!ancestor)
+      return
     var point = item.mapToItem(scroll.contentItem, 0, 0)
     var margin = FoamyStyle.gap
-    if (point.y < scroll.contentY) scroll.contentY = Math.max(0, point.y - margin)
+    if (point.y < scroll.contentY)
+      scroll.contentY = Math.max(0, point.y - margin)
     else if (point.y + item.height > scroll.contentY + scroll.height)
       scroll.contentY = Math.max(0, Math.min(scroll.contentHeight - scroll.height, point.y + item.height - scroll.height + margin))
   }
 
-  Keys.onEscapePressed: function(event) { root.back(); event.accepted = true }
+  Keys.onEscapePressed: function (event) {
+    root.back()
+    event.accepted = true
+  }
 
   Connections {
     target: root.Window.window
     ignoreUnknownSignals: true
-    function onActiveFocusItemChanged() { if (target && target.activeFocusItem) root.keepVisible(target.activeFocusItem) }
+    function onActiveFocusItemChanged() {
+      if (target && target.activeFocusItem)
+        root.keepVisible(target.activeFocusItem)
+    }
   }
 
   // The same band as the popup's hero header, in its compact form.
@@ -81,7 +96,10 @@ FocusScope {
     onBack: root.back()
   }
 
-  FoamyWheelScroll { id: wheel; target: scroll }
+  FoamyWheelScroll {
+    id: wheelScroll
+    target: scroll
+  }
 
   Flickable {
     id: scroll
@@ -95,7 +113,9 @@ FocusScope {
     boundsBehavior: Flickable.StopAtBounds
     onContentHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
     onHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-    Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
+    Controls.ScrollBar.vertical: Controls.ScrollBar {
+      policy: Controls.ScrollBar.AsNeeded
+    }
 
     Column {
       id: column

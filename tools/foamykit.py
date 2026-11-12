@@ -5,6 +5,7 @@ Used through ../sync.sh and ../check.sh; see README.md. The native helper
 build tool is kit/native/native.py (tools/build-native.sh runs a plugin's copy).
 Standard library only.
 """
+
 import argparse
 import hashlib
 import json
@@ -12,11 +13,9 @@ import os
 import re
 import shutil
 import stat
-import struct
 import subprocess
 import sys
 import tempfile
-import tomllib
 from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +26,7 @@ def _load_native():
     """kit/native/native.py, the native helper build tool FoamyNative copies
     into plugins; check.sh uses its checks (python3 -I keeps kit/ off sys.path)."""
     import importlib.util
+
     spec = importlib.util.spec_from_file_location("foamy_native", KIT_DIR / "native/native.py")
     module = importlib.util.module_from_spec(spec)
     sys.modules["foamy_native"] = module
@@ -35,28 +35,80 @@ def _load_native():
 
 
 native = _load_native()
-from foamy_native import (  # noqa: E402
-    ARCHES, NATIVE_COMPONENT, PIN_NAME, ROOT_FILES, TOOLCHAIN_FILE, KitError, build_native, cmd_native, elf_problem,
-    native_pins, native_source_hash, read_pin, unstamped, verify_native)
+from foamy_native import KitError, verify_native  # noqa: E402
+
 STAMP_TAIL = "— do not edit; change foamy-kit and run sync"
 STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 LOCK_NAME = "foamy-kit.lock"
 CHECK_NAME = "tests/kit-check.sh"
+REVIEW_NAME = "REVIEW.md"
+# The tooling every plugin carries (README "Tooling"): the one validation
+# command, its engine, the pinned tool versions and the shared linter and
+# formatter configuration. {path in the plugin: source in foamy-kit}. The
+# sources are the kit's own files (foamy-kit validates itself with them), so
+# these are not a component: sync always writes them, stamped like kit code.
+# kit/native/native.py (TOOLING_FILES) and tools/kit-check.sh.in list the
+# same root paths; tests/test_native.py keeps them in step.
+TOOLING_FILES = {
+    ".github/workflows/checks.yml": ".github/workflows/checks.yml",
+    ".oxlintrc.json": ".oxlintrc.json",
+    ".qmlformat.ini": ".qmlformat.ini",
+    "kit/tooling/validate.py": "kit/tooling/validate.py",
+    "mise.toml": "mise.toml",
+    "ruff.toml": "ruff.toml",
+    "tests/validate.sh": "tests/validate.sh",
+}
+# AGENTS.md belongs to the plugin; sync manages only this marked block, which
+# points review agents (Codex reads AGENTS.md) at the shared REVIEW.md.
+AGENTS_NAME = "AGENTS.md"
+AGENTS_MARK = "<!-- foamy-kit review:"
+AGENTS_BEGIN = AGENTS_MARK + " begin; managed by foamy-kit sync.sh, edit outside this block -->"
+AGENTS_END = AGENTS_MARK + " end -->"
+AGENTS_BLOCK = f"""{AGENTS_BEGIN}
+## Code review
+
+Follow [REVIEW.md](REVIEW.md) when reviewing or preparing a change. It is the
+shared Foamy review standard, synced from foamy-kit. The rest of this file
+adds repository-specific rules.
+{AGENTS_END}
+"""
+AGENTS_PLACEHOLDER = b"@AGENTS_BLOCK@"
 
 
 # --------------------------------------------------------------------- stamps
+
 
 def kit_version():
     return (KIT_ROOT / "VERSION").read_text().strip()
 
 
 def kit_revision():
+    """The kit commit sync copies from, for the lock's `source` line: the full
+    id, which checks.yml fetches to run the kit's test helpers and design lint
+    at that commit. "+dirty" marks uncommitted kit changes; CI rejects it."""
     try:
-        out = subprocess.run(["git", "-C", str(KIT_ROOT), "rev-parse", "--short=12", "HEAD"],
-                             capture_output=True, text=True, timeout=10)
+        out = subprocess.run(
+            ["git", "-C", str(KIT_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10
+        )
         rev = out.stdout.strip() if out.returncode == 0 else ""
-        dirty = subprocess.run(["git", "-C", str(KIT_ROOT), "status", "--porcelain", "--", "kit", "VERSION", "tools"],
-                               capture_output=True, text=True, timeout=10).stdout.strip()
+        dirty = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(KIT_ROOT),
+                "status",
+                "--porcelain",
+                "--",
+                "kit",
+                "VERSION",
+                "tools",
+                REVIEW_NAME,
+                *TOOLING_FILES.values(),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
         return (rev or "unknown") + ("+dirty" if dirty else "")
     except (OSError, subprocess.SubprocessError):
         return "unknown"
@@ -67,7 +119,7 @@ def sha256(data):
 
 
 def comment_prefix(name):
-    return "#" if name.endswith((".sh", ".toml", ".py", ".yml")) or Path(name).name == "qmldir" else "//"
+    return "#" if name.endswith((".sh", ".toml", ".py", ".yml", ".ini")) or Path(name).name == "qmldir" else "//"
 
 
 def stamp_index(name, lines):
@@ -100,24 +152,13 @@ def read_stamp(data):
         if index < len(lines):
             match = STAMP_RE.match(lines[index])
             if match:
-                body = "".join(lines[:index] + lines[index + 1:]).encode("utf-8")
+                body = "".join(lines[:index] + lines[index + 1 :]).encode("utf-8")
                 return match.group(2), match.group(3), body
     return None
 
 
-def verify_file(path):
-    """None if intact, else a reason."""
-    data = path.read_bytes()
-    info = read_stamp(data)
-    if info is None:
-        return "not stamped"
-    _, expected, body = info
-    if sha256(body) != expected:
-        return "edited locally (body no longer matches its stamp)"
-    return None
-
-
 # ----------------------------------------------------------------- components
+
 
 def load_components():
     return json.loads((KIT_DIR / "components.json").read_text())
@@ -137,8 +178,9 @@ def component_files(name, spec):
     out = []
     for pattern in spec["files"]:
         if any(ch in pattern for ch in "*?["):
-            matches = sorted(p for p in KIT_DIR.glob(pattern)
-                             if p.is_file() and "target" not in p.relative_to(KIT_DIR).parts)
+            matches = sorted(
+                p for p in KIT_DIR.glob(pattern) if p.is_file() and "target" not in p.relative_to(KIT_DIR).parts
+            )
             if not matches:
                 raise KitError(f"components.json: {name}: {pattern} matches no file")
             out += [(f"kit/{p.relative_to(KIT_DIR).as_posix()}", p) for p in matches]
@@ -146,7 +188,13 @@ def component_files(name, spec):
             out.append((f"kit/{pattern}", KIT_DIR / pattern))
     for dest, source in sorted(spec.get("rootFiles", {}).items()):
         parts = Path(dest).parts
-        if Path(dest).is_absolute() or ".." in parts or not parts or parts[0] == "kit" or dest in (LOCK_NAME, CHECK_NAME):
+        if (
+            Path(dest).is_absolute()
+            or ".." in parts
+            or not parts
+            or parts[0] == "kit"
+            or dest in (LOCK_NAME, CHECK_NAME, REVIEW_NAME, *TOOLING_FILES)
+        ):
             raise KitError(f"components.json: {name}: invalid rootFiles path {dest}")
         out.append((dest, KIT_DIR / source))
     return out
@@ -180,12 +228,12 @@ def qmldir_for(selected, components):
                 type_name = file[:-4]
                 prefix = "singleton " if type_name in singletons else ""
                 lines.append(f"{prefix}{type_name} 1.0 {file}")
-    return ("\n".join(sorted(lines, key=lambda l: l.split()[-1])) + "\n").encode()
+    return ("\n".join(sorted(lines, key=lambda line: line.split()[-1])) + "\n").encode()
 
 
 def lock_path_ok(rel, components=None):
     """True for a path foamy-kit can own: a normalised relative path under kit/,
-    tests/kit-check.sh, or a component's rootFiles destination. The lock is
+    tests/kit-check.sh, REVIEW.md, a tooling file, or a component's rootFiles destination. The lock is
     plugin content, so anything else (`../x`, `/etc/x`, `kit/../x`) is refused
     before sync reads, overwrites or deletes it."""
     parts = rel.split("/")
@@ -193,7 +241,7 @@ def lock_path_ok(rel, components=None):
         return False
     if parts[0] == "kit" and len(parts) > 1:
         return True
-    if rel == CHECK_NAME:
+    if rel in (CHECK_NAME, REVIEW_NAME) or rel in TOOLING_FILES:
         return True
     components = load_components() if components is None else components
     return any(rel in spec.get("rootFiles", {}) for spec in components.values())
@@ -213,8 +261,11 @@ def read_lock(plugin):
             info["components"] = [c for c in parts[1].split(",") if c]
         elif len(parts) == 2 and re.fullmatch(r"[0-9a-f]{64}", parts[0]):
             if not lock_path_ok(parts[1], components):
-                raise KitError(f"{LOCK_NAME} lists {parts[1]!r}, which is not a path foamy-kit owns "
-                               "(only kit/…, tests/kit-check.sh and component root files); fix or delete the lock")
+                raise KitError(
+                    f"{LOCK_NAME} lists {parts[1]!r}, which is not a path foamy-kit owns "
+                    "(only kit/…, tests/kit-check.sh, REVIEW.md, the tooling files and component root files); "
+                    "fix or delete the lock"
+                )
             info["files"][parts[1]] = parts[0]
     return info
 
@@ -230,6 +281,7 @@ def inside(plugin, rel):
 
 # ----------------------------------------------------------------------- sync
 
+
 def planned_files(selected, components, version):
     """{relative path: bytes} for everything sync owns in a plugin."""
     files = {}
@@ -242,7 +294,14 @@ def planned_files(selected, components, version):
     for notice in sorted(notices):
         files[f"kit/{notice}"] = (KIT_ROOT / notice).read_bytes()
     template = (KIT_ROOT / "tools/kit-check.sh.in").read_bytes()
+    if template.count(AGENTS_PLACEHOLDER) != 1:
+        raise KitError("tools/kit-check.sh.in must contain @AGENTS_BLOCK@ exactly once")
+    template = template.replace(AGENTS_PLACEHOLDER, AGENTS_BLOCK.rstrip("\n").encode())
     files[CHECK_NAME] = stamped("kit-check.sh", template, version)
+    for rel, source in TOOLING_FILES.items():
+        files[rel] = stamped(rel, (KIT_ROOT / source).read_bytes(), version)
+    # Hash the guide whole, like license notices, so it stays valid Markdown.
+    files[REVIEW_NAME] = (KIT_ROOT / REVIEW_NAME).read_bytes()
     return files
 
 
@@ -250,7 +309,7 @@ def lock_bytes(version, selected, files):
     lines = [
         "# foamy-kit.lock: written by foamy-kit sync.sh; do not edit.",
         "# Hashes are of each file's body (the file without its stamp line);",
-        "# notices are hashed whole. tests/kit-check.sh verifies them.",
+        "# notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.",
         f"version {version}",
         f"source {kit_revision()}",
         "components " + ",".join(selected),
@@ -261,9 +320,62 @@ def lock_bytes(version, selected, files):
     return ("\n".join(lines) + "\n").encode()
 
 
-def lock_core(data):
-    """Lock content minus the source line (which changes with every kit commit)."""
-    return b"\n".join(l for l in data.split(b"\n") if not l.startswith(b"source "))
+def agents_with_review(current):
+    """AGENTS.md bytes with the managed review block added or refreshed.
+
+    `current` is the existing file (None when absent). Text outside the block
+    is the plugin's and is kept byte for byte. A damaged block (a marker
+    missing, repeated, reordered or edited) raises instead of guessing."""
+    if current is None:
+        return ("# Notes for coding agents\n\n" + AGENTS_BLOCK).encode()
+    try:
+        text = current.decode("utf-8")
+    except UnicodeDecodeError:
+        raise KitError(f"{AGENTS_NAME} is not UTF-8 text") from None
+    marks = [match.start() for match in re.finditer(re.escape(AGENTS_MARK), text)]
+    if not marks:
+        separator = "" if not text else "\n" if text.endswith("\n") else "\n\n"
+        return (text + separator + AGENTS_BLOCK).encode()
+    start, end = text.find(AGENTS_BEGIN), text.find(AGENTS_END)
+    stop = end + len(AGENTS_END)
+    if (
+        len(marks) != 2
+        or marks != [start, end]
+        or (start and text[start - 1] != "\n")
+        or text[stop : stop + 1] not in ("", "\n")
+    ):
+        raise KitError(
+            f"{AGENTS_NAME}: the foamy-kit review block is damaged (expected one begin and one end "
+            "marker, each on its own line); restore or delete the block, then re-run"
+        )
+    return (text[:start] + AGENTS_BLOCK + text[stop + 1 :]).encode()
+
+
+def agents_problems(plugin):
+    """Integrity problems with the plugin's AGENTS.md review block."""
+    path = plugin / AGENTS_NAME
+    if path.is_symlink() or not path.is_file():
+        return [f"{AGENTS_NAME} is missing or not a regular file (run sync.sh)"]
+    data = path.read_bytes()
+    try:
+        current = agents_with_review(data) == data
+    except KitError as error:
+        return [str(error)]
+    return [] if current else [f"{AGENTS_NAME} lacks the current foamy-kit review block (run sync.sh)"]
+
+
+def replace_file(path, data):
+    """Atomically replace `path`, keeping its permission bits (0644 if new)."""
+    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=print, add=None):
@@ -301,7 +413,7 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
     for rel in sorted(owned | set(files)):
         if not inside(plugin, rel):
             problems.append(f"{rel} resolves outside the plugin (a parent directory is a symlink)")
-    # Components' rootFiles (rust-toolchain.toml), owned now or planned.
+    # Root files (including the shared review guide), owned now or planned.
     for rel in sorted(rel for rel in owned | set(files) if not rel.startswith("kit/") and rel != CHECK_NAME):
         path = plugin / rel
         if path.is_symlink():
@@ -317,18 +429,32 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         info = read_stamp(data)
         if info is None:
             if rel in owned and sha256(data) == lock["files"][rel]:
-                pass  # an unmodified notice
+                pass  # an unmodified notice or shared document
             elif rel in files and data == files[rel]:
                 pass
             elif not force:
-                problems.append(f"{rel} is not a foamy-kit file (or a notice was edited); move it out of kit/ or use --force")
+                problems.append(
+                    f"{rel} is not a foamy-kit file (or a copied file was edited); preserve it elsewhere before syncing or use --force"
+                )
                 continue
         else:
             if sha256(info[2]) != info[1] and not force:
-                problems.append(f"{rel} was edited locally; move the change into foamy-kit, then re-run (or --force to discard it)")
+                problems.append(
+                    f"{rel} was edited locally; move the change into foamy-kit, then re-run (or --force to discard it)"
+                )
                 continue
         if rel not in files:
             removals.append(rel)
+    agents_path = plugin / AGENTS_NAME
+    agents_old = agents_new = None
+    if agents_path.is_symlink() or (agents_path.exists() and not agents_path.is_file()):
+        problems.append(f"{AGENTS_NAME} is a symlink or not a regular file")
+    else:
+        try:
+            agents_old = agents_path.read_bytes() if agents_path.exists() else None
+            agents_new = agents_with_review(agents_old)
+        except KitError as error:
+            problems.append(str(error))
     if problems:
         raise KitError(f"{plugin.name}: refusing to sync:\n  " + "\n  ".join(problems))
 
@@ -353,7 +479,12 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
             (plugin / rel).unlink()
             # A removed root file's own directories (.github/workflows), once empty.
             parent = (plugin / rel).parent
-            while not rel.startswith("kit/") and parent != plugin and not parent.is_symlink() and not any(parent.iterdir()):
+            while (
+                not rel.startswith("kit/")
+                and parent != plugin
+                and not parent.is_symlink()
+                and not any(parent.iterdir())
+            ):
                 parent.rmdir()
                 parent = parent.parent
     if not dry_run and kit_dir.is_dir():
@@ -361,13 +492,36 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         for path in sorted(kit_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
             if path.is_dir() and not path.is_symlink() and not any(path.iterdir()):
                 path.rmdir()
+    if agents_new != agents_old:
+        changed.append(AGENTS_NAME)
+        if not dry_run:
+            replace_file(agents_path, agents_new)
     new_lock = lock_bytes(version, selected, files)
     lock_path = plugin / LOCK_NAME
     old_lock = lock_path.read_bytes() if lock_path.is_file() else b""
-    if lock_core(old_lock) != lock_core(new_lock):
+    # The source line too, when every file is current: checks.yml checks the
+    # kit out at that commit, so an older one would run older helpers.
+    if old_lock != new_lock:
         changed.append(LOCK_NAME)
         if not dry_run:
             lock_path.write_bytes(new_lock)
+    # A native.pin's `kit` line names the kit its binaries match. After the
+    # files above, a pin whose source hash still matches is fresh at this
+    # version: refresh only that line (never the source hash or checksums).
+    # A stale pin keeps the version that built it until the rebuild.
+    if "FoamyNative" in selected:
+        for pin_path in native.native_pins(plugin):
+            crate = pin_path.parent.name
+            if not inside(plugin, f"{crate}/{native.PIN_NAME}"):
+                continue
+            pin = native.read_pin(pin_path)
+            if not dry_run and native.native_source_hash(plugin, crate) != pin.get("source"):
+                continue
+            data = native.refresh_pin_kit(pin_path, version)
+            if data is not None:
+                changed.append(f"{crate}/{native.PIN_NAME}")
+                if not dry_run:
+                    replace_file(pin_path, data)
 
     verb = "would update" if dry_run else "updated"
     if changed:
@@ -380,11 +534,14 @@ def sync_plugin(plugin, names, force=False, dry_run=False, validate=True, out=pr
         if os.access(validator, os.X_OK):
             result = subprocess.run([validator, str(plugin)], capture_output=True, text=True, timeout=60)
             if result.returncode != 0:
-                raise KitError(f"{plugin.name}: omarchy-plugin-validate failed after sync:\n{result.stderr or result.stdout}")
+                raise KitError(
+                    f"{plugin.name}: omarchy-plugin-validate failed after sync:\n{result.stderr or result.stdout}"
+                )
     return changed
 
 
 # ---------------------------------------------------------------------- check
+
 
 def verify_plugin(plugin, native=True):
     """List of integrity problems (empty when intact); `native` also checks
@@ -423,6 +580,7 @@ def verify_plugin(plugin, native=True):
             rel = str(path.relative_to(plugin))
             if (path.is_file() or path.is_symlink()) and rel not in lock["files"]:
                 problems.append(f"{rel} is not part of foamy-kit")
+    problems += agents_problems(plugin)
     if native:
         problems += verify_native(plugin, lock)
     return problems
@@ -437,10 +595,10 @@ RULES = {
     "radius-x2": "use FoamyStyle.radius",
     "hex-colour": "use Commons.Color or FoamyPalette (theme colours), not a hex literal",
     "unguarded-loop": "infinite animations need `running: … && !FoamyMotion.reduceMotion`",
-    "raw-ipc": "use FoamyIpc (4.5 socket fast path, 4.0 fallback)",
+    "raw-ipc": "use FoamyIpc (registers with IpcRegistry for the omarchy-shell socket fast path)",
     "opt-out-reason": "a foamy-lint opt-out needs a reason: // foamy-lint: allow <rule> — <why>",
-    "empty-glyph": "a glyph's text is empty (an icon character was lost); write it as an escape like \"\\u{f0e7}\"",
-    "pua-literal": "private-use (icon font) character written literally; editors and tools strip them, use an escape like \"\\u{f0e7}\"",
+    "empty-glyph": 'a glyph\'s text is empty (an icon character was lost); write it as an escape like "\\u{f0e7}"',
+    "pua-literal": 'private-use (icon font) character written literally; editors and tools strip them, use an escape like "\\u{f0e7}"',
 }
 # Rules that can be downgraded to warnings with --warn-pua (they fail by default).
 WARNINGS = {"pua-literal"}
@@ -497,7 +655,7 @@ def split_line(line, state):
             code.append(ch)
             blank.append(ch)
         elif ch == "/" and nxt == "/":
-            comment = line[i + 2:]
+            comment = line[i + 2 :]
             break
         elif ch == "/" and nxt == "*":
             state["block"] = True
@@ -515,7 +673,7 @@ def lint_text(name, text):
     base = os.path.basename(name)
     is_qml = name.endswith(".qml")
     state = {"block": False}
-    rows = [split_line(l, state) for l in text.splitlines()]
+    rows = [split_line(line, state) for line in text.splitlines()]
     findings = []
 
     def allowed(index, rule):
@@ -587,7 +745,7 @@ def loop_guarded(rows, index):
     for j in range(open_line, len(rows)):
         text = rows[j][1]
         if j == open_line:
-            text = text[text.rfind("{", 0, column if j == index else len(text)):]
+            text = text[text.rfind("{", 0, column if j == index else len(text)) :]
         if "reduceMotion" in text or "loopAllowed" in text:
             return True
         for ch in text:
@@ -627,8 +785,12 @@ def lint_files(plugin):
     plugin = Path(plugin)
     files = []
     try:
-        result = subprocess.run(["git", "-C", str(plugin), "ls-files", "-co", "--exclude-standard"],
-                                capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            ["git", "-C", str(plugin), "ls-files", "-co", "--exclude-standard"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         if result.returncode == 0:
             files = [plugin / f for f in result.stdout.splitlines()]
     except (OSError, subprocess.SubprocessError):
@@ -656,6 +818,7 @@ def lint_plugin(plugin):
 
 # ------------------------------------------------------------------------ cli
 
+
 def cmd_sync(args):
     names = None
     if args.components:
@@ -675,7 +838,9 @@ def cargo_target_dirs(plugin):
     """Cargo target dirs inside a plugin (`<plugin>/target`,
     `<plugin>/<crate>/target`), found by cargo's CACHEDIR.TAG."""
     plugin = Path(plugin)
-    found = [plugin / "target"] + [d / "target" for d in sorted(plugin.iterdir()) if d.is_dir() and not d.name.startswith(".")]
+    found = [plugin / "target"] + [
+        d / "target" for d in sorted(plugin.iterdir()) if d.is_dir() and not d.name.startswith(".")
+    ]
     return [d.relative_to(plugin).as_posix() for d in found if (d / "CACHEDIR.TAG").is_file()]
 
 
@@ -689,9 +854,14 @@ def cmd_check(args):
             continue
         name = plugin.resolve().name
         problems = []
-        lock = read_lock(plugin)
+        # A lock that names paths foamy-kit doesn't own is this plugin's
+        # problem (verify_plugin reports it), not a reason to stop checking.
+        try:
+            lock, lock_broken = read_lock(plugin), False
+        except KitError:
+            lock, lock_broken = None, True
         if not args.lint_only:
-            if lock is None and args.allow_unsynced:
+            if lock is None and args.allow_unsynced and not lock_broken:
                 pass
             else:
                 problems += verify_plugin(plugin)
@@ -702,8 +872,10 @@ def cmd_check(args):
             print(f"{name}: kit: {problem}")
         if not args.lint_only:
             for target in cargo_target_dirs(plugin):
-                print(f"{name}: warning: {target}/ is a cargo target dir inside the plugin; remove it and "
-                      f"export CARGO_TARGET_DIR=~/.cache/foamy-native/{name} before any cargo command")
+                print(
+                    f"{name}: warning: {target}/ is a cargo target dir inside the plugin; remove it and "
+                    f"export CARGO_TARGET_DIR=~/.cache/foamy-native/{name} before any cargo command"
+                )
         failing = [f for f in findings if not args.warn_pua or f[2] not in WARNINGS]
         for rel, line, rule, excerpt in findings:
             level = "warning: " if rule in WARNINGS and args.warn_pua else ""
@@ -749,8 +921,11 @@ def main(argv=None):
     check.add_argument("--no-lint", action="store_true")
     check.add_argument("--allow-unsynced", action="store_true", help="don't fail plugins without a lock")
     check.add_argument("--quiet", action="store_true")
-    check.add_argument("--warn-pua", action="store_true",
-                       help="report pua-literal (literal icon-font characters) as a warning instead of failing")
+    check.add_argument(
+        "--warn-pua",
+        action="store_true",
+        help="report pua-literal (literal icon-font characters) as a warning instead of failing",
+    )
     check.add_argument("--strict", action="store_true", help=argparse.SUPPRESS)  # the default since 0.3.4 tooling
     check.set_defaults(func=cmd_check)
     lint = sub.add_parser("lint", help="lint individual files")

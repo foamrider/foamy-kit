@@ -9,18 +9,45 @@ Shared by preview/render.py and tests/. Each run gets a fresh temporary root:
                        for FakePanelWindow (offscreen Qt has no layer shell)
   <root>/plugin        -> the plugin directory
   <root>/harness/      preview/qml/*.qml (mock bar, screen)
-  <root>/home, xdg dirs, runtime dir; theme colors.toml in the temp HOME
+  <root>/home, xdg dirs; theme colors.toml in the temp HOME
+
+Sockets live in a second, short directory (`Run.sockets`,
+`foamy-kit-s-<pid>-<random>`, 0700): the runtime dir (XDG_RUNTIME_DIR, where
+qs binds quickshell/by-id/<id>/ipc.sock) and the private buses' sockets. A
+unix socket path holds at most 107 bytes, and a long TMPDIR (an agent
+sandbox's) plus the run's prefix went past it: qs only logged "Failed to start
+IPC server" and `qs ipc` found no instance. The directory is in the temp dir
+when that fits, else in /tmp; a run whose socket paths still don't fit stops
+with a clear message.
 
 The environment drops WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and
-DISPLAY, points HOME and every XDG_* directory into the root, and uses the
+DISPLAY (start() refuses a run.env that has them back, unless the user set
+FOAMY_TEST_DESKTOP=1: tests never show anything on the live desktop
+otherwise), points HOME and every XDG_* directory into the root, and uses the
 offscreen platform with a 1920x1080 screen and the software renderer, so
 nothing reaches the live session. OMARCHY_PATH points at a stub holding only
-the host's i18n catalogs (data); no host script or binary is ever run.
+the host's i18n catalogs (data); no host script or binary is ever run:
+
+- Omarchy's bin directories (/usr/share/omarchy/bin, the host's ../bin, the
+  caller's $OMARCHY_PATH/bin) are dropped from PATH, and every other
+  `omarchy` / `omarchy-*` command still on PATH (a wrapper in ~/.local/bin)
+  is shadowed by a stub that logs the call to $FOAMY_OUT/host-commands.log
+  (Run.host_commands()) and exits 127. `fakebin` stand-ins come first. A
+  test that changes run.env["PATH"] puts its own directories in front of it;
+  start() refuses a PATH without the stubs, with a host command directory
+  before them, or with an Omarchy bin directory back on it.
+- An AppImage's bundled libraries and binaries ($APPDIR, e.g. an editor's
+  libnotify) are dropped from LD_LIBRARY_PATH and PATH.
+- No audio server is reachable: PULSE_SERVER and PIPEWIRE_REMOTE name dead
+  sockets, and the server lookup paths are the private runtime dir.
 
 D-Bus: by default each run gets a private dbus-daemon (no service
 activation), so MPRIS players, notifications and other session services of
 the live desktop are invisible; bus="none" points the session bus at a dead
-socket instead.
+socket instead. The system bus (NetworkManager, logind, UPower, BlueZ…) is a
+dead address by default; system_bus="private" starts a second private daemon
+for a test that registers fake system services (its address is
+Run.system_bus_address), and an explicit "unix:path=…" address uses that bus.
 
 Processes: qs (and the private bus) run in their own process group with a
 parent-death signal, so they die with the Python process even when it is
@@ -28,13 +55,13 @@ killed; stop() kills the whole group, and every live run is stopped at exit.
 Use a Run as a context manager (or call cleanup()) to remove its temp dir.
 
 Temp dirs: each run owns one directory, `<prefix><pid>-<random>` (mode 0700,
-created by mkdtemp), and only ever removes that one. Never `rm -rf` other
+created by mkdtemp), and its socket directory, and only ever removes those. Never `rm -rf` other
 runs' directories (`/tmp/foamy-kit-preview-*`): concurrent renders by other
 agents live there. Stale dirs of dead runs: `python3 preview/harness.py --gc`
 removes only those whose owner PID is gone and that no process still uses.
 """
+
 import atexit
-import ctypes
 import json
 import os
 import re
@@ -47,33 +74,55 @@ from pathlib import Path
 
 KIT_ROOT = Path(__file__).resolve().parents[1]
 PREVIEW = KIT_ROOT / "preview"
-# Host shells. 4.5 is the installed one (FOAMY_HOST_45 overrides). 4.0 is
-# opt-in: it exists only when FOAMY_HOST_40 points at a 4.0 shell directory.
-# Callers that loop over hosts use available_hosts(), which skips the others.
-KNOWN_HOSTS = ("4.0", "4.5")
-HOSTS = {}
-if os.environ.get("FOAMY_HOST_40"):
-    HOSTS["4.0"] = Path(os.environ["FOAMY_HOST_40"])
-HOSTS["4.5"] = Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")
+
+
+def _load_hostenv():
+    """The kit's preview/hostenv.py, by path: a plugin's own tests/hostenv.py
+    imported earlier must not stand in for it."""
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location("foamy_kit_hostenv", PREVIEW / "hostenv.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["foamy_kit_hostenv"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+hostenv = _load_hostenv()
+# Host shells: Omarchy 4.5 only, the installed one (FOAMY_HOST_45 overrides).
+# 4.0 support ended with kit 0.9.0: asking for it fails with a clear message,
+# and available_hosts() prints a SKIP line for it, so a plugin test that still
+# lists 4.0 keeps running its 4.5 cases. FOAMY_HOST_40 is ignored.
+KNOWN_HOSTS = ("4.5",)
+RETIRED_HOSTS = {
+    "4.0": "Omarchy 4.0 is no longer supported (foamy-kit 0.9.0 tests 4.5 only; FOAMY_HOST_40 is ignored); "
+    "drop the 4.0 case"
+}
+HOSTS = {"4.5": Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")}
 SCREEN = (1920, 1080)
-FAILURE_MARKERS = ("ReferenceError", "TypeError", "Failed to load configuration",
-                   "Cannot assign", "Unable to assign", "Non-existent attached object", "SAVE FAILED")
+# sun_path is 108 bytes with its NUL; a longer socket path can't be bound.
+SOCKET_PATH_MAX = 107
+# Where qs binds its IPC socket under XDG_RUNTIME_DIR. Instance ids are 11
+# characters on Quickshell 0.3; 16 leaves room.
+QS_IPC_SOCKET = "quickshell/by-id/" + "x" * 16 + "/ipc.sock"
+SOCKET_PREFIX = "foamy-kit-s-"
+FAILURE_MARKERS = (
+    "ReferenceError",
+    "TypeError",
+    "Failed to load configuration",
+    "Cannot assign",
+    "Unable to assign",
+    "Non-existent attached object",
+    "SAVE FAILED",
+    "Failed to start IPC server",
+)
 
 
 _LIVE = set()
 # PIDs of every qs / dbus-daemon this process started (leak checks in tests).
 STARTED = []
-try:
-    _LIBC = ctypes.CDLL(None, use_errno=True)
-except OSError:
-    _LIBC = None
-PR_SET_PDEATHSIG = 1
-
-
-def _die_with_parent():
-    """preexec_fn: SIGKILL this child when the Python process dies."""
-    if _LIBC is not None:
-        _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+_die_with_parent = hostenv.die_with_parent
 
 
 def _kill_group(process, sig=signal.SIGKILL):
@@ -97,8 +146,10 @@ def _stop_all():
 
 def install_signal_cleanup():
     """Turn SIGTERM/SIGHUP into SystemExit so finally blocks and atexit run."""
-    def handler(signum, frame):
+
+    def handler(signum, _frame):
         raise SystemExit(128 + signum)
+
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, handler)
 
@@ -119,6 +170,37 @@ def processes_under(path):
     return found
 
 
+# Shadows a host command left on PATH: logged, refused like a missing one.
+HOST_STUB = """#!/bin/sh
+printf '%s\\n' "${0##*/} $*" >> "$FOAMY_OUT/host-commands.log"
+echo "foamy-kit harness: ${0##*/} is a host command; give the test a fakebin stand-in" >&2
+exit 127
+"""
+
+
+def _socket_problem(runtime):
+    """Why qs's IPC socket under `runtime` can't be bound, or None."""
+    socket = Path(runtime) / QS_IPC_SOCKET
+    length = len(os.fsencode(str(socket)))
+    if length <= SOCKET_PATH_MAX:
+        return None
+    return (
+        f"harness: qs's IPC socket under {runtime} would be about {length} bytes, past the unix limit of "
+        f"{SOCKET_PATH_MAX}; use a shorter XDG_RUNTIME_DIR"
+    )
+
+
+def _socket_dir():
+    """A new 0700 directory for a run's sockets whose paths fit
+    SOCKET_PATH_MAX: in the temp dir when that is short enough, else /tmp."""
+    prefix = f"{SOCKET_PREFIX}{os.getpid()}-"
+    for parent in dict.fromkeys((tempfile.gettempdir(), "/tmp")):
+        # mkdtemp adds 8 characters.
+        if _socket_problem(Path(parent) / (prefix + "x" * 8) / "runtime") is None:
+            return Path(tempfile.mkdtemp(prefix=prefix, dir=parent))
+    raise SystemExit(_socket_problem(Path("/tmp") / (prefix + "x" * 8) / "runtime"))
+
+
 def host_variable(name):
     """The environment variable that points at host `name` (FOAMY_HOST_45)."""
     return f"FOAMY_HOST_{name.replace('.', '')}"
@@ -126,10 +208,10 @@ def host_variable(name):
 
 def host_problem(name):
     """Why host `name` can't be used, or None when it can."""
+    if name in RETIRED_HOSTS:
+        return RETIRED_HOSTS[name]
     if name not in KNOWN_HOSTS:
         return f"unknown host {name!r}; use one of {', '.join(KNOWN_HOSTS)}"
-    if name not in HOSTS:
-        return f"host {name} is opt-in: set {host_variable(name)} to an Omarchy {name} shell directory"
     path = HOSTS[name]
     if not (path / "Commons").is_dir() or not (path / "Ui").is_dir():
         return f"host {name} not found at {path} (set {host_variable(name)})"
@@ -139,8 +221,8 @@ def host_problem(name):
 def available_hosts(wanted=KNOWN_HOSTS, what="", require=True):
     """The hosts of `wanted` that can be used, in order. Prints a `SKIP` line
     (naming `what`, the check or render being skipped) for each other one, e.g.
-    4.0 unless FOAMY_HOST_40 is set. With `require`, none usable is an error,
-    so a run without any host fails instead of passing on SKIPs."""
+    a retired 4.0. With `require`, none usable is an error, so a run without
+    any host fails instead of passing on SKIPs."""
     usable = []
     for name in wanted:
         problem = host_problem(name)
@@ -175,7 +257,7 @@ def _code_only(line):
             continue
         if ch in "\"'`":
             quote = ch
-        elif ch == "/" and line[i + 1:i + 2] == "/":
+        elif ch == "/" and line[i + 1 : i + 2] == "/":
             break
         else:
             out.append(ch)
@@ -250,18 +332,35 @@ def build_ui(host, dest):
 
 
 class Run:
-    def __init__(self, host, shell_qml, plugin=None, theme="dark", language=None, extra=None, prefix="foamy-kit-run-",
-                 bus="private", fakebin=None, scale=1.0):
+    def __init__(
+        self,
+        host,
+        shell_qml,
+        plugin=None,
+        theme="dark",
+        language=None,
+        extra=None,
+        prefix="foamy-kit-run-",
+        bus="private",
+        fakebin=None,
+        scale=1.0,
+        system_bus="none",
+    ):
         self.host_name = host
         # Display scale (the screen's device pixel ratio): 1.25 renders what a
         # 125 % output shows, at 1.25x the pixels.
         self.scale = float(scale or 1.0)
         self.bus = bus
+        if system_bus not in ("none", "private") and not str(system_bus).startswith("unix:"):
+            raise ValueError(f"system_bus must be 'none', 'private' or a unix: address, not {system_bus!r}")
+        self.system_bus = system_bus
         self.process = None
         self.bus_process = None
+        self.system_bus_process = None
         self.log = ""
         self.ok = False
         self.host = host_dir(host)
+        self.sockets = _socket_dir()
         self.base = Path(tempfile.mkdtemp(prefix=f"{prefix}{os.getpid()}-"))
         self.root = self.base / "shell"
         self.root.mkdir()
@@ -289,7 +388,55 @@ class Run:
             for name, text in fakebin.items():
                 (bin_dir / name).write_text(text)
                 (bin_dir / name).chmod(0o755)
-            self.env["PATH"] = f"{bin_dir}:{self.env.get('PATH', '/usr/bin:/bin')}"
+            self.env["PATH"] = f"{bin_dir}:{self.env['PATH']}"
+
+    def _isolated_path(self):
+        """The caller's PATH without Omarchy's and an AppImage's bin
+        directories, behind a directory of stubs for every omarchy command
+        left on it."""
+        kept = [p for p in hostenv.isolated_path(None, self.host.parent / "bin").split(":") if p]
+        blocked = self.base / "host-bin"
+        blocked.mkdir()
+        names = set()
+        # Where the commands the stubs shadow really live (_path_problem()).
+        self._host_command_dirs = set()
+        for folder in kept:
+            try:
+                found = {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
+            except OSError:
+                continue
+            names |= found
+            if found:
+                self._host_command_dirs.add(os.path.realpath(folder))
+        for name in sorted(names):
+            (blocked / name).write_text(HOST_STUB)
+            (blocked / name).chmod(0o755)
+        return ":".join([str(blocked)] + kept)
+
+    def _path_problem(self):
+        """Why run.env["PATH"] would let a host command run, or None. A test
+        may put its own directories first; the stubs must stay in front of
+        every directory holding a command they shadow."""
+        stubs = str(self.base / "host-bin")
+        entries = [p for p in self.env.get("PATH", "").split(":") if p]
+        advice = (
+            "put the test's directories in front of the run's PATH (f\"{folder}:{run.env['PATH']}\") or use fakebin"
+        )
+        if stubs not in entries:
+            return f"harness: run.env['PATH'] no longer has the host-command stubs ({stubs}), so host commands can run; {advice}"
+        omarchy_bins = hostenv.host_bins(self.host.parent / "bin")
+        back = [p for p in entries if os.path.realpath(p) in omarchy_bins]
+        if back:
+            return f"harness: run.env['PATH'] has Omarchy's bin directory {back[0]} again; {advice}"
+        early = [p for p in entries[: entries.index(stubs)] if os.path.realpath(p) in self._host_command_dirs]
+        if early:
+            return f"harness: run.env['PATH'] puts {early[0]} before the host-command stubs, so its omarchy commands run for real; {advice}"
+        return None
+
+    def host_commands(self):
+        """Host commands the run tried (and the stubs refused), one line each."""
+        log = self.out / "host-commands.log"
+        return log.read_text(errors="replace").splitlines() if log.exists() else []
 
     def _environment(self, theme, language):
         home = self.base / "home"
@@ -299,7 +446,7 @@ class Run:
         if theme:
             source = Path(theme) if os.path.sep in str(theme) else PREVIEW / "themes" / f"{theme}.toml"
             shutil.copyfile(source, theme_dir / "colors.toml")
-        runtime = self.base / "runtime"
+        runtime = self.sockets / "runtime"
         runtime.mkdir(mode=0o700)
         omarchy = self.base / "omarchy"
         (omarchy / "default").mkdir(parents=True)
@@ -312,47 +459,104 @@ class Run:
         # The offscreen platform ignores a screen "dpr"; QT_SCALE_FACTOR gives
         # windows the scale (and grabs device pixels). The screen is sized so
         # its logical size stays SCREEN.
-        screens.write_text(json.dumps({"screens": [{"name": "FOAMY-1", "x": 0, "y": 0,
-                                                    "width": round(SCREEN[0] * self.scale), "height": round(SCREEN[1] * self.scale),
-                                                    "logicalDpi": 96, "logicalBaseDpi": 96, "dpr": 1}]}))
-        env = {key: value for key, value in os.environ.items()
-               if key not in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY", "QT_QPA_PLATFORM",
-                              "QT_QPA_PLATFORMTHEME", "QT_STYLE_OVERRIDE", "QML_IMPORT_PATH", "QML2_IMPORT_PATH",
-                              "LC_ALL", "LANGUAGE", "OMARCHY_PATH", "XDG_CURRENT_DESKTOP", "QT_SCALE_FACTOR",
-                              "QT_SCREEN_SCALE_FACTORS", "QT_AUTO_SCREEN_SCALE_FACTOR", "QT_ENABLE_HIGHDPI_SCALING")
-               and (not key.startswith("XDG_") or key in ("XDG_DATA_DIRS", "XDG_CONFIG_DIRS"))}
-        env.update({
-            "HOME": str(home),
-            "XDG_CONFIG_HOME": str(home / ".config"),
-            "XDG_STATE_HOME": str(state),
-            "XDG_CACHE_HOME": str(home / ".cache"),
-            "XDG_DATA_HOME": str(home / ".local/share"),
-            "XDG_RUNTIME_DIR": str(runtime),
-            "QT_QPA_PLATFORM": f"offscreen:configfile={screens}",
-            "QT_QUICK_BACKEND": "software",
-            "QT_QPA_PLATFORMTHEME": "basic",
-            "LANG": "en_US.UTF-8",
-            "OMARCHY_PATH": str(omarchy),
-            "OMARCHY_LANGUAGE_FILE": str(language_file),
-            "FOAMY_OUT": str(self.out),
-            "FOAMY_HOST": self.host_name,
-            "FOAMY_SCALE": str(self.scale),
-            **({"QT_SCALE_FACTOR": str(self.scale)} if self.scale != 1.0 else {}),
-            # A dead address until start() brings up the private bus.
-            "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
-        })
-        env.pop("DBUS_SYSTEM_BUS_ADDRESS", None)
+        screens.write_text(
+            json.dumps(
+                {
+                    "screens": [
+                        {
+                            "name": "FOAMY-1",
+                            "x": 0,
+                            "y": 0,
+                            "width": round(SCREEN[0] * self.scale),
+                            "height": round(SCREEN[1] * self.scale),
+                            "logicalDpi": 96,
+                            "logicalBaseDpi": 96,
+                            "dpr": 1,
+                        }
+                    ]
+                }
+            )
+        )
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if key
+            not in (
+                "WAYLAND_DISPLAY",
+                "HYPRLAND_INSTANCE_SIGNATURE",
+                "DISPLAY",
+                "QT_QPA_PLATFORM",
+                "QT_QPA_PLATFORMTHEME",
+                "QT_STYLE_OVERRIDE",
+                "QML_IMPORT_PATH",
+                "QML2_IMPORT_PATH",
+                "LC_ALL",
+                "LANGUAGE",
+                "OMARCHY_PATH",
+                "XDG_CURRENT_DESKTOP",
+                "QT_SCALE_FACTOR",
+                "QT_SCREEN_SCALE_FACTORS",
+                "QT_AUTO_SCREEN_SCALE_FACTOR",
+                "QT_ENABLE_HIGHDPI_SCALING",
+            )
+            and (not key.startswith("XDG_") or key in ("XDG_DATA_DIRS", "XDG_CONFIG_DIRS"))
+        }
+        env.update(
+            {
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(home / ".config"),
+                "XDG_STATE_HOME": str(state),
+                "XDG_CACHE_HOME": str(home / ".cache"),
+                "XDG_DATA_HOME": str(home / ".local/share"),
+                "XDG_RUNTIME_DIR": str(runtime),
+                "QT_QPA_PLATFORM": f"offscreen:configfile={screens}",
+                "QT_QUICK_BACKEND": "software",
+                "QT_QPA_PLATFORMTHEME": "basic",
+                "LANG": "en_US.UTF-8",
+                "OMARCHY_PATH": str(omarchy),
+                "OMARCHY_LANGUAGE_FILE": str(language_file),
+                "FOAMY_OUT": str(self.out),
+                "FOAMY_HOST": self.host_name,
+                "FOAMY_SCALE": str(self.scale),
+                **({"QT_SCALE_FACTOR": str(self.scale)} if self.scale != 1.0 else {}),
+                # A dead address until start() brings up the private bus.
+                "DBUS_SESSION_BUS_ADDRESS": f"unix:path={self.base}/no-session-bus",
+            }
+        )
+        env.update(
+            {
+                "PATH": self._isolated_path(),
+                # No live audio server: dead sockets, lookups in the private runtime dir.
+                "PULSE_SERVER": f"unix:{self.base}/no-pulse",
+                "PIPEWIRE_REMOTE": f"{self.base}/no-pipewire",
+                "PIPEWIRE_RUNTIME_DIR": str(runtime),
+                "PULSE_RUNTIME_PATH": str(runtime / "pulse"),
+                # Not the machine's system bus (NetworkManager, logind…) unless asked.
+                "DBUS_SYSTEM_BUS_ADDRESS": (
+                    self.system_bus if self.system_bus.startswith("unix:") else f"unix:path={self.base}/no-system-bus"
+                ),
+            }
+        )
+        library_path = hostenv.library_path()
+        if library_path:
+            env["LD_LIBRARY_PATH"] = library_path
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+        env.pop("PULSE_COOKIE", None)
         if self.plugin:
             env["FOAMY_PLUGIN_URL"] = self.plugin.as_uri()
         return env
 
-    def _start_bus(self):
-        config = self.base / "bus.conf"
-        socket = self.base / "bus"
+    def _start_bus(self, kind="session"):
+        """A private dbus-daemon (`kind` session or system); its process, or
+        None when dbus-daemon is missing (the address stays dead)."""
+        name = "bus" if kind == "session" else "system-bus"
+        config = self.base / f"{name}.conf"
+        socket = self.sockets / name
         config.write_text(f"""<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
-  <type>session</type>
+  <type>{kind}</type>
   <listen>unix:path={socket}</listen>
   <auth>EXTERNAL</auth>
   <policy context="default">
@@ -364,25 +568,68 @@ class Run:
 """)
         daemon = shutil.which("dbus-daemon")
         if not daemon:
-            return  # stays on the dead address
-        self.bus_process = subprocess.Popen([daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            start_new_session=True, preexec_fn=_die_with_parent)
+            return None  # stays on the dead address
+        process = subprocess.Popen(
+            [daemon, f"--config-file={config}", "--nofork", "--nopidfile"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            preexec_fn=_die_with_parent,
+        )
+        variable = "DBUS_SESSION_BUS_ADDRESS" if kind == "session" else "DBUS_SYSTEM_BUS_ADDRESS"
         for _ in range(100):
             if socket.exists():
-                self.env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={socket}"
-                return
+                self.env[variable] = f"unix:path={socket}"
+                break
             time.sleep(0.02)
+        return process
+
+    @property
+    def system_bus_address(self):
+        """The system bus address the run's processes see (with
+        system_bus="private", the private daemon's once start_buses() or
+        start() ran)."""
+        return self.env["DBUS_SYSTEM_BUS_ADDRESS"]
+
+    def start_buses(self):
+        """Start the run's private buses (the session bus, and the system bus
+        with system_bus="private") without qs, so a test can put fake
+        services on them first: Quickshell looks for some (NetworkManager)
+        only once, at start. start() reuses them; stop() ends them."""
+        _LIVE.add(self)
+        if self.bus == "private" and self.bus_process is None:
+            self.bus_process = self._start_bus()
+            if self.bus_process is not None:
+                STARTED.append(self.bus_process.pid)
+        if self.system_bus == "private" and self.system_bus_process is None:
+            self.system_bus_process = self._start_bus("system")
+            if self.system_bus_process is not None:
+                STARTED.append(self.system_bus_process.pid)
+        return self
 
     def start(self):
-        """Start qs (and the private bus). Pair with stop()."""
-        _LIVE.add(self)
-        if self.bus == "private":
-            self._start_bus()
+        """Start qs (and the private buses, unless start_buses() did). Pair
+        with stop()."""
+        # Before anything starts: a test may have changed XDG_RUNTIME_DIR, PATH
+        # or put the live display back.
+        problem = (
+            _socket_problem(self.env["XDG_RUNTIME_DIR"])
+            or self._path_problem()
+            or hostenv.desktop_problem(self.env, "harness: run.env")
+        )
+        if problem:
+            raise SystemExit(problem)
+        self.start_buses()
         self._log_file = (self.base / "qs.log").open("w")
-        self.process = subprocess.Popen(["qs", "-p", str(self.root), "--no-color"], env=self.env, stdout=self._log_file,
-                                        stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=_die_with_parent)
-        STARTED.extend(p.pid for p in (self.process, self.bus_process) if p is not None)
+        self.process = subprocess.Popen(
+            ["qs", "-p", str(self.root), "--no-color"],
+            env=self.env,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            preexec_fn=_die_with_parent,
+        )
+        STARTED.append(self.process.pid)
         return self
 
     def stop(self):
@@ -391,7 +638,8 @@ class Run:
             _kill_group(self.process, signal.SIGTERM)
         _kill_group(self.process)
         _kill_group(self.bus_process)
-        self.process = self.bus_process = None
+        _kill_group(self.system_bus_process)
+        self.process = self.bus_process = self.system_bus_process = None
         log_file = getattr(self, "_log_file", None)
         if log_file and not log_file.closed:
             log_file.close()
@@ -406,31 +654,62 @@ class Run:
         except subprocess.TimeoutExpired:
             pass
 
+    def wait_for_log(self, text, timeout=20):
+        """Wait (while qs runs) until its log shows `text`; True when it did."""
+        log = self.base / "qs.log"
+        return wait_for(
+            lambda: text in log.read_text(errors="replace") if log.exists() else False,
+            timeout,
+            stop=lambda: self.process is None or self.process.poll() is not None,
+        )
+
     def run(self, timeout=40, done="FOAMY DONE"):
         self.start()
         try:
             self.wait(timeout)
         finally:
             self.stop()
-        self.ok = done in self.log and not any(marker in self.log for marker in FAILURE_MARKERS) and "FOAMY FAIL" not in self.log
+        self.ok = (
+            done in self.log
+            and not any(marker in self.log for marker in FAILURE_MARKERS)
+            and "FOAMY FAIL" not in self.log
+        )
         return self
 
     def __enter__(self):
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *_exc):
         self.stop()
         self.cleanup()
         return False
 
     def failures(self):
-        return [line for line in self.log.splitlines()
-                if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)]
+        return [
+            line
+            for line in self.log.splitlines()
+            if "FOAMY FAIL" in line or any(marker in line for marker in FAILURE_MARKERS)
+        ]
 
     def cleanup(self):
-        """Remove this run's own temp dir (and nothing else)."""
+        """Remove this run's own temp and socket dirs (and nothing else)."""
         self.stop()
         shutil.rmtree(self.base, ignore_errors=True)
+        shutil.rmtree(self.sockets, ignore_errors=True)
+
+
+def wait_for(condition, timeout=10, interval=0.05, stop=None):
+    """Poll `condition()` until it returns something truthy (returned) or
+    `timeout` seconds pass (None); `stop()` true ends the wait early. For
+    test steps whose length depends on machine load: no fixed sleeps."""
+    deadline = time.monotonic() + timeout
+    while True:
+        value = condition()
+        if value:
+            return value
+        if time.monotonic() >= deadline or (stop is not None and stop()):
+            return condition() or None
+        time.sleep(interval)
 
 
 OWNED_DIR = re.compile(r"^foamy-kit-[\w.-]*?-(\d+)-[\w]+$")
@@ -438,9 +717,13 @@ OWNED_DIR = re.compile(r"^foamy-kit-[\w.-]*?-(\d+)-[\w]+$")
 
 def gc(tmp=None, dry_run=False):
     """Remove harness temp dirs whose owner process is gone and that no live
-    process references. Returns the removed paths."""
+    process references. Returns the removed paths. Without `tmp`, the socket
+    dirs a long temp dir's runs put in /tmp are looked at too."""
     removed = []
-    for path in sorted(Path(tmp or tempfile.gettempdir()).glob("foamy-kit-*")):
+    paths = list(Path(tmp or tempfile.gettempdir()).glob("foamy-kit-*"))
+    if tmp is None and Path(tempfile.gettempdir()) != Path("/tmp"):
+        paths += Path("/tmp").glob(f"{SOCKET_PREFIX}*")
+    for path in sorted(paths):
         match = OWNED_DIR.match(path.name)
         if not match or not path.is_dir() or path.is_symlink() or path.stat().st_uid != os.getuid():
             continue
@@ -454,6 +737,7 @@ def gc(tmp=None, dry_run=False):
 
 if __name__ == "__main__":
     import sys
+
     if sys.argv[1:2] == ["--gc"]:
         for path in gc(dry_run="--dry-run" in sys.argv):
             print(f"removed {path}")

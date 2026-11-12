@@ -33,7 +33,7 @@ Item {
   readonly property bool hot: enabled && (hasCursor || mouse.containsMouse)
   readonly property alias switchItem: track
 
-  signal clicked()
+  signal clicked
   signal hovered(bool isHovered)
 
   implicitWidth: FoamyStyle.popupWidth - FoamyStyle.padding * 2
@@ -49,8 +49,10 @@ Item {
   Accessible.description: description
   Accessible.checkable: true
   Accessible.checked: checked
-  Accessible.onPressAction: if (root.enabled) root.clicked()
-  Accessible.onToggleAction: if (root.enabled) root.clicked()
+  Accessible.onPressAction: if (root.enabled)
+    root.clicked()
+  Accessible.onToggleAction: if (root.enabled)
+    root.clicked()
 
   // Hover / cursor / focus: a fill reaching a little past the text, so the
   // label stays aligned with section titles and fields.
@@ -63,7 +65,11 @@ Item {
     color: root.hot || root.activeFocus ? FoamyPalette.hoverFill : "transparent"
     border.width: root.activeFocus ? 1 : 0
     border.color: root.accent
-    Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+    Behavior on color {
+      ColorAnimation {
+        duration: FoamyMotion.hover
+      }
+    }
   }
 
   Column {
@@ -122,7 +128,8 @@ Item {
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: if (root.enabled) root.clicked()
+    onClicked: if (root.enabled)
+      root.clicked()
     onContainsMouseChanged: root.hovered(containsMouse)
   }
 }

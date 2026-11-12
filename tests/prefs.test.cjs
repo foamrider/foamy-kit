@@ -96,6 +96,66 @@ test("array and object types", () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.value(rich, {}, "plan"))), { days: [] }, "defaults are copied");
 });
 
+test("storedProblem() names an invalid stored value; absent and null are fine", () => {
+  const settings = { folders: [{ path: "/a" }, { nope: 1 }], route: { from: 1 }, name: 7, plan: null };
+  assert.strictEqual(Prefs.storedProblem(rich, settings, "folders"), "Each folder needs a path.");
+  assert.strictEqual(Prefs.storedProblem(rich, settings, "route"), Prefs.NOT_ALLOWED);
+  assert.strictEqual(Prefs.storedProblem(rich, settings, "name"), Prefs.NOT_ALLOWED);
+  assert.strictEqual(Prefs.storedProblem(rich, settings, "plan"), "", "null is no stored value");
+  assert.strictEqual(Prefs.storedProblem(rich, {}, "folders"), "", "absent");
+  assert.strictEqual(Prefs.storedProblem(rich, null, "folders"), "", "no settings");
+  assert.strictEqual(Prefs.storedProblem(rich, { folders: [{ path: "/a" }] }, "folders"), "", "valid");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.storedProblems(rich, settings))),
+    { folders: "Each folder needs a path.", route: Prefs.NOT_ALLOWED, name: Prefs.NOT_ALLOWED });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.value(rich, settings, "folders"))), [], "it still reads as the default");
+});
+
+test("save() keeps an invalid stored array (user data) unless forced", () => {
+  const calls = [];
+  const bar = { shell: { updateEntryInline: (id, s) => { calls.push(JSON.parse(JSON.stringify(s))); return true; } } };
+  const stored = { id: "foamy.x", folders: [{ path: "/a" }, { path: "/b" }, { path: "/c" }], name: "n" };   // over maxItems
+  const refused = Prefs.save(bar, "foamy.x", rich, stored, "folders", [{ path: "/new" }]);
+  assert.strictEqual(refused.ok, false);
+  assert.strictEqual(refused.storedInvalid, true);
+  assert.strictEqual(refused.error, Prefs.STORED_INVALID);
+  assert.strictEqual(refused.command.length, 0, "no CLI command either");
+  assert.strictEqual(calls.length, 0, "nothing written");
+  const cli = Prefs.save({ shell: { updateEntryInline: () => false } }, "foamy.x", rich, stored, "folders", [{ path: "/new" }]);
+  assert.ok(!cli.ok && cli.storedInvalid && cli.command.length === 0, "the CLI path refuses too");
+  const shape = Prefs.save(bar, "foamy.x", rich, { folders: "not a list" }, "folders", []);
+  assert.ok(shape.storedInvalid, "a stored value of the wrong type is kept as well");
+  assert.ok(Prefs.keepsStored(rich, stored, "folders"));
+  assert.ok(!Prefs.keepsStored(rich, stored, "folders", { folders: [{ path: "/ok" }] }), "a valid pending value is what is stored");
+
+  const other = Prefs.save(bar, "foamy.x", rich, stored, "name", "m");
+  assert.ok(other.ok && other.inline, "other keys still save");
+  assert.deepStrictEqual(calls[0].folders, stored.folders, "and carry the stored array over verbatim");
+
+  const forced = Prefs.save(bar, "foamy.x", rich, stored, "folders", [{ path: "/new" }], {}, true);
+  assert.ok(forced.ok && forced.inline && !forced.storedInvalid, "force replaces it");
+  assert.deepStrictEqual(calls[1].folders, [{ path: "/new" }]);
+});
+
+test("invalid stored scalars and objects are replaced as before", () => {
+  const writes = [];
+  const bar = { shell: { updateEntryInline: (id, s) => { writes.push(s); return true; } } };
+  assert.ok(Prefs.save(bar, "foamy.x", rich, { route: { from: 1 } }, "route", { from: 1, to: 2 }).ok, "object");
+  assert.ok(Prefs.save(bar, "foamy.x", rich, { name: 7 }, "name", "ok").ok, "scalar");
+  assert.ok(Prefs.save(bar, "foamy.x", rich, { folders: null }, "folders", [{ path: "/a" }]).ok, "a null array");
+  assert.ok(Prefs.save(bar, "foamy.x", rich, {}, "folders", [{ path: "/a" }]).ok, "an absent array");
+  assert.strictEqual(writes.length, 4);
+});
+
+test("plain() copies settings as JSON; anything but an object is {}", () => {
+  const stored = { list: [1, { a: 2 }], name: "x" };
+  const copy = Prefs.plain(stored);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(copy)), stored);
+  copy.list.push(3);
+  assert.strictEqual(stored.list.length, 2, "the copy is independent");
+  for (const bad of [null, undefined, "x", 3, [1, 2]])
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.plain(bad))), {}, JSON.stringify(bad));
+});
+
 test("equal / overlay / settle", () => {
   assert.ok(Prefs.equal({ a: 1, b: [1, { c: 2, d: 3 }] }, { b: [1, { d: 3, c: 2 }], a: 1 }), "key order");
   assert.ok(!Prefs.equal([1, 2], [2, 1]));

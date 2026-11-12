@@ -6,14 +6,23 @@
 //! minutes. [`DeadlineStream`] re-arms the socket timeout to the time left
 //! before **every** read and write, and fails with [`DeadlineExceeded`]
 //! (kind `TimedOut`) once the deadline has passed, so everything layered on
-//! top of it (rustls, an HTTP parser, `read_to_end`) is bounded as a whole:
+//! top of it (rustls, an HTTP parser, `read_to_end`) is bounded as a whole.
+//!
+//! Only reads and writes: the stream exists once connected, so bound the
+//! connect yourself (`TcpStream::connect_timeout` with the time left), and
+//! name resolution too (`ToSocketAddrs` has no timeout: resolve before, or
+//! connect to an address).
 //!
 //! ```no_run
+//! use std::net::{SocketAddr, TcpStream};
 //! use std::time::{Duration, Instant};
 //! use foamy_helper::net::DeadlineStream;
 //! # fn main() -> std::io::Result<()> {
-//! let tcp = std::net::TcpStream::connect(("127.0.0.1", 8384))?;
-//! let mut stream = DeadlineStream::new(tcp, Instant::now() + Duration::from_secs(5));
+//! let deadline = Instant::now() + Duration::from_secs(5);
+//! let address = SocketAddr::from(([127, 0, 0, 1], 8384));
+//! let left = deadline.saturating_duration_since(Instant::now());
+//! let tcp = TcpStream::connect_timeout(&address, left)?;
+//! let mut stream = DeadlineStream::new(tcp, deadline);
 //! // e.g. rustls::StreamOwned::new(connection, stream), then read and write.
 //! # Ok(()) }
 //! ```
