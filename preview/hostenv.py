@@ -201,6 +201,89 @@ def check(env, *outputs):
         assert not any(b + "/" in str(text) for b in named), "a host script ran"
 
 
+# kit/clipboard.sh stand-ins (clipboard_fakes()). wl-paste and
+# clipboard-fixture are this one script: bash builtins only, so it starts in
+# milliseconds (clipboard.sh gives a paste 2 s in all, and a Python stand-in's
+# start-up alone took longer than that on a loaded machine).
+CLIPBOARD_STAND_IN = r"""#!/bin/bash
+state=$TEST_CLIPBOARD_STATE
+if [[ ${0##*/} == clipboard-fixture ]]; then
+  printf '%s' "$1" >"$state"
+  exit 0
+fi
+mode=$(<"$state")
+printf '%s' "$$" >"$state.pid"
+args=$(printf ',"%s"' "$@")
+printf '[%s]' "${args#,}" >"$state.args"
+xs() { local s; printf -v s '%*s' "$1" ''; printf '%s' "${s// /x}"; }
+case $mode in
+  failure) exit 1 ;;
+  ignore) trap '' TERM; exec sleep 30 ;;
+  stall) exec sleep 30 ;;
+  stream) while :; do xs 4096; done ;;
+  slow) while :; do printf x; sleep 0.1; done ;;
+  delayed) sleep 0.4; printf later ;;
+  loaded) sleep 2.5; printf late ;;
+  unicode) printf '%s' "/home/test/Blåbær 📁" ;;
+  empty) ;;
+  limit) xs 16384 ;;
+  large) xs 16385 ;;
+  nul) printf 'a\0b' ;;
+  lines) printf 'one\r\ntwo\xe2\x80\xa8three' ;;
+  long) xs 400 ;;
+  *) printf folder ;;
+esac
+"""
+# Modes whose outcome is clipboard.sh's own 2 s deadline.
+CLIPBOARD_DEADLINE_MODES = ("stall", "slow", "ignore")
+# timeout(1) in front of clipboard.sh: the deadline modes keep the real 2 s,
+# every other mode (it ends by itself) gets 60 s.
+CLIPBOARD_TIMEOUT = r"""#!/bin/bash
+case $(<"$TEST_CLIPBOARD_STATE") in
+  stall | slow | ignore) ;;
+  *) [[ $1 == --signal=KILL && $2 == 2s ]] && set -- "$1" 60s "${@:3}" ;;
+esac
+exec @TIMEOUT@ "$@"
+"""
+
+
+def clipboard_fakes(folder, env=None):
+    """Stand-ins for a test of kit/clipboard.sh (run directly, or through
+    SafeTextField in a qs) in `folder` (created): `wl-paste`,
+    `clipboard-fixture MODE` (what the next paste does) and `timeout`.
+    Returns the environment overrides: TEST_CLIPBOARD_STATE (the mode file,
+    "normal" to start) and PATH, `env`'s (default the caller's) with
+    `folder` first.
+
+    Modes: normal ("folder"), unicode, empty, limit (16384 bytes), large
+    (16385), nul, lines (CR LF and U+2028), long (400 bytes), delayed (0.4
+    s), loaded (2.5 s: a paste on a loaded machine), failure (exit 1),
+    stream (endless), and the deadline modes stall, slow (a byte per 0.1 s)
+    and ignore (ignores SIGTERM). Each paste writes its argv to
+    <state>.args (JSON) and its pid to <state>.pid.
+
+    The stand-in timeout keeps clipboard.sh's 2 s for the deadline modes,
+    whose outcome is that deadline, and gives every other mode 60 s, so a
+    loaded machine (the paste is six processes) can't turn a paste that
+    works into a timeout. clipboard.sh itself is unchanged."""
+    folder = Path(folder)
+    path = (env if env is not None else os.environ).get("PATH", "/usr/bin:/bin")
+    real = shutil.which("timeout", path=path)
+    if not real:
+        raise FileNotFoundError(f"timeout(1) is not on PATH ({path})")
+    write_commands(
+        folder,
+        {
+            "wl-paste": CLIPBOARD_STAND_IN,
+            "clipboard-fixture": CLIPBOARD_STAND_IN,
+            "timeout": CLIPBOARD_TIMEOUT.replace("@TIMEOUT@", real),
+        },
+    )
+    state = folder / "clipboard-mode"
+    state.write_text("normal")
+    return {"TEST_CLIPBOARD_STATE": str(state), "PATH": f"{folder}:{path}"}
+
+
 def die_with_parent():
     """preexec_fn: SIGKILL this child when the Python process dies."""
     if _LIBC is not None:

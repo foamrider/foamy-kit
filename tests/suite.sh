@@ -28,5 +28,6 @@ run node i18n.test.cjs
 run python3 -I test_sync_check.py
 run python3 -I test_validate.py
 run python3 -I test_compare.py
+run python3 -I test_clipboard.py
 echo "SKIP the Quickshell, Omarchy host and Rust tests (run tests/validate.sh without --ci/--fast)"
 exit $status

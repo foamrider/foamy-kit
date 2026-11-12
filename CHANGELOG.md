@@ -225,6 +225,21 @@
   between `run.start_buses()` and `run.start()`; weather and train, whose
   runtime tests assume offline because the system bus is dead, can test the
   online and offline paths with it.
+- `hostenv.clipboard_fakes(folder)`: the load-proof stand-ins for
+  `kit/clipboard.sh` tests, from foamy-media's f7de0ac: a bash-builtin
+  `wl-paste`/`clipboard-fixture` and a `timeout` that keeps the real 2 s for
+  the deadline modes and gives a paste that ends by itself 60 s.
+  clipboard.sh's fixed 2 s for the whole six-process paste made every
+  plugin's copied clipboard tests fail under load (media: 6 of 12 runs at
+  load 36-50); its runtime behaviour is unchanged and it has no test switch.
+  `tests/test_clipboard.py` is the kit's first test of clipboard.sh (shell
+  only, so `tests/suite.sh --ci` runs it).
+
+  Plugins (hostenv comes from the kit checkout): bolt, github, media,
+  syncthing and weather replace the wl-paste mock in their
+  `tests/test_clipboard.py` with `hostenv.clipboard_fakes()` (media already
+  has the same stand-ins) and wait as long as a working paste may take
+  (media's `pasteWait`, 60 s) in their QML case.
 - `render.py --language` names a catalog the plugin has. `--language nb` on
   a plugin whose catalog is `no.json` (Omarchy's Norwegian code; there is
   no `nb`) rendered English without a word; it now renders `no` and says

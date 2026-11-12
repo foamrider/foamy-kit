@@ -26,6 +26,7 @@ run python3 -I test_features.py
 run python3 -I test_lifecycle.py
 run python3 -I test_ipc_cli.py
 run python3 -I test_compare.py
+run python3 -I test_clipboard.py
 run python3 -I test_harness.py
 run python3 -I test_isolation.py
 run python3 -I test_fake_nm.py

@@ -943,6 +943,18 @@ import harness, hostenv
   - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
     whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
     fake.
+  - `clipboard_fakes(folder, env=None)`: stand-ins for a test of
+    `kit/clipboard.sh` (directly, or through `SafeTextField` in a qs):
+    `wl-paste`, `clipboard-fixture MODE` and `timeout` in `folder`; returns
+    `TEST_CLIPBOARD_STATE` and `PATH` (`folder` first) to add to the
+    environment. The stand-in wl-paste is bash builtins only, so it starts
+    in milliseconds, and the stand-in `timeout` keeps clipboard.sh's real 2 s
+    for the modes whose outcome is that deadline (`CLIPBOARD_DEADLINE_MODES`:
+    stall, slow, ignore) and gives every other mode 60 s: a paste through
+    six processes on a loaded machine no longer fails a test that is
+    otherwise right. clipboard.sh itself is unchanged. Modes and the files
+    each paste writes (`<state>.args`, `<state>.pid`) are in the docstring;
+    `tests/test_clipboard.py` is a full example.
   - `ProcessGroup(argv, **popen)`: a `qs` (or service) the test starts
     itself, as the leader of its own process group. `stop(grace=2.0)` (or
     leaving the `with` block) sends SIGTERM to the whole group, SIGKILL to
