@@ -263,9 +263,41 @@ def main():
             "an unset session bus becomes the dead address too (no fallback to the login bus)",
             unset["DBUS_SESSION_BUS_ADDRESS"] == f"unix:path={base}/no-session-bus",
         )
+        # Live-desktop use is the user's choice (FOAMY_TEST_DESKTOP=1), not the test's.
+        os.environ.pop(hostenv.DESKTOP_OPT_IN, None)
+        try:
+            hostenv.isolate(dict(live), base, display=True)
+            refusal = ""
+        except RuntimeError as error:
+            refusal = str(error)
+        ok &= report(
+            "isolate(display=True) refuses without FOAMY_TEST_DESKTOP=1",
+            "WAYLAND_DISPLAY" in refusal and "FOAMY_TEST_DESKTOP=1" in refusal,
+            refusal or "no refusal",
+        )
+        # Display values that name no real compositor: were the guard missing,
+        # qs would still reach nothing (and it draws offscreen anyway).
+        unreal = {"WAYLAND_DISPLAY": "foamy-kit-no-such-display", "DISPLAY": ":foamy-kit-none"}
+        refused_run = harness.Run("4.5", IPC, prefix="foamy-kit-desktop-")
+        try:
+            refused_run.env.update(unreal)
+            try:
+                refused_run.start()
+                refusal = ""
+            except SystemExit as error:
+                refusal = str(error)
+            ok &= report(
+                "Run.start() refuses a run.env with the display back, before qs starts",
+                refused_run.process is None and "FOAMY_TEST_DESKTOP=1" in refusal and "WAYLAND_DISPLAY" in refusal,
+                refusal or "qs started",
+            )
+        finally:
+            refused_run.stop()
+            refused_run.cleanup()
+        os.environ[hostenv.DESKTOP_OPT_IN] = "1"
         own = hostenv.isolate(dict(live), base, session_bus="unix:path=/tmp/test-bus", display=True)
         ok &= report(
-            "session_bus= and display=True keep what the test chose",
+            "with FOAMY_TEST_DESKTOP=1, session_bus= and display=True keep what the test chose",
             own["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/tmp/test-bus"
             and all(own.get(k) == live[k] for k in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")),
             str({k: own.get(k) for k in live}),

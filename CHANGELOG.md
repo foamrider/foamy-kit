@@ -211,6 +211,23 @@
   now get a dead one; one that needs a bus runs under `dbus-run-session`.
   An offscreen qs needs `QT_QPA_PLATFORMTHEME` set (`basic`): without a
   display the desktop's `gtk3` theme stops it.
+- Live-desktop use in tests is the user's opt-in: `hostenv.isolate(display=True)`
+  raises RuntimeError, and `harness.Run.start()` refuses a `run.env` with
+  `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or `DISPLAY` put back,
+  unless `FOAMY_TEST_DESKTOP=1` is set. Plugin tests put real surfaces on
+  the user's desktop during validate runs. `hostenv.desktop_problem(env,
+  what)` gives the same verdict for a test's own checks. README "Test
+  helpers" and REVIEW.md section 6 state the rule: tests never show anything
+  on the live desktop unless the user opts in.
+
+  Plugins (hostenv comes from the kit checkout): the clipboard wayland modes
+  of bolt, github and weather (`display=True`) now need
+  `FOAMY_TEST_DESKTOP=1` as well as their platform switch. A test that puts
+  `WAYLAND_DISPLAY` into its environment itself after `isolate()`
+  (syncthing's clipboard wayland mode) checks
+  `hostenv.desktop_problem(env, …)` before it starts qs, or passes
+  `display=True` instead. notifications' own `desktop_opt_in()` gate can
+  rely on the kit's.
 - `preview/fake_nm.py`: a shared stand-in NetworkManager for the run's
   private system bus (from foamy-github's `tests/fake_nm.py`): no devices,
   the connectivity a state file names (`set_connectivity(file, value)`,

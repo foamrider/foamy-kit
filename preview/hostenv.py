@@ -86,6 +86,22 @@ def isolated_path(value=None, *extra_bins):
 # What isolate() drops unless display=True: the live compositor, Hyprland
 # and X11.
 DISPLAY_VARIABLES = ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")
+# Tests never show anything on the live desktop unless the user sets this to
+# 1 for the run: a validate run used to put test surfaces on the user's screen.
+DESKTOP_OPT_IN = "FOAMY_TEST_DESKTOP"
+
+
+def desktop_problem(env, what):
+    """Why `what` must not run with `env`: it keeps a variable that reaches the
+    live desktop (DISPLAY_VARIABLES) and the user has not set
+    FOAMY_TEST_DESKTOP=1 in this process's environment. None when it may."""
+    kept = [name for name in DISPLAY_VARIABLES if env.get(name)]
+    if not kept or os.environ.get(DESKTOP_OPT_IN) == "1":
+        return None
+    return (
+        f"{what} keeps {', '.join(kept)}, which reach the live desktop; tests never show anything there "
+        f"unless the user opts in: set {DESKTOP_OPT_IN}=1 to run it on purpose"
+    )
 
 
 def isolate(env, base, session_bus=None, display=False):
@@ -101,9 +117,14 @@ def isolate(env, base, session_bus=None, display=False):
     terminal, where a test's qs would reach the live notification daemon and
     media players. WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and DISPLAY
     leave unless `display=True` (a test that runs on the live compositor
-    on purpose)."""
+    on purpose), which raises RuntimeError unless FOAMY_TEST_DESKTOP=1 is
+    set."""
     if session_bus is not None and not str(session_bus).startswith("unix:"):
         raise ValueError(f"session_bus must be a unix: address, not {session_bus!r}")
+    if display:
+        problem = desktop_problem(env, "hostenv.isolate(display=True)")
+        if problem:
+            raise RuntimeError(problem)
     env["PATH"] = isolated_path(env.get("PATH", "/usr/bin:/bin"))
     libraries = library_path(env.get("LD_LIBRARY_PATH", ""))
     if libraries:

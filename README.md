@@ -1000,6 +1000,14 @@ import harness, hostenv
   Python condition and returns its value (or None after the timeout);
   **`Run.wait_for_log(text, timeout)`** waits until the running shell logs
   `text` (a `FOAMY READY` line before an IPC call).
+- **Tests never show anything on the live desktop unless the user opts
+  in** with `FOAMY_TEST_DESKTOP=1` for that run. `harness.Run` draws
+  offscreen, and its `start()` refuses a `run.env` with `WAYLAND_DISPLAY`,
+  `HYPRLAND_INSTANCE_SIGNATURE` or `DISPLAY` put back; `hostenv.isolate()`
+  drops them and refuses `display=True`, both unless the variable is `1`.
+  `tests/validate.sh` and `tests/suite.sh` never set it: a test that needs
+  the live compositor stays out of the suite (or skips with that reason)
+  and runs only when the user asks for it.
 - **`preview/hostenv.py`** for what runs outside `harness.Run`, or needs a
   private Omarchy tree:
   - `isolate(env, base, session_bus=None, display=False)`: the harness's
@@ -1009,7 +1017,8 @@ import harness, hostenv
     addresses, and no `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or
     `DISPLAY`. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
     inside `dbus-run-session`); one that runs on the live compositor on
-    purpose passes `display=True`. Set `QT_QPA_PLATFORMTHEME` (`basic`) for
+    purpose passes `display=True`, which raises RuntimeError unless the user
+    set `FOAMY_TEST_DESKTOP=1`. Set `QT_QPA_PLATFORMTHEME` (`basic`) for
     an offscreen qs: the desktop's `gtk3` theme needs a display and stops qs.
     `library_path()`, `isolated_path()` and `host_bins()` are the parts.
   - `make(base, app, env=None, stubs=None, names=())`: environment overrides

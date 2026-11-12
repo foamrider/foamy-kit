@@ -21,7 +21,9 @@ when that fits, else in /tmp; a run whose socket paths still don't fit stops
 with a clear message.
 
 The environment drops WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and
-DISPLAY, points HOME and every XDG_* directory into the root, and uses the
+DISPLAY (start() refuses a run.env that has them back, unless the user set
+FOAMY_TEST_DESKTOP=1: tests never show anything on the live desktop
+otherwise), points HOME and every XDG_* directory into the root, and uses the
 offscreen platform with a 1920x1080 screen and the software renderer, so
 nothing reaches the live session. OMARCHY_PATH points at a stub holding only
 the host's i18n catalogs (data); no host script or binary is ever run:
@@ -608,8 +610,13 @@ class Run:
     def start(self):
         """Start qs (and the private buses, unless start_buses() did). Pair
         with stop()."""
-        # Before anything starts: a test may have changed XDG_RUNTIME_DIR or PATH.
-        problem = _socket_problem(self.env["XDG_RUNTIME_DIR"]) or self._path_problem()
+        # Before anything starts: a test may have changed XDG_RUNTIME_DIR, PATH
+        # or put the live display back.
+        problem = (
+            _socket_problem(self.env["XDG_RUNTIME_DIR"])
+            or self._path_problem()
+            or hostenv.desktop_problem(self.env, "harness: run.env")
+        )
         if problem:
             raise SystemExit(problem)
         self.start_buses()
