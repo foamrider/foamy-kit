@@ -28,6 +28,9 @@ import "FoamyPrefs.js" as Prefs
 //   saveTimeoutMs the whole group is SIGKILLed, and so is what's left of it
 //   when the save is stopped by a signal or the queue is destroyed. The next
 //   save starts only after that, so a timed-out save can't write late.
+// - `settings` is read as a plain JSON copy (`storedSettings`): a list that
+//   arrives as a QML sequence wrapper (settings passed through createObject)
+//   is not an Array and would read as an invalid stored array.
 // - Each save merges over `effectiveSettings` (settings + values saved but
 //   not yet reflected back), so two quick saves never undo each other.
 // - A pending value is dropped once `settings` shows it, or after
@@ -56,8 +59,10 @@ QtObject {
   property int saveTimeoutMs: 20000
   readonly property int stderrLimit: 4096
 
+  // Everything below reads this copy, never `settings` itself (see above).
+  readonly property var storedSettings: Prefs.plain(settings)
   property var pending: ({})
-  readonly property var effectiveSettings: Prefs.overlay(settings, pending)
+  readonly property var effectiveSettings: Prefs.overlay(storedSettings, pending)
   readonly property bool saving: inFlight
   property bool inFlight: false
   readonly property bool busy: saving || waiting.length > 0
@@ -95,7 +100,7 @@ QtObject {
 
   function save(key, value, force) {
     var issue = Prefs.problem(fields, key, value)
-    if (!issue && force !== true && Prefs.keepsStored(fields, settings, key, pending))
+    if (!issue && force !== true && Prefs.keepsStored(fields, storedSettings, key, pending))
       issue = Prefs.STORED_INVALID
     if (issue) {
       error = issue
@@ -146,7 +151,7 @@ QtObject {
   }
 
   function run(key, value, force) {
-    var result = Prefs.save(bar, moduleName, fields, settings, key, value, pending, force)
+    var result = Prefs.save(bar, moduleName, fields, storedSettings, key, value, pending, force)
     if (!result.ok) {
       error = result.error
       // A kept invalid array isn't retryable: the same save would refuse again.
@@ -170,7 +175,7 @@ QtObject {
     // 4.5 reflects an inline save synchronously: `settings` already changed
     // inside Prefs.save(), before this value became pending, so settle now or
     // it would mask later outside changes and be written back by the next save.
-    pending = Prefs.settle(settings, pending)
+    pending = Prefs.settle(storedSettings, pending)
     if (result.inline) {
       saved(key, value)
       Qt.callLater(advance)
@@ -253,7 +258,7 @@ QtObject {
     run(next.key, next.value, next.force)
   }
 
-  onSettingsChanged: pending = Prefs.settle(settings, pending)
+  onStoredSettingsChanged: pending = Prefs.settle(storedSettings, pending)
 
   property Timer expiry: Timer {
     interval: 1000

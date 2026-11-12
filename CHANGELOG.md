@@ -223,6 +223,19 @@
   `FoamyScheduleDay { labelComponent: Component { TrainText { } } … }` in the
   settings page, and point the schedule unit tests at the kit (or drop them:
   the kit tests cover them).
+- `FoamyPrefsQueue` reads `settings` through a plain JSON copy
+  (`storedSettings`, `FoamyPrefs.plain()`). A list that reaches the queue
+  as a QML sequence wrapper (settings passed through `createObject`, as the
+  bar and plugin tests do) fails `Array.isArray`, so it read as an invalid
+  stored array: the setting showed its default, `storedProblem()` named it
+  and, with the stored-array rule above, every save of it was refused
+  (foamy-github). A reflected wrapper also never settled its pending value.
+  An invalid stored array is still refused. Code that calls `FoamyPrefs.js`
+  directly passes `Prefs.plain(settings)` the same way.
+
+  After syncing: a plugin's own JSON copy in front of the queue
+  (foamy-github's `settings: JSON.parse(JSON.stringify(root.settings || {}))`)
+  is redundant and can go.
 
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit

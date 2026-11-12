@@ -146,6 +146,16 @@ test("invalid stored scalars and objects are replaced as before", () => {
   assert.strictEqual(writes.length, 4);
 });
 
+test("plain() copies settings as JSON; anything but an object is {}", () => {
+  const stored = { list: [1, { a: 2 }], name: "x" };
+  const copy = Prefs.plain(stored);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(copy)), stored);
+  copy.list.push(3);
+  assert.strictEqual(stored.list.length, 2, "the copy is independent");
+  for (const bad of [null, undefined, "x", 3, [1, 2]])
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.plain(bad))), {}, JSON.stringify(bad));
+});
+
 test("equal / overlay / settle", () => {
   assert.ok(Prefs.equal({ a: 1, b: [1, { c: 2, d: 3 }] }, { b: [1, { d: 3, c: 2 }], a: 1 }), "key order");
   assert.ok(!Prefs.equal([1, 2], [2, 1]));

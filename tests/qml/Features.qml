@@ -343,6 +343,27 @@ ShellRoot {
         a: ""
       })
   }
+  // A panel handed its settings through createObject (as the bar and the
+  // plugin tests do) sees each list as a QML sequence wrapper, which fails
+  // Array.isArray.
+  Component {
+    id: wrappedQueueComponent
+    FoamyPrefsQueue {
+      bar: storedBar
+      fields: shell.fields
+    }
+  }
+  Component {
+    id: settingsHolder
+    QtObject {
+      property var settings: ({})
+    }
+  }
+  function wrappedSettings(settings) {
+    return settingsHolder.createObject(shell, {
+      settings: settings
+    }).settings
+  }
   property var storedFailures: []
   Connections {
     target: storedQueue
@@ -640,6 +661,59 @@ ShellRoot {
       list: [9],
       a: "x"
     }, "the forced value is written")
+
+    // --- FoamyPrefsQueue: a list passed in as a QML sequence wrapper -----------------
+    var wrappedList = shell.wrappedSettings({
+      list: [1, 2]
+    }).list
+    check(!Array.isArray(wrappedList) && wrappedList.length === 2, "createObject hands a list over as a sequence wrapper")
+    var wrappedQueue = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped",
+      settings: {
+        id: "foamy.wrapped",
+        list: [1, 2],
+        a: ""
+      }
+    })
+    eq(wrappedQueue.storedProblem("list"), "", "a wrapped valid list has no stored problem")
+    eq(wrappedQueue.storedProblems, {}, "storedProblems is empty")
+    eq(wrappedQueue.value("list"), [1, 2], "it reads as stored, not as the default")
+    check(Array.isArray(wrappedQueue.value("list")), "as a real Array")
+    var savedBefore = storedBar.saved.length
+    check(wrappedQueue.save("list", [1, 2, 3]), "a save of the wrapped list isn't refused")
+    eq(wrappedQueue.error, "", "and sets no error")
+    var wrappedWrite = storedBar.saved[savedBefore] || {}
+    eq([wrappedWrite.list, wrappedWrite.a], [[1, 2, 3], ""], "the new list is written")
+    // No list stored yet, so the save goes through either way; the host then
+    // reflects it as a wrapper.
+    var wrappedNew = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped-new",
+      settings: {
+        id: "foamy.wrapped-new",
+        a: ""
+      }
+    })
+    check(wrappedNew.save("list", [5]), "a first list saves")
+    check("list" in wrappedNew.pending, "and is pending until the host reflects it")
+    wrappedNew.settings = shell.wrappedSettings({
+      id: "foamy.wrapped-new",
+      list: [5],
+      a: ""
+    })
+    eq(Object.keys(wrappedNew.pending), [], "pending settles when the host reflects the list as a wrapper")
+    eq(wrappedNew.storedProblems, {}, "and the reflected list is no stored problem")
+    var wrappedInvalid = wrappedQueueComponent.createObject(shell, {
+      moduleName: "foamy.wrapped-invalid",
+      settings: {
+        id: "foamy.wrapped-invalid",
+        list: [1, 2, 3, 4],
+        a: ""
+      }
+    })
+    eq(wrappedInvalid.storedProblem("list"), "That value isn't allowed.", "a wrapped invalid list is still a stored problem")
+    check(!wrappedInvalid.save("list", [9]), "and a save over it is still refused")
+    eq(wrappedInvalid.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with the stored-invalid message")
+    eq(storedBar.saved.length, savedBefore + 2, "nothing more was written")
 
     // --- FoamyPrefsQueue: CLI, newest value per key, failure + retry ------------------
     cliQueue.save("a", "first")
