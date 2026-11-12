@@ -109,6 +109,32 @@ def render(
             run.cleanup()
 
 
+# Language codes people type that Omarchy names differently: its Norwegian
+# is "no" (default/i18n/locales.json has no "nb").
+LANGUAGE_ALIASES = {"nb": "no"}
+
+
+def catalog_language(plugin, language):
+    """The language to render for `--language`: as given when the plugin has
+    i18n/<language>.json (or its base language's), the Omarchy code when
+    only that catalog exists (nb -> no). Without a catalog the shell would
+    show English, so that stops the render (SystemExit). None and en pass."""
+    if not language or language == "en":
+        return language
+    catalogs = {path.stem for path in (Path(plugin) / "i18n").glob("*.json")}
+    if language in catalogs or language.split("-")[0] in catalogs:
+        return language
+    alias = LANGUAGE_ALIASES.get(language)
+    if alias in catalogs:
+        print(f"render: --language {language}: Omarchy calls it {alias!r}; rendering {alias}", file=sys.stderr)
+        return alias
+    have = ", ".join(sorted(catalogs)) or "none"
+    raise SystemExit(
+        f"render: --language {language}: {Path(plugin).name} has no i18n/{language}.json (catalogs: {have}), "
+        "so the render would show English"
+    )
+
+
 def dev_copy(plugin, ref, before_preview):
     """Extract `ref` of the plugin repo (git archive: the repo is not touched)
     into a temp dir and make it renderable offscreen. Returns the copy, or
@@ -235,7 +261,7 @@ def main():
     parser.add_argument("--preview", default=None)
     parser.add_argument("--states", default="", help="comma-separated subset of previewStates")
     parser.add_argument("--theme", default="dark", help="dark, light, or a colors.toml path")
-    parser.add_argument("--language", default=None, help="language code (4.5 only)")
+    parser.add_argument("--language", default=None, help="Omarchy language code with a plugin catalog (nb reads as no)")
     parser.add_argument("--position", default="top", choices=["top", "bottom", "left", "right"])
     parser.add_argument("--rounding", type=int, default=6, help="Hyprland decoration:rounding to simulate")
     parser.add_argument(
@@ -280,6 +306,7 @@ def main():
         return 0
     plugin = Path(args.plugin).resolve()
     out = Path(args.out or f"/tmp/foamy-preview-{plugin.name}")
+    language = catalog_language(plugin, args.language)
     if args.host in harness.RETIRED_HOSTS:
         raise SystemExit(f"render: --host {args.host}: {harness.RETIRED_HOSTS[args.host]}")
     hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="render")
@@ -293,7 +320,7 @@ def main():
             args.preview,
             [s for s in args.states.split(",") if s],
             args.theme,
-            args.language,
+            language,
             args.position,
             args.rounding,
             args.keep,

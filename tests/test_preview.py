@@ -69,8 +69,52 @@ def pixel_differs(png, x, y, other):
         return False
 
 
-def main():
+def languages():
+    """--language names a catalog the plugin has: nb (no such Omarchy code)
+    is read as no when only no.json exists, and a language without a
+    catalog stops the render instead of silently rendering English."""
     ok = True
+    with tempfile.TemporaryDirectory(prefix="foamy-kit-language-") as work:
+        plugin = Path(work) / "foamy-norsk"
+        (plugin / "i18n").mkdir(parents=True)
+        for name in ("en", "no", "pt"):
+            (plugin / "i18n" / f"{name}.json").write_text("{}")
+        cases = (
+            (None, None),
+            ("en", "en"),
+            ("no", "no"),
+            ("nb", "no"),
+            ("pt-BR", "pt-BR"),
+            ("da", "render: --language da: foamy-norsk has no i18n/da.json"),
+        )
+        for asked, expected in cases:
+            try:
+                got = render.catalog_language(plugin, asked)
+            except SystemExit as error:
+                got = str(error)
+            ok &= report(
+                f"--language {asked}: {expected}",
+                got == expected or (expected and str(got).startswith(expected)),
+                str(got),
+            )
+        (plugin / "i18n/nb.json").write_text("{}")
+        ok &= report("--language nb stays nb when nb.json exists", render.catalog_language(plugin, "nb") == "nb")
+        cli = subprocess.run(
+            [sys.executable, "-I", str(KIT_ROOT / "preview/render.py"), str(plugin), "--language", "da"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        ok &= report(
+            "render.py --language da on a plugin without da.json fails before rendering",
+            cli.returncode != 0 and "has no i18n/da.json" in cli.stderr and "PNGs" not in cli.stdout,
+            cli.stderr.strip()[-200:],
+        )
+    return ok
+
+
+def main():
+    ok = languages()
     out_root = KIT_ROOT / "tests/out/preview"
     plugin = synced_demo()
     for host in harness.available_hosts(what="preview render"):

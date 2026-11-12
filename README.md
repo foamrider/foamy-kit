@@ -850,7 +850,11 @@ FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da`, `--position`,
 `--rounding`, `--scale 1.25` (display scale: windows get that device pixel
 ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
-`--timeout`, `--bus private|none`, `--keep`.
+`--timeout`, `--bus private|none`, `--keep`. `--language` takes an Omarchy
+code the plugin has a catalog for (`i18n/<code>.json`, or its base
+language's); without one the render stops instead of showing English.
+Omarchy's Norwegian is `no`: `--language nb` renders `no` when only
+`no.json` exists.
 
 Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 

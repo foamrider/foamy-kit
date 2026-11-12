@@ -225,6 +225,11 @@
   between `run.start_buses()` and `run.start()`; weather and train, whose
   runtime tests assume offline because the system bus is dead, can test the
   online and offline paths with it.
+- `render.py --language` names a catalog the plugin has. `--language nb` on
+  a plugin whose catalog is `no.json` (Omarchy's Norwegian code; there is
+  no `nb`) rendered English without a word; it now renders `no` and says
+  so. A language with no catalog (nor its base language's) stops the render
+  with the catalogs it has, before qs starts.
 - `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
   replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
   the same template: a translated key switching no → da/ar → en live, the
