@@ -585,20 +585,34 @@ class Run:
     @property
     def system_bus_address(self):
         """The system bus address the run's processes see (with
-        system_bus="private", the private daemon's once start() ran)."""
+        system_bus="private", the private daemon's once start_buses() or
+        start() ran)."""
         return self.env["DBUS_SYSTEM_BUS_ADDRESS"]
 
+    def start_buses(self):
+        """Start the run's private buses (the session bus, and the system bus
+        with system_bus="private") without qs, so a test can put fake
+        services on them first: Quickshell looks for some (NetworkManager)
+        only once, at start. start() reuses them; stop() ends them."""
+        _LIVE.add(self)
+        if self.bus == "private" and self.bus_process is None:
+            self.bus_process = self._start_bus()
+            if self.bus_process is not None:
+                STARTED.append(self.bus_process.pid)
+        if self.system_bus == "private" and self.system_bus_process is None:
+            self.system_bus_process = self._start_bus("system")
+            if self.system_bus_process is not None:
+                STARTED.append(self.system_bus_process.pid)
+        return self
+
     def start(self):
-        """Start qs (and the private bus). Pair with stop()."""
+        """Start qs (and the private buses, unless start_buses() did). Pair
+        with stop()."""
         # Before anything starts: a test may have changed XDG_RUNTIME_DIR or PATH.
         problem = _socket_problem(self.env["XDG_RUNTIME_DIR"]) or self._path_problem()
         if problem:
             raise SystemExit(problem)
-        _LIVE.add(self)
-        if self.bus == "private":
-            self.bus_process = self._start_bus()
-        if self.system_bus == "private":
-            self.system_bus_process = self._start_bus("system")
+        self.start_buses()
         self._log_file = (self.base / "qs.log").open("w")
         self.process = subprocess.Popen(
             ["qs", "-p", str(self.root), "--no-color"],
@@ -608,7 +622,7 @@ class Run:
             start_new_session=True,
             preexec_fn=_die_with_parent,
         )
-        STARTED.extend(p.pid for p in (self.process, self.bus_process, self.system_bus_process) if p is not None)
+        STARTED.append(self.process.pid)
         return self
 
     def stop(self):

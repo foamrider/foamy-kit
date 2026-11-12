@@ -794,6 +794,32 @@ reach is isolated by default (0.9.0):
   needs one opts in: `Run(…, system_bus="private")` starts a second private
   daemon (`Run.system_bus_address`) for its fake services, and
   `system_bus="unix:path=…"` uses a bus the test runs itself.
+  `Run.start_buses()` brings the private buses up before qs, for a fake
+  that must be there when qs starts (Quickshell looks for NetworkManager
+  only once, at start); `start()` then reuses them.
+- **A fake NetworkManager.** `preview/fake_nm.py` owns
+  `org.freedesktop.NetworkManager` on the run's private system bus, with no
+  devices and the connectivity a state file names (`fake_nm.FULL`,
+  `LIMITED`, `PORTAL`, `NONE`, `UNKNOWN`; full when the file is missing),
+  re-read every 100 ms with PropertiesChanged on a change. Quickshell's
+  `Networking.connectivity` reads it, so a test takes the network down and
+  up by writing the file. It needs dbus-python and PyGObject (the system's).
+
+  ```python
+  import fake_nm
+  run = harness.Run(host, shell, plugin=plugin, system_bus="private")
+  state = run.base / "connectivity"
+  run.start_buses()
+  with fake_nm.start(run.system_bus_address, state):   # returns once it owns the name
+      run.start()
+      fake_nm.set_connectivity(state, fake_nm.NONE)
+      …
+  run.stop()
+  ```
+
+  `fake_nm.start()` runs it in its own process group (`hostenv.ProcessGroup`)
+  and raises RuntimeError with the service's output when it isn't ready
+  within its timeout. `tests/test_fake_nm.py` covers it.
 The plugin is loaded over `file://`, like the shell loads it, so plugin
 subdirectories need no qmldir.
 

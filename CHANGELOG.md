@@ -211,6 +211,20 @@
   now get a dead one; one that needs a bus runs under `dbus-run-session`.
   An offscreen qs needs `QT_QPA_PLATFORMTHEME` set (`basic`): without a
   display the desktop's `gtk3` theme stops it.
+- `preview/fake_nm.py`: a shared stand-in NetworkManager for the run's
+  private system bus (from foamy-github's `tests/fake_nm.py`): no devices,
+  the connectivity a state file names (`set_connectivity(file, value)`,
+  written atomically), PropertiesChanged on a change. `fake_nm.start(address,
+  state)` returns its `hostenv.ProcessGroup` once it owns the name, or raises
+  with its output. `harness.Run.start_buses()` brings the private buses up
+  before qs: Quickshell looks for NetworkManager only once, when it starts,
+  so a fake started after qs (as github's `runtime-lifecycle.py` does) leaves
+  `Networking` with "Could not find an available backend".
+
+  Plugins: github replaces `tests/fake_nm.py` with the kit's and starts it
+  between `run.start_buses()` and `run.start()`; weather and train, whose
+  runtime tests assume offline because the system bus is dead, can test the
+  online and offline paths with it.
 - `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
   replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
   the same template: a translated key switching no → da/ar → en live, the
