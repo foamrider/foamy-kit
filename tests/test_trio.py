@@ -44,7 +44,9 @@ Item {
 
 
 def git(repo, *args):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", "-C", str(repo), *args], capture_output=True, text=True, check=True
+    ).stdout
 
 
 def make_repo(base, fail_on_45=False):

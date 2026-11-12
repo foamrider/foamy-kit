@@ -183,7 +183,9 @@ def main():
     repo.mkdir()
 
     def git(*a):
-        return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, check=True).stdout
+        return subprocess.run(
+            ["git", "-c", "commit.gpgsign=false", "-C", str(repo), *a], capture_output=True, text=True, check=True
+        ).stdout
 
     git("init", "-q", "-b", "dev")
     (repo / "README.md").write_text("example\n")
