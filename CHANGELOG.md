@@ -246,6 +246,23 @@
   (it used to keep the old line then, so `source` could name an older kit
   than the one the plugin was last synced from). `+dirty` still marks
   uncommitted kit changes.
+- `checks.yml` checks foamy-kit out at the lock's `source` commit and exports
+  `FOAMY_KIT` for `tests/validate.sh --ci`. The kit's test helpers
+  (`hostenv.clipboard_fakes()`) and design lint are not synced, and the
+  runner had no kit checkout: since bolt, github, media, syncthing and
+  weather moved their clipboard mocks to hostenv, their clipboard shell cases
+  skipped in CI, and design-lint always skipped there. The step fetches over
+  public https into `$RUNNER_TEMP` (outside the checkout), keeps the job
+  read-only and fails, before validate, when `source` is not a full commit
+  id or github.com does not have that commit yet.
+
+  Plugins: re-sync (`./sync.sh ../foamy-*`) from a committed foamy-kit that
+  is pushed to github.com, and commit `checks.yml` and `foamy-kit.lock`
+  together; push the kit before the plugin, or the job fails at the kit
+  checkout. Until the re-sync, the old `checks.yml` keeps skipping those
+  cases. Later kit commits change `source` on the next sync: commit the lock
+  with it. The design lint now runs in CI, so `check.sh <plugin>` must pass
+  there too.
 - Docs: `FoamyText.tooltip()`'s comment asks for one item per line (a
   list joined into one line loses whole items past 100 characters). README:
   the preview contract is `readonly property var popup: previewPopup` with

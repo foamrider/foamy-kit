@@ -175,7 +175,8 @@ non-ignored files.
 - `tests/suite.sh`, required: the plugin's node, Python and offscreen runtime
   tests. It gets `--ci` (no Quickshell, no Omarchy host: run only node and
   host-free Python tests) and `--fast` (skip the slow runtime tests), and
-  must exit nonzero on any failure. `FOAMY_KIT` is set when the kit was found,
+  must exit nonzero on any failure. `FOAMY_KIT` is set when the kit was found
+  (in CI, `checks.yml` checks it out),
   and the pinned tools (node included) come first on `PATH`. Under `--ci`,
   skip only what needs Quickshell or the host: `kit/clipboard.sh`'s shell
   cases (through `hostenv.clipboard_fakes()`) need neither, so a clipboard
@@ -255,6 +256,18 @@ for pushes to main and dev and for pull requests, with read-only contents
 permission and no secrets; actions/checkout and jdx/mise-action are pinned by
 commit. It sits beside verify-native.yml, which still rebuilds and attests
 native helpers.
+
+The design lint and the kit's test helpers (`preview/hostenv.py`,
+`harness.py`) are not synced, so in a plugin the job first fetches
+foamy-kit over public https at the commit `foamy-kit.lock`'s `source` line
+names, into `$RUNNER_TEMP/foamy-kit` (outside the checkout, so no check reads
+it), and exports `FOAMY_KIT`. The helpers then match the synced files, and
+the design lint and the suites' host-free kit cases (such as
+`hostenv.clipboard_fakes()`) run in CI. The job fails, before validate,
+when `source` is not a full commit id (an abbreviated id from an older
+sync.sh, or `+dirty`: re-sync from a committed kit) or when github.com does
+not have that commit yet (a plugin synced from an unpushed kit commit: push
+foamy-kit, then re-run the job). In foamy-kit itself the step does nothing.
 
 ## Native helpers
 

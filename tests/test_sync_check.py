@@ -166,7 +166,86 @@ def lock_source_tests(base):
     )
     git(kit, "checkout", "-q", "--", "kit/FoamyStyle.qml")
     sh(str(kit / "sync.sh"), str(plugin))
+    ok &= workflow_kit_tests(base, kit, plugin, second)
     return ok
+
+
+def workflow_kit_tests(base, kit, plugin, commit):
+    """checks.yml's kit checkout step, run as the runner would (bash, a clean
+    environment), against a local remote in place of github.com."""
+    ok = True
+    script = workflow_step_script(KIT_ROOT / ".github/workflows/checks.yml", "Check out foamy-kit")
+    remote = base / "remote-kit.git"
+    git(base, "clone", "-q", "--bare", str(kit), str(remote))
+
+    def step(cwd, case):
+        runner = base / f"runner-{case}"
+        runner.mkdir()
+        github_env = runner / "env"
+        github_env.write_text("")
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": str(runner),
+            "RUNNER_TEMP": str(runner),
+            "GITHUB_ENV": str(github_env),
+            "FOAMY_KIT_URL": f"file://{remote}",
+            "GIT_CONFIG_NOSYSTEM": "1",
+        }
+        result = subprocess.run(
+            ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        return result.returncode, result.stdout + result.stderr, github_env.read_text(), runner / "foamy-kit"
+
+    code, out, github_env, checkout = step(plugin, "ok")
+    head = git(checkout, "rev-parse", "HEAD") if (checkout / ".git").is_dir() else ""
+    ok &= report(
+        "checks.yml checks out the lock's kit commit and exports FOAMY_KIT",
+        code == 0 and github_env == f"FOAMY_KIT={checkout}\n" and head == commit and (checkout / "check.sh").is_file(),
+        out.strip()[-300:],
+    )
+    lock = plugin / foamykit.LOCK_NAME
+    original = lock.read_text()
+    cases = [
+        ("unpushed", commit, "f" * 40, "could not fetch foamy-kit commit " + "f" * 40),
+        ("dirty", commit, commit + "+dirty", "not a full foamy-kit commit id"),
+        ("short", commit, commit[:12], "not a full foamy-kit commit id"),
+    ]
+    for case, old, new, message in cases:
+        lock.write_text(original.replace(f"source {old}\n", f"source {new}\n"))
+        code, out, github_env, _ = step(plugin, case)
+        ok &= report(
+            f"checks.yml fails a {case} source and exports nothing",
+            code != 0 and message in out and github_env == "",
+            out.strip()[-300:],
+        )
+    lock.write_text(original)
+    code, out, github_env, checkout = step(kit, "kit")
+    ok &= report(
+        "in foamy-kit itself the step fetches nothing",
+        code == 0 and github_env == "" and not checkout.exists(),
+        out.strip()[-300:],
+    )
+    return ok
+
+
+def workflow_step_script(workflow, name):
+    """The `run: |` block of the step whose name starts with `name` (stdlib
+    only: no YAML parser), dedented."""
+    lines = workflow.read_text().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip().startswith(f"- name: {name}"))
+    run = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == "run: |")
+    indent = len(lines[run]) - len(lines[run].lstrip()) + 2
+    body = []
+    for line in lines[run + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) < indent:
+            break
+        body.append(line[indent:])
+    return "\n".join(body) + "\n"
 
 
 def main():
