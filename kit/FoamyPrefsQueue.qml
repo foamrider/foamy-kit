@@ -38,11 +38,12 @@ import "FoamyPrefs.js" as Prefs
 // - An array whose stored value is invalid (user data the schema rejects)
 //   is never replaced by save(key, value): it fails at once with
 //   FoamyPrefs.STORED_INVALID, nothing is written and it isn't retryable.
-//   storedProblem(key) / storedProblems say so, for the panel to show and to
-//   block editing; save(key, value, true) replaces it on purpose.
+//   storedProblems.<key> says so, for the panel to show and to block
+//   editing (storedProblem(key) returns the same, for code that isn't a
+//   binding); save(key, value, true) replaces it on purpose.
 //
-//     FoamySettingsError { text: FoamyI18n.t(prefs.storedProblem("accounts") ? "Fix the account list in shell.json first." : "") }
-//     FoamyButton { enabled: !prefs.storedProblem("accounts"); onClicked: prefs.save("accounts", next) }
+//     FoamySettingsError { text: FoamyI18n.t(prefs.storedProblems.accounts ? "Fix the account list in shell.json first." : "") }
+//     FoamyButton { enabled: !prefs.storedProblems.accounts; onClicked: prefs.save("accounts", next) }
 //
 // - error is an English message for FoamyI18n.t(): "That value isn't
 //   allowed.", "Couldn't save the setting.", "The saved list in shell.json

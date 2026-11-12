@@ -103,7 +103,7 @@
   values, reads and the inline/CLI paths are unchanged.
 
   After syncing: a plugin whose array settings hold user data should show
-  `storedProblem(key)` (and block the editor, or offer a confirmed "start
+  `storedProblems.<key>` (and block the editor, or offer a confirmed "start
   over" that saves with force), and add the new message to its catalogs if
   it shows `prefs.error`. foamy-teams will (accounts).
 

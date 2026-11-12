@@ -365,6 +365,9 @@ ShellRoot {
     }).settings
   }
   property var storedFailures: []
+  // The documented bindings: both follow the queue's settings.
+  readonly property string storedListProblem: storedQueue.storedProblems.list || ""
+  readonly property string storedListProblemCall: storedQueue.storedProblem("list")
   Connections {
     target: storedQueue
     function onFailed(key, value, error) {
@@ -646,6 +649,7 @@ ShellRoot {
     eq(storedQueue.storedProblem("a"), "", "a valid stored value has no problem")
     eq(Object.keys(storedQueue.storedProblems), ["list"], "storedProblems lists it")
     eq(storedQueue.value("list"), [], "it still reads as the default")
+    eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
     check(!storedQueue.save("list", [9]), "a save over the invalid stored list is refused")
     eq(storedQueue.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with its own message")
     eq(storedFailures, ["The saved list in shell.json isn't valid, so it wasn't replaced."], "failed() reports it")
@@ -661,6 +665,7 @@ ShellRoot {
       list: [9],
       a: "x"
     }, "the forced value is written")
+    eq([storedListProblem, storedListProblemCall], ["", ""], "and both bindings clear once the forced list is in effect")
 
     // --- FoamyPrefsQueue: a list passed in as a QML sequence wrapper -----------------
     var wrappedList = shell.wrappedSettings({
