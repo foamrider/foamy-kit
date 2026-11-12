@@ -5,10 +5,11 @@ system bus (`harness.Run(…, system_bus="private")`).
 Quickshell's `Networking` (`Networking.connectivity`) reads only this
 object. The fake owns org.freedesktop.NetworkManager with no devices and the
 connectivity a state file names (NetworkManager's NMConnectivityState: 4
-full, 3 limited, 2 portal, 1 none, 0 unknown; 4 when the file is missing or
-unreadable). It re-reads the file every 100 ms and sends PropertiesChanged
-when the value changes, so a test takes the network down and up by writing
-the file.
+full, 3 limited, 2 portal, 1 none, 0 unknown; 4 when the file is missing,
+the last value while it is empty or invalid). It re-reads the file every
+100 ms and sends PropertiesChanged when the value changes, so a test takes
+the network down and up by writing the file, with set_connectivity() (an
+atomic replace).
 
   import fake_nm
   run = harness.Run(host, shell, plugin=plugin, system_bus="private")
@@ -31,6 +32,7 @@ import os
 import select
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -41,24 +43,39 @@ OUTPUT_LIMIT = 8192
 UNKNOWN, NONE, PORTAL, LIMITED, FULL = range(5)
 
 
-def connectivity(file):
-    """The connectivity the state file names; FULL when missing or invalid."""
+def connectivity(file, last):
+    """The connectivity the state file names: FULL when it is missing, `last`
+    (the value the service reports now) when it is empty, unreadable or not
+    0-4. A test that writes the file in place leaves it empty or half
+    written for a moment; that must not look like a change (to FULL, online)."""
     try:
-        value = int(Path(file).read_text().strip() or FULL)
-    except (OSError, ValueError):
+        text = Path(file).read_text()
+    except FileNotFoundError:
         return FULL
-    return value if UNKNOWN <= value <= FULL else FULL
+    except (OSError, UnicodeDecodeError):
+        return last
+    try:
+        value = int(text.strip())
+    except ValueError:
+        return last
+    return value if UNKNOWN <= value <= FULL else last
 
 
 def set_connectivity(file, value):
-    """Write `value` (UNKNOWN…FULL) to the state file in one step, so the
-    service never reads half a write."""
+    """Write `value` (UNKNOWN…FULL) to the state file in one step (a unique
+    temporary file beside it, then rename), so the service never reads half
+    a write."""
     if value not in range(UNKNOWN, FULL + 1):
         raise ValueError(f"connectivity must be 0-4, not {value!r}")
     file = Path(file)
-    partial = file.with_name(file.name + ".partial")
-    partial.write_text(f"{value}\n")
-    os.replace(partial, file)
+    fd, partial = tempfile.mkstemp(dir=file.parent, prefix=f".{file.name}.")
+    try:
+        with os.fdopen(fd, "w") as out:
+            out.write(f"{value}\n")
+        os.replace(partial, file)
+    except BaseException:
+        Path(partial).unlink(missing_ok=True)
+        raise
 
 
 def _load_hostenv():
@@ -115,7 +132,7 @@ def main():
             # The object keeps the BusName (and so the name) referenced.
             super().__init__(bus_name=name, object_path=PATH)
             self.file = file
-            self.value = connectivity(file)
+            self.value = connectivity(file, FULL)
 
         def properties(self):
             # 70: NM_STATE_CONNECTED_GLOBAL, 60: CONNECTED_SITE, 50:
@@ -161,7 +178,7 @@ def main():
             pass
 
         def poll(self):
-            value = connectivity(self.file)
+            value = connectivity(self.file, self.value)
             if value != self.value:
                 self.value = value
                 props = self.properties()

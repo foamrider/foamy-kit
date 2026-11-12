@@ -64,6 +64,42 @@ def main():
         refused = True
     ok &= report("set_connectivity() refuses a value outside 0-4", refused)
 
+    # The state file as the service reads it: FULL only when it is missing; an
+    # empty or invalid read (a write in progress) keeps the last value.
+    with tempfile.TemporaryDirectory(prefix="foamy-kit-fake-nm-state-") as work:
+        state = Path(work) / "connectivity"
+        cases = [
+            ("missing", None, fake_nm.NONE, fake_nm.FULL),
+            ("empty", "", fake_nm.NONE, fake_nm.NONE),
+            ("blank line", "\n", fake_nm.PORTAL, fake_nm.PORTAL),
+            ("not a number", "of", fake_nm.NONE, fake_nm.NONE),
+            ("out of range", "9\n", fake_nm.LIMITED, fake_nm.LIMITED),
+            ("not UTF-8", b"\xff", fake_nm.NONE, fake_nm.NONE),
+            ("a value", "1\n", fake_nm.FULL, fake_nm.NONE),
+        ]
+        wrong = []
+        for name, content, last, expected in cases:
+            state.unlink(missing_ok=True)
+            if isinstance(content, bytes):
+                state.write_bytes(content)
+            elif content is not None:
+                state.write_text(content)
+            got = fake_nm.connectivity(state, last)
+            if got != expected:
+                wrong.append(f"{name}: {got}, expected {expected}")
+        ok &= report(
+            "connectivity(): FULL when missing, the last value on an empty or invalid read",
+            not wrong,
+            "; ".join(wrong),
+        )
+        fake_nm.set_connectivity(state, fake_nm.PORTAL)
+        fake_nm.set_connectivity(state, fake_nm.NONE)
+        ok &= report(
+            "set_connectivity() replaces the file and leaves no temporary file",
+            state.read_text() == f"{fake_nm.NONE}\n" and sorted(p.name for p in Path(work).iterdir()) == [state.name],
+            str(sorted(p.name for p in Path(work).iterdir())),
+        )
+
     with tempfile.TemporaryDirectory(prefix="foamy-kit-fake-nm-") as work:
         try:
             fake_nm.start(f"unix:path={work}/no-bus", Path(work) / "state", timeout=10)

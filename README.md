@@ -853,10 +853,12 @@ reach is isolated by default (0.9.0):
 - **A fake NetworkManager.** `preview/fake_nm.py` owns
   `org.freedesktop.NetworkManager` on the run's private system bus, with no
   devices and the connectivity a state file names (`fake_nm.FULL`,
-  `LIMITED`, `PORTAL`, `NONE`, `UNKNOWN`; full when the file is missing),
-  re-read every 100 ms with PropertiesChanged on a change. Quickshell's
-  `Networking.connectivity` reads it, so a test takes the network down and
-  up by writing the file. It needs dbus-python and PyGObject (the system's).
+  `LIMITED`, `PORTAL`, `NONE`, `UNKNOWN`; full when the file is missing,
+  the last value while it is empty or invalid), re-read every 100 ms with
+  PropertiesChanged on a change. Quickshell's `Networking.connectivity`
+  reads it, so a test takes the network down and up by writing the file
+  with `fake_nm.set_connectivity()` (an atomic replace; a write in place can
+  be read half done). It needs dbus-python and PyGObject (the system's).
 
   ```python
   import fake_nm

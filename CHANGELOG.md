@@ -242,6 +242,14 @@
   between `run.start_buses()` and `run.start()`; weather and train, whose
   runtime tests assume offline because the system bus is dead, can test the
   online and offline paths with it.
+- `fake_nm`: an empty, unreadable or invalid state file keeps the
+  connectivity the service reports; only a missing file means full. It read
+  all of them as full, so a test that wrote the file in place (truncate, then
+  write) could look online for a moment (the weather sync). `connectivity()`
+  takes the last value as a second argument. `set_connectivity()` writes a
+  unique temporary file and renames it (it used a fixed `.partial` name).
+
+  Plugins: write the state file with `fake_nm.set_connectivity()`.
 - `hostenv.clipboard_fakes(folder)`: the load-proof stand-ins for
   `kit/clipboard.sh` tests, from foamy-media's f7de0ac: a bash-builtin
   `wl-paste`/`clipboard-fixture` and a `timeout` that keeps the real 2 s for
