@@ -30,7 +30,10 @@ the host's i18n catalogs (data); no host script or binary is ever run:
   caller's $OMARCHY_PATH/bin) are dropped from PATH, and every other
   `omarchy` / `omarchy-*` command still on PATH (a wrapper in ~/.local/bin)
   is shadowed by a stub that logs the call to $FOAMY_OUT/host-commands.log
-  (Run.host_commands()) and exits 127. `fakebin` stand-ins come first.
+  (Run.host_commands()) and exits 127. `fakebin` stand-ins come first. A
+  test that changes run.env["PATH"] puts its own directories in front of it;
+  start() refuses a PATH without the stubs, with a host command directory
+  before them, or with an Omarchy bin directory back on it.
 - An AppImage's bundled libraries and binaries ($APPDIR, e.g. an editor's
   libnotify) are dropped from LD_LIBRARY_PATH and PATH.
 - No audio server is reachable: PULSE_SERVER and PIPEWIRE_REMOTE name dead
@@ -404,15 +407,40 @@ class Run:
         blocked = self.base / "host-bin"
         blocked.mkdir()
         names = set()
+        # Where the commands the stubs shadow really live (_path_problem()).
+        self._host_command_dirs = set()
         for folder in kept:
             try:
-                names |= {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
+                found = {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
             except OSError:
                 continue
+            names |= found
+            if found:
+                self._host_command_dirs.add(os.path.realpath(folder))
         for name in sorted(names):
             (blocked / name).write_text(HOST_STUB)
             (blocked / name).chmod(0o755)
         return ":".join([str(blocked)] + kept)
+
+    def _path_problem(self):
+        """Why run.env["PATH"] would let a host command run, or None. A test
+        may put its own directories first; the stubs must stay in front of
+        every directory holding a command they shadow."""
+        stubs = str(self.base / "host-bin")
+        entries = [p for p in self.env.get("PATH", "").split(":") if p]
+        advice = (
+            "put the test's directories in front of the run's PATH (f\"{folder}:{run.env['PATH']}\") or use fakebin"
+        )
+        if stubs not in entries:
+            return f"harness: run.env['PATH'] no longer has the host-command stubs ({stubs}), so host commands can run; {advice}"
+        omarchy_bins = hostenv.host_bins(self.host.parent / "bin")
+        back = [p for p in entries if os.path.realpath(p) in omarchy_bins]
+        if back:
+            return f"harness: run.env['PATH'] has Omarchy's bin directory {back[0]} again; {advice}"
+        early = [p for p in entries[: entries.index(stubs)] if os.path.realpath(p) in self._host_command_dirs]
+        if early:
+            return f"harness: run.env['PATH'] puts {early[0]} before the host-command stubs, so its omarchy commands run for real; {advice}"
+        return None
 
     def host_commands(self):
         """Host commands the run tried (and the stubs refused), one line each."""
@@ -573,8 +601,8 @@ class Run:
 
     def start(self):
         """Start qs (and the private bus). Pair with stop()."""
-        # Before anything starts: a test may have changed XDG_RUNTIME_DIR.
-        problem = _socket_problem(self.env["XDG_RUNTIME_DIR"])
+        # Before anything starts: a test may have changed XDG_RUNTIME_DIR or PATH.
+        problem = _socket_problem(self.env["XDG_RUNTIME_DIR"]) or self._path_problem()
         if problem:
             raise SystemExit(problem)
         _LIVE.add(self)

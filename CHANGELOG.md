@@ -248,6 +248,17 @@
   still be too long. Plugin tests that read `run.env["XDG_RUNTIME_DIR"]`
   need no change; one that built `run.base / "runtime"` or
   `run.base / "bus"` reads `run.sockets` (or the env) instead.
+- `harness.Run.start()` stops with the reason when a test's
+  `run.env["PATH"]` would let a host command run: the harness's
+  `host-bin` stubs are gone (PATH rebuilt from `os.environ`), a directory
+  holding a host `omarchy*` command (`/usr/bin` has `omarchy-shell`,
+  `~/.local/bin` a wrapper) comes before them, or an Omarchy bin directory is
+  back. The isolation only held while the stubs came first, and nothing
+  said when a test dropped them (tray and monitor reviews).
+
+  After syncing: foamy-menu's `tests/runtime.py` sets
+  `PATH=f"{stubs}:{os.environ['PATH']}"`, which `start()` now refuses;
+  it puts its stubs in front of `run.env['PATH']` instead.
 
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit

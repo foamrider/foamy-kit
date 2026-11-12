@@ -172,6 +172,37 @@ def main():
         except ValueError:
             refused = True
         ok &= report("an unknown system_bus value is refused", refused)
+
+        # A test that rewrites run.env["PATH"] must keep the stubs in front
+        # of the host's commands; start() refuses before anything runs.
+        fakes = work / "test-fakes"
+        fakes.mkdir()
+        cases = (
+            ("the caller's PATH instead of the run's", lambda run: f"{fakes}:{os.environ['PATH']}", "no longer has"),
+            ("a host command dir before the stubs", lambda run: f"{user_bin}:{run.env['PATH']}", f"{user_bin} before"),
+            ("an Omarchy bin dir added back", lambda run: f"{run.env['PATH']}:{omarchy_tree}/bin", "Omarchy's bin"),
+        )
+        for label, path, words in cases:
+            run = harness.Run("4.5", SHELL, prefix="foamy-kit-isolation-path-")
+            run.env["PATH"] = path(run)
+            try:
+                run.start()
+                message = "started"
+            except SystemExit as error:
+                message = str(error)
+            ok &= report(f"start() refuses {label}", words in message and run.process is None, message)
+            run.cleanup()
+        run = harness.Run("4.5", SHELL, prefix="foamy-kit-isolation-path-")
+        run.env["FOAMY_PROBE"] = PROBE
+        run.env["PATH"] = f"{fakes}:{run.env['PATH']}"
+        run.run(timeout=30)
+        probed = (run.out / "probe.txt").read_text(errors="replace") if (run.out / "probe.txt").exists() else ""
+        ok &= report(
+            "a test's own commands in front of the run's PATH are fine",
+            run.ok and "omarchy=127" in probed and not marker.exists(),
+            probed[-300:] or run.log[-300:],
+        )
+        run.cleanup()
     finally:
         os.environ.clear()
         os.environ.update(saved)

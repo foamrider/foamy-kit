@@ -780,7 +780,11 @@ reach is isolated by default (0.9.0):
   any other `omarchy`/`omarchy-*` still on it (`/usr/bin`, a wrapper in
   `~/.local/bin`) is shadowed by a stub that exits 127 and logs the call to
   `$FOAMY_OUT/host-commands.log` (`Run.host_commands()`). `Run(…,
-  fakebin={"omarchy": script})` stand-ins come first.
+  fakebin={"omarchy": script})` stand-ins come first. A test that changes
+  `run.env["PATH"]` adds its own directories in front of it
+  (`f"{folder}:{run.env['PATH']}"`); `Run.start()` stops with the reason
+  when the stubs are gone from `PATH`, a directory holding a host
+  `omarchy*` command comes before them, or an Omarchy bin directory is back.
 - **No AppImage libraries.** Entries under `$APPDIR` (an editor's bundled
   libnotify) leave `LD_LIBRARY_PATH` and `PATH`.
 - **No audio server.** `PULSE_SERVER` and `PIPEWIRE_REMOTE` name dead
