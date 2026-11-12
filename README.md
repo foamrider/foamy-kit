@@ -904,6 +904,21 @@ the real host's imports) types FoamyPopup as a `PanelWindow`, so
 `popup` shadows the property (id-shadows-member, twice), in every preview.
 In the harness the popup is an Item either way; the render is the same.
 
+After the rename, a read written `popup.…` reaches the root's `popup`
+property, the same object. Write each read so that it adds no qmllint entry
+(the baseline matches on the line's text):
+
+- in a child object of the root (a Timer, a Connections), qualify it through
+  the root id, `preview.popup.bodyItem…`: unqualified, it is
+  `unqualified` access;
+- on the root's own bindings and handlers, `popup.…` and `preview.popup.…`
+  both lint clean (the `var` property also ends the old `missing-property`
+  entries for calls on `popup.bodyItem`);
+- inside the `body` Component, qmllint reports every read of the preview's
+  scope as `unqualified`, `preview.…` included, so no form is clean there:
+  leave an existing `popup.…` as it is, and its baselined entry still
+  matches; rewriting it only swaps one entry for another.
+
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da`, `--position`,

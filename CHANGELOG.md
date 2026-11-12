@@ -277,7 +277,12 @@
 
   After syncing: rename the FoamyPopup id in `preview/Preview.qml` and type
   `popup` `var`, then shrink the qmllint baseline (`tests/validate.sh
-  --update-baseline qmllint`, review the diff).
+  --update-baseline qmllint`, review the diff). Reads of `popup.…` then
+  reach the root property: in a child object (a Timer) qualify them as
+  `preview.popup.…` (unqualified, they are new `unqualified` entries); on
+  the root's own bindings either form is clean; inside the `body` Component
+  leave them as they are, since qmllint reports every outer read there and
+  the baselined line still matches (README, "Preview").
 - `render.py --language` names a catalog the plugin has. `--language nb` on
   a plugin whose catalog is `no.json` (Omarchy's Norwegian code; there is
   no `nb`) rendered English without a word; it now renders `no` and says
