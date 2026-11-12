@@ -11,6 +11,10 @@ the last value while it is empty or invalid). It re-reads the file every
 the network down and up by writing the file, with set_connectivity() (an
 atomic replace).
 
+The fake changes only what the shell sees. It does not cut a helper off
+from the Internet: point the plugin's helpers at a loopback stand-in and
+fail on any outside request (README, "Test helpers for plugins").
+
   import fake_nm
   run = harness.Run(host, shell, plugin=plugin, system_bus="private")
   state = run.base / "connectivity"

@@ -875,6 +875,15 @@ reach is isolated by default (0.9.0):
   `fake_nm.start()` runs it in its own process group (`hostenv.ProcessGroup`)
   and raises RuntimeError with the service's output when it isn't ready
   within its timeout. `tests/test_fake_nm.py` covers it.
+
+  The fake changes only what the shell sees: `NONE` does not cut a helper
+  off from the Internet, and a test's helper still reaches real servers.
+  Point the plugin's helpers at a loopback stand-in (a local fixture server
+  on 127.0.0.1, through the helper's own base-URL setting or environment)
+  and make the test fail on any request that leaves the machine, for
+  example a stand-in that records each request and a check that every one
+  went to it. An offline test proves the offline path only when nothing
+  could get out.
 The plugin is loaded over `file://`, like the shell loads it, so plugin
 subdirectories need no qmldir.
 

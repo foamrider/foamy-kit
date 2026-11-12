@@ -250,6 +250,10 @@
   unique temporary file and renames it (it used a fixed `.partial` name).
 
   Plugins: write the state file with `fake_nm.set_connectivity()`.
+- Docs: README "Test helpers": the fake NetworkManager changes only what
+  the shell sees; it does not cut a helper off from the Internet. Plugins
+  point their helpers at a loopback stand-in and fail a test on any outside
+  request (found in the weather sync).
 - `hostenv.clipboard_fakes(folder)`: the load-proof stand-ins for
   `kit/clipboard.sh` tests, from foamy-media's f7de0ac: a bash-builtin
   `wl-paste`/`clipboard-fixture` and a `timeout` that keeps the real 2 s for
