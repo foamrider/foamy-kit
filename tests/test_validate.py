@@ -19,8 +19,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import KIT_ROOT, report, synced_demo  # noqa: E402
 
 
-def validate(plugin, *args, env=None):
-    env = dict(env or os.environ, FOAMY_KIT=str(KIT_ROOT))
+def validate(plugin, *args, env=None, kit=KIT_ROOT):
+    env = dict(env or os.environ, FOAMY_KIT=str(kit))
+    if kit is None:
+        del env["FOAMY_KIT"]
     result = subprocess.run(
         ["bash", str(plugin / "tests/validate.sh"), *args],
         cwd=plugin,
@@ -187,6 +189,19 @@ def main():
         and "SKIP  plugin-validate: --ci" in out
         and "suite args: --ci; FOAMY_VALIDATE=ci" in out
         and "PASS  kit-check" in out,
+        summary(out),
+    )
+    ok &= report("--ci with FOAMY_KIT runs the design lint", "PASS  design-lint" in out, summary(out))
+    code, out = validate(plugin, "--ci", "--only", "design-lint", kit=None)
+    ok &= report(
+        "--ci without FOAMY_KIT skips the design lint and says why",
+        code == 0 and "SKIP  design-lint: --ci: FOAMY_KIT is unset (checks.yml sets it" in out,
+        summary(out),
+    )
+    code, out = validate(plugin, "--ci", "--only", "design-lint", kit=plugin)
+    ok &= report(
+        "a FOAMY_KIT that is not a foamy-kit checkout fails the design lint",
+        code != 0 and f"FAIL  design-lint: FOAMY_KIT={plugin} is not a foamy-kit checkout" in out,
         summary(out),
     )
     (plugin / "tests/suite.sh").write_text("#!/bin/bash\nexit 3\n")

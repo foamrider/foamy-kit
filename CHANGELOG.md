@@ -254,7 +254,9 @@
   skipped in CI, and design-lint always skipped there. The step fetches over
   public https into `$RUNNER_TEMP` (outside the checkout), keeps the job
   read-only and fails, before validate, when `source` is not a full commit
-  id or github.com does not have that commit yet.
+  id or github.com does not have that commit yet. Under `--ci`, design-lint's
+  SKIP now says `FOAMY_KIT is unset` (it said "no foamy-kit checkout"), and
+  a `FOAMY_KIT` that is not a kit checkout fails instead of skipping.
 
   Plugins: re-sync (`./sync.sh ../foamy-*`) from a committed foamy-kit that
   is pushed to github.com, and commit `checks.yml` and `foamy-kit.lock`

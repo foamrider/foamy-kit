@@ -251,7 +251,7 @@ def read_reasoned(path, what):
 def foamy_kit(repo):
     """The foamy-kit checkout for check.sh and the runtime tests' harness:
     FOAMY_KIT, else ~/GitHub/Personal/foamy-kit or a sibling foamy-kit (not
-    under --ci, which runs what a CI runner without a kit checkout runs)."""
+    under --ci: on the runner, only the kit checks.yml checks out counts)."""
     if repo.kit_mode:
         return repo.root
     defaults = () if repo.args.ci else (DEFAULT_KIT, repo.root.parent / "foamy-kit")
@@ -410,10 +410,12 @@ def check_design_lint(repo):
         raise Skip("foamy-kit's own design lint runs in tests/test_sync_check.py")
     kit = foamy_kit(repo)
     if kit is None:
-        raise Skip(
-            "no foamy-kit checkout (set FOAMY_KIT"
-            + (")" if repo.args.ci else ", or keep it at ~/GitHub/Personal/foamy-kit)")
-        )
+        configured = os.environ.get("FOAMY_KIT")
+        if configured:
+            raise Failure(f"FOAMY_KIT={configured} is not a foamy-kit checkout (no check.sh and kit/components.json)")
+        if repo.args.ci:
+            raise Skip("--ci: FOAMY_KIT is unset (checks.yml sets it to the kit commit foamy-kit.lock names)")
+        raise Skip("no foamy-kit checkout: set FOAMY_KIT, or keep it at ~/GitHub/Personal/foamy-kit")
     result = run(["bash", str(kit / "check.sh"), str(repo.root)], repo, timeout=300)
     show(result.stdout + result.stderr)
     if result.returncode != 0:

@@ -155,7 +155,7 @@ under `--ci`) is a SKIP with the reason.
 |---|---|
 | `kit-check` | `bash tests/kit-check.sh` |
 | `plugin-validate` | `omarchy-plugin-validate <plugin>` (host) |
-| `design-lint` | foamy-kit's `check.sh <plugin>`, when the kit is at `$FOAMY_KIT` or `~/GitHub/Personal/foamy-kit` (else SKIP) |
+| `design-lint` | foamy-kit's `check.sh <plugin>`, with the kit at `$FOAMY_KIT` or (not under `--ci`) `~/GitHub/Personal/foamy-kit`; else SKIP with the reason. A `FOAMY_KIT` that is not a kit checkout fails |
 | `qmllint` | `/usr/lib/qt6/bin/qmllint` with `qs` as the Omarchy shell (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`) and Qt's QML dir on the import path; every default category, unused imports as errors, Qt Design Studio's categories off (host) |
 | `qmlformat` | `/usr/lib/qt6/bin/qmlformat -s .qmlformat.ini`, compared with each file (host; Qt 6.12's output) |
 | `oxlint` | `.oxlintrc.json` over every `.js`/`.cjs`/`.mjs`. QML-loaded files are linted from a copy in which `.pragma`/`.import` lines are `//` comments (same line numbers); their top-level functions are QML's API, so an unused one is not reported |
