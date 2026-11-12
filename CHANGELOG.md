@@ -187,6 +187,30 @@
   starts its own qs (power's `integration.py`, the clipboard QML runs,
   notifications' and notification-center's dbus-run-session tests) should
   start it through `hostenv.ProcessGroup`.
+- `hostenv.isolate(env, base, session_bus=None, display=False)` no longer
+  hands the caller's session bus and display to the test's process. It
+  kept `DBUS_SESSION_BUS_ADDRESS`, `WAYLAND_DISPLAY`,
+  `HYPRLAND_INSTANCE_SIGNATURE` and `DISPLAY`, so a test run from a
+  terminal gave its own qs or `notify-send` the desktop's notification
+  daemon and media players, unlike `harness.Run` (its documented model).
+  The session bus is now a dead address (also when none was set: an unset
+  address falls back to the login bus) unless `session_bus` names the
+  test's own, and the display variables leave unless `display=True`.
+
+  Plugins (hostenv comes from the kit checkout): a test that calls
+  `isolate()` inside `dbus-run-session` passes
+  `session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`: notifications'
+  `tests/testhost.py`, notification-center's `stock-runtime.py`,
+  `settings-ui.py`, `browser-ui.py`, `motion.py` and `images-ui.py`. One that
+  sets `WAYLAND_DISPLAY` before the call to use the live compositor
+  (notifications' `features-runtime.py` wayland mode, through `testhost.make`)
+  passes `display=True`; github's and bolt's clipboard wayland mode set it
+  after the call and need no change. Tests that used the caller's session
+  bus (bolt and syncthing clipboard, idle-suspend runtime,
+  notification-center `scrolling.py`, `rtl-rows.py`, `settings-number.py`)
+  now get a dead one; one that needs a bus runs under `dbus-run-session`.
+  An offscreen qs needs `QT_QPA_PLATFORMTHEME` set (`basic`): without a
+  display the desktop's `gtk3` theme stops it.
 - `preview/i18n_runtime.py <plugin>`: one catalog check for every plugin,
   replacing the 13 `tests/i18n-runtime.py` copies (12 different variants of
   the same template: a translated key switching no → da/ar → en live, the

@@ -12,6 +12,7 @@ harness.Run already applies isolate() to every run. Use these for what runs
 outside it, or for more than it does:
 
   env = hostenv.isolate(dict(os.environ), base)      # a qs, notify-send… a test starts itself
+                                                     # (session_bus=… for its own bus)
   env.update(hostenv.make(base, app))                # private OMARCHY_PATH, logging omarchy-* stubs
   …
   hostenv.check(env, log_text, *hostenv.calls(base)) # no host script could run, and none did
@@ -82,11 +83,27 @@ def isolated_path(value=None, *extra_bins):
     return ":".join(p for p in value.split(":") if p and os.path.realpath(p) not in bins and not in_appdir(p))
 
 
-def isolate(env, base):
+# What isolate() drops unless display=True: the live compositor, Hyprland
+# and X11.
+DISPLAY_VARIABLES = ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")
+
+
+def isolate(env, base, session_bus=None, display=False):
     """`env` (a dict, changed in place and returned) for a process a test
     starts itself: no Omarchy bin directory or AppImage entry on PATH or
-    LD_LIBRARY_PATH, no audio server, no system bus. `base` is the test's
-    temp dir; the dead sockets are named inside it."""
+    LD_LIBRARY_PATH, no audio server, no system bus, and, like harness.Run,
+    not the desktop's session bus or display. `base` is the test's temp
+    dir; the dead sockets are named inside it.
+
+    The session bus is a dead address unless `session_bus` names the test's
+    own (a unix: address, e.g. `os.environ["DBUS_SESSION_BUS_ADDRESS"]`
+    inside dbus-run-session): the caller's address is the desktop's in a
+    terminal, where a test's qs would reach the live notification daemon and
+    media players. WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and DISPLAY
+    leave unless `display=True` (a test that runs on the live compositor
+    on purpose)."""
+    if session_bus is not None and not str(session_bus).startswith("unix:"):
+        raise ValueError(f"session_bus must be a unix: address, not {session_bus!r}")
     env["PATH"] = isolated_path(env.get("PATH", "/usr/bin:/bin"))
     libraries = library_path(env.get("LD_LIBRARY_PATH", ""))
     if libraries:
@@ -98,10 +115,16 @@ def isolate(env, base):
             "PULSE_SERVER": f"unix:{base}/no-pulse",
             "PIPEWIRE_REMOTE": f"{base}/no-pipewire",
             "DBUS_SYSTEM_BUS_ADDRESS": f"unix:path={base}/no-system-bus",
+            # Set even when the caller had none: an unset address falls back
+            # to $XDG_RUNTIME_DIR/bus, the login session's.
+            "DBUS_SESSION_BUS_ADDRESS": str(session_bus) if session_bus else f"unix:path={base}/no-session-bus",
         }
     )
     for name in ("PULSE_RUNTIME_PATH", "PIPEWIRE_RUNTIME_DIR", "PULSE_COOKIE"):
         env.pop(name, None)
+    if not display:
+        for name in DISPLAY_VARIABLES:
+            env.pop(name, None)
     return env
 
 

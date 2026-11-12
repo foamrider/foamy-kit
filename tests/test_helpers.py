@@ -87,7 +87,8 @@ def alive(pid):
     """True while `pid` runs (a zombie counts as gone)."""
     try:
         return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
-    except (FileNotFoundError, IndexError):
+    # ProcessLookupError: it went between open() and read().
+    except (FileNotFoundError, ProcessLookupError, IndexError):
         return False
 
 
@@ -108,6 +109,7 @@ def process_group(base):
     env = hostenv.isolate(dict(os.environ), base)
     env.update(
         QT_QPA_PLATFORM="offscreen",
+        QT_QPA_PLATFORMTHEME="basic",
         QT_QUICK_BACKEND="software",
         XDG_RUNTIME_DIR=str(runtime),
         XDG_STATE_HOME=str(base / "group-state"),
@@ -230,6 +232,50 @@ def main():
             and env["DBUS_SYSTEM_BUS_ADDRESS"] == f"unix:path={base}/no-system-bus",
             str(env),
         )
+        # The desktop's session bus and display stay out unless the test
+        # names its own bus or asks for the display.
+        live = {
+            "PATH": "/usr/bin",
+            "DBUS_SESSION_BUS_ADDRESS": os.environ.get("DBUS_SESSION_BUS_ADDRESS") or "unix:path=/run/user/1000/bus",
+            "WAYLAND_DISPLAY": "wayland-1",
+            "HYPRLAND_INSTANCE_SIGNATURE": "abc",
+            "DISPLAY": ":0",
+        }
+        env = hostenv.isolate(dict(live), base)
+        ok &= report(
+            "isolate() names a dead session bus and drops the display by default",
+            env["DBUS_SESSION_BUS_ADDRESS"] == f"unix:path={base}/no-session-bus"
+            and not {"WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY"} & set(env),
+            str({k: env.get(k) for k in live}),
+        )
+        reach = subprocess.run(
+            ["dbus-send", "--session", "--print-reply", "--dest=org.freedesktop.DBus", "/org/freedesktop/DBus"]
+            + ["org.freedesktop.DBus.ListNames"],
+            env=env,
+            capture_output=True,
+            timeout=10,
+        )
+        ok &= report(
+            "a process with that environment reaches no session bus", reach.returncode != 0, str(reach.returncode)
+        )
+        unset = hostenv.isolate({"PATH": "/usr/bin"}, base)
+        ok &= report(
+            "an unset session bus becomes the dead address too (no fallback to the login bus)",
+            unset["DBUS_SESSION_BUS_ADDRESS"] == f"unix:path={base}/no-session-bus",
+        )
+        own = hostenv.isolate(dict(live), base, session_bus="unix:path=/tmp/test-bus", display=True)
+        ok &= report(
+            "session_bus= and display=True keep what the test chose",
+            own["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/tmp/test-bus"
+            and all(own.get(k) == live[k] for k in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")),
+            str({k: own.get(k) for k in live}),
+        )
+        try:
+            hostenv.isolate(dict(live), base, session_bus="tcp:host=localhost,port=1")
+            refused = False
+        except ValueError:
+            refused = True
+        ok &= report("a session_bus that isn't a unix: address is refused", refused)
         ok &= report(
             "library_path() keeps entries outside $APPDIR",
             hostenv.library_path(f"{appdir}/usr/lib:{appdir}x/lib:/opt/lib") == f"{appdir}x/lib:/opt/lib",

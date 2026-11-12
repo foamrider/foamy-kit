@@ -892,11 +892,16 @@ import harness, hostenv
   `text` (a `FOAMY READY` line before an IPC call).
 - **`preview/hostenv.py`** for what runs outside `harness.Run`, or needs a
   private Omarchy tree:
-  - `isolate(env, base)`: the harness's isolation for a process the test
-    starts itself (its own `qs`, `notify-send`): no Omarchy bin dir or
-    `$APPDIR` on `PATH`/`LD_LIBRARY_PATH`, dead audio and system-bus
-    addresses. `library_path()`, `isolated_path()` and `host_bins()` are the
-    parts.
+  - `isolate(env, base, session_bus=None, display=False)`: the harness's
+    isolation for a process the test starts itself (its own `qs`,
+    `notify-send`): no Omarchy bin dir or `$APPDIR` on
+    `PATH`/`LD_LIBRARY_PATH`, dead audio, system-bus and session-bus
+    addresses, and no `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or
+    `DISPLAY`. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
+    inside `dbus-run-session`); one that runs on the live compositor on
+    purpose passes `display=True`. Set `QT_QPA_PLATFORMTHEME` (`basic`) for
+    an offscreen qs: the desktop's `gtk3` theme needs a display and stops qs.
+    `library_path()`, `isolated_path()` and `host_bins()` are the parts.
   - `make(base, app, env=None, stubs=None, names=())`: environment overrides
     for a private `OMARCHY_PATH` (the host's `shell/` and `default/` only) whose
     `bin/` and `PATH` stubs log every `omarchy-*` call to
