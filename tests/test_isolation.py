@@ -131,7 +131,7 @@ def main():
         )
         ok &= report(
             "the session bus is the run's private one",
-            got.get("SESSION") == f"unix:path={run.base}/bus" and got.get("session-bus") == "0",
+            got.get("SESSION") == f"unix:path={run.sockets}/bus" and got.get("session-bus") == "0",
             f"{got.get('SESSION')} exit {got.get('session-bus')}",
         )
         run.cleanup()
@@ -140,7 +140,7 @@ def main():
         run, got, lines = probe(system_bus="private", fakebin={"omarchy": fake})
         ok &= report(
             "system_bus='private' gives the run its own system bus",
-            got.get("SYSTEM") == f"unix:path={run.base}/system-bus"
+            got.get("SYSTEM") == f"unix:path={run.sockets}/system-bus"
             and got.get("system-bus") == "0"
             and run.system_bus_address == got.get("SYSTEM"),
             f"{got.get('SYSTEM')} exit {got.get('system-bus')}",

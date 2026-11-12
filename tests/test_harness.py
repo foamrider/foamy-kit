@@ -26,6 +26,7 @@ import harness
 run = harness.Run("4.5", {HANG!r}, prefix="foamy-kit-orphan-")
 run.start()
 print(run.base, flush=True)
+print(run.sockets, flush=True)
 time.sleep(120)
 """
 
@@ -37,6 +38,105 @@ def gone(base, seconds=5):
             return True
         time.sleep(0.1)
     return False
+
+
+def ipc_reachable(run):
+    """The instance id once qs's IPC socket answers `qs ipc show`, else None."""
+    by_id = Path(run.env["XDG_RUNTIME_DIR"]) / "quickshell/by-id"
+    if not run.wait_for_log("FOAMY UP", 30):
+        return None
+    sockets = harness.wait_for(lambda: sorted(by_id.glob("*/ipc.sock")), 10)
+    if not sockets:
+        return None
+    instance = sockets[0].parent.name
+    shown = subprocess.run(
+        ["qs", "ipc", "-i", instance, "show"], env=run.env, capture_output=True, text=True, timeout=10
+    )
+    return instance if shown.returncode == 0 else None
+
+
+def long_tmpdir():
+    ok = True
+    parent = Path(tempfile.mkdtemp(prefix="foamy-kit-long-tmp-"))
+    long_tmp = parent / ("t" * (harness.SOCKET_PATH_MAX - len(str(parent))))
+    long_tmp.mkdir()
+    saved = tempfile.tempdir
+    tempfile.tempdir = str(long_tmp)
+    try:
+        run = harness.Run("4.5", HANG, prefix="foamy-kit-long-tmpdir-run-")
+        try:
+            run.start()
+            instance = ipc_reachable(run)
+        finally:
+            run.stop()
+        ok &= report(
+            "a TMPDIR longer than the socket limit still gives qs a working IPC socket",
+            run.base.parent == long_tmp and instance is not None and "Failed to start IPC server" not in run.log,
+            f"TMPDIR {len(str(long_tmp))} bytes, runtime {run.env['XDG_RUNTIME_DIR']}, instance {instance}; "
+            + "; ".join(run.log.splitlines()[-3:]),
+        )
+        run.cleanup()
+        ok &= report(
+            "cleanup removes the run's socket dir too",
+            not Path(run.env["XDG_RUNTIME_DIR"]).exists() and not run.base.exists(),
+        )
+    finally:
+        tempfile.tempdir = saved
+        shutil.rmtree(parent, ignore_errors=True)
+
+    # A runtime dir a test made too long stops start() with the reason,
+    # before qs or a bus runs.
+    run = harness.Run("4.5", HANG, prefix="foamy-kit-long-runtime-")
+    run.env["XDG_RUNTIME_DIR"] = str(run.base / ("r" * harness.SOCKET_PATH_MAX))
+    try:
+        run.start()
+        message = "started"
+    except SystemExit as error:
+        message = str(error)
+    ok &= report(
+        "start() refuses a runtime dir whose IPC socket path is too long",
+        "past the unix limit of 107" in message and run.process is None and run.bus_process is None,
+        message,
+    )
+    run.cleanup()
+
+    # A socket limit no temp dir can meet: Run() stops with the reason and
+    # leaves nothing behind.
+    before = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
+    limit = harness.SOCKET_PATH_MAX
+    harness.SOCKET_PATH_MAX = 40
+    try:
+        harness.Run("4.5", HANG, prefix="foamy-kit-no-socket-dir-")
+        message = "constructed"
+    except SystemExit as error:
+        message = str(error)
+    finally:
+        harness.SOCKET_PATH_MAX = limit
+    after = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
+    ok &= report(
+        "Run() stops with the reason when no socket dir fits, creating nothing",
+        "past the unix limit of 40" in message and after == before,
+        f"{message}; new: {sorted(map(str, after - before))}",
+    )
+
+    # qs's own report of an unbindable socket fails a run.
+    marker = harness.Run(
+        "4.5",
+        """import QtQuick
+import Quickshell
+ShellRoot { Component.onCompleted: { console.warn("Failed to start IPC server on path \\"x\\""); console.log("FOAMY DONE"); Qt.quit() } }
+""",
+        prefix="foamy-kit-ipc-marker-",
+    ).run(timeout=20)
+    ok &= report(
+        '"Failed to start IPC server" fails the run',
+        "FOAMY DONE" in marker.log
+        and not marker.ok
+        and any("Failed to start IPC server" in f for f in marker.failures()),
+        "; ".join(marker.failures()),
+    )
+    marker.cleanup()
+    return ok
 
 
 def main():
@@ -55,6 +155,7 @@ def main():
     # 2. The Python parent is SIGKILLed mid-run (no finally, no atexit).
     child = subprocess.Popen([sys.executable, "-I", "-c", CHILD], stdout=subprocess.PIPE, text=True)
     base = Path(child.stdout.readline().strip())
+    sockets = child.stdout.readline().strip()
     time.sleep(1.5)
     alive_before = bool(harness.processes_under(base))
     child.send_signal(signal.SIGKILL)
@@ -65,20 +166,30 @@ def main():
         f"before={alive_before} after={harness.processes_under(base)}",
     )
     shutil.rmtree(base, ignore_errors=True)
+    # Only a socket dir the child named: an empty line must not become ".".
+    if Path(sockets).name.startswith("foamy-kit-s-"):
+        shutil.rmtree(sockets, ignore_errors=True)
 
     # 3. Context manager.
     with harness.Run("4.5", HANG, prefix="foamy-kit-ctx-") as ctx:
         ctx.start()
         base = ctx.base
         time.sleep(1)
-    ok &= report("Run as a context manager stops and removes everything", gone(base) and not base.exists())
+    ok &= report(
+        "Run as a context manager stops and removes everything",
+        gone(base) and not base.exists() and not ctx.sockets.exists(),
+    )
     # 4. Temp-dir hygiene: own dir per run, PID-tagged, 0700; gc removes only dead runs' dirs.
     run = harness.Run("4.5", HANG, prefix="foamy-kit-hygiene-")
     mode = run.base.stat().st_mode & 0o777
+    socket_mode = run.sockets.stat().st_mode & 0o777
     ok &= report(
-        "each run owns a PID-tagged 0700 dir",
-        f"-{os.getpid()}-" in run.base.name and mode == 0o700,
-        f"{run.base.name} {oct(mode)}",
+        "each run owns a PID-tagged 0700 dir and socket dir",
+        f"-{os.getpid()}-" in run.base.name
+        and mode == 0o700
+        and run.sockets.name.startswith(f"foamy-kit-s-{os.getpid()}-")
+        and socket_mode == 0o700,
+        f"{run.base.name} {oct(mode)} {run.sockets.name} {oct(socket_mode)}",
     )
     run.cleanup()
     tmp = Path(tempfile.mkdtemp(prefix="foamy-kit-gc-test-"))
@@ -102,8 +213,20 @@ def main():
         str(removed),
     )
     shutil.rmtree(tmp, ignore_errors=True)
+    # A long temp dir's runs keep their sockets in /tmp: gc looks there too.
+    stale_sockets = Path(tempfile.mkdtemp(prefix=f"foamy-kit-s-{dead.pid}-", dir="/tmp"))
+    try:
+        found = harness.gc(dry_run=True)
+    finally:
+        shutil.rmtree(stale_sockets, ignore_errors=True)
+    ok &= report("gc finds a dead run's socket dir in /tmp", stale_sockets in found, str(found))
 
-    # 5. Hosts: 4.5 only, the installed shell by default; 4.0 is retired with a clear message.
+    # 5. A long TMPDIR (an agent sandbox's) must not push qs's IPC socket
+    # past the unix socket limit: qs then only logs "Failed to start IPC
+    # server", and `qs ipc` finds no instance.
+    ok &= long_tmpdir()
+
+    # 6. Hosts: 4.5 only, the installed shell by default; 4.0 is retired with a clear message.
     probe = (
         "import sys; sys.path.insert(0, sys.argv[1]); import harness; "
         "print(sorted((k, str(v)) for k, v in harness.HOSTS.items())); "

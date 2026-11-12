@@ -9,7 +9,16 @@ Shared by preview/render.py and tests/. Each run gets a fresh temporary root:
                        for FakePanelWindow (offscreen Qt has no layer shell)
   <root>/plugin        -> the plugin directory
   <root>/harness/      preview/qml/*.qml (mock bar, screen)
-  <root>/home, xdg dirs, runtime dir; theme colors.toml in the temp HOME
+  <root>/home, xdg dirs; theme colors.toml in the temp HOME
+
+Sockets live in a second, short directory (`Run.sockets`,
+`foamy-kit-s-<pid>-<random>`, 0700): the runtime dir (XDG_RUNTIME_DIR, where
+qs binds quickshell/by-id/<id>/ipc.sock) and the private buses' sockets. A
+unix socket path holds at most 107 bytes, and a long TMPDIR (an agent
+sandbox's) plus the run's prefix went past it: qs only logged "Failed to start
+IPC server" and `qs ipc` found no instance. The directory is in the temp dir
+when that fits, else in /tmp; a run whose socket paths still don't fit stops
+with a clear message.
 
 The environment drops WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and
 DISPLAY, points HOME and every XDG_* directory into the root, and uses the
@@ -41,7 +50,7 @@ killed; stop() kills the whole group, and every live run is stopped at exit.
 Use a Run as a context manager (or call cleanup()) to remove its temp dir.
 
 Temp dirs: each run owns one directory, `<prefix><pid>-<random>` (mode 0700,
-created by mkdtemp), and only ever removes that one. Never `rm -rf` other
+created by mkdtemp), and its socket directory, and only ever removes those. Never `rm -rf` other
 runs' directories (`/tmp/foamy-kit-preview-*`): concurrent renders by other
 agents live there. Stale dirs of dead runs: `python3 preview/harness.py --gc`
 removes only those whose owner PID is gone and that no process still uses.
@@ -88,6 +97,12 @@ RETIRED_HOSTS = {
 }
 HOSTS = {"4.5": Path(os.environ.get("FOAMY_HOST_45") or "/usr/share/omarchy/shell")}
 SCREEN = (1920, 1080)
+# sun_path is 108 bytes with its NUL; a longer socket path can't be bound.
+SOCKET_PATH_MAX = 107
+# Where qs binds its IPC socket under XDG_RUNTIME_DIR. Instance ids are 11
+# characters on Quickshell 0.3; 16 leaves room.
+QS_IPC_SOCKET = "quickshell/by-id/" + "x" * 16 + "/ipc.sock"
+SOCKET_PREFIX = "foamy-kit-s-"
 FAILURE_MARKERS = (
     "ReferenceError",
     "TypeError",
@@ -96,6 +111,7 @@ FAILURE_MARKERS = (
     "Unable to assign",
     "Non-existent attached object",
     "SAVE FAILED",
+    "Failed to start IPC server",
 )
 
 
@@ -166,6 +182,29 @@ printf '%s\\n' "${0##*/} $*" >> "$FOAMY_OUT/host-commands.log"
 echo "foamy-kit harness: ${0##*/} is a host command; give the test a fakebin stand-in" >&2
 exit 127
 """
+
+
+def _socket_problem(runtime):
+    """Why qs's IPC socket under `runtime` can't be bound, or None."""
+    socket = Path(runtime) / QS_IPC_SOCKET
+    length = len(os.fsencode(str(socket)))
+    if length <= SOCKET_PATH_MAX:
+        return None
+    return (
+        f"harness: qs's IPC socket under {runtime} would be about {length} bytes, past the unix limit of "
+        f"{SOCKET_PATH_MAX}; use a shorter XDG_RUNTIME_DIR"
+    )
+
+
+def _socket_dir():
+    """A new 0700 directory for a run's sockets whose paths fit
+    SOCKET_PATH_MAX: in the temp dir when that is short enough, else /tmp."""
+    prefix = f"{SOCKET_PREFIX}{os.getpid()}-"
+    for parent in dict.fromkeys((tempfile.gettempdir(), "/tmp")):
+        # mkdtemp adds 8 characters.
+        if _socket_problem(Path(parent) / (prefix + "x" * 8) / "runtime") is None:
+            return Path(tempfile.mkdtemp(prefix=prefix, dir=parent))
+    raise SystemExit(_socket_problem(Path("/tmp") / (prefix + "x" * 8) / "runtime"))
 
 
 def host_variable(name):
@@ -327,6 +366,7 @@ class Run:
         self.log = ""
         self.ok = False
         self.host = host_dir(host)
+        self.sockets = _socket_dir()
         self.base = Path(tempfile.mkdtemp(prefix=f"{prefix}{os.getpid()}-"))
         self.root = self.base / "shell"
         self.root.mkdir()
@@ -387,7 +427,7 @@ class Run:
         if theme:
             source = Path(theme) if os.path.sep in str(theme) else PREVIEW / "themes" / f"{theme}.toml"
             shutil.copyfile(source, theme_dir / "colors.toml")
-        runtime = self.base / "runtime"
+        runtime = self.sockets / "runtime"
         runtime.mkdir(mode=0o700)
         omarchy = self.base / "omarchy"
         (omarchy / "default").mkdir(parents=True)
@@ -493,7 +533,7 @@ class Run:
         None when dbus-daemon is missing (the address stays dead)."""
         name = "bus" if kind == "session" else "system-bus"
         config = self.base / f"{name}.conf"
-        socket = self.base / name
+        socket = self.sockets / name
         config.write_text(f"""<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
@@ -533,6 +573,10 @@ class Run:
 
     def start(self):
         """Start qs (and the private bus). Pair with stop()."""
+        # Before anything starts: a test may have changed XDG_RUNTIME_DIR.
+        problem = _socket_problem(self.env["XDG_RUNTIME_DIR"])
+        if problem:
+            raise SystemExit(problem)
         _LIVE.add(self)
         if self.bus == "private":
             self.bus_process = self._start_bus()
@@ -610,9 +654,10 @@ class Run:
         ]
 
     def cleanup(self):
-        """Remove this run's own temp dir (and nothing else)."""
+        """Remove this run's own temp and socket dirs (and nothing else)."""
         self.stop()
         shutil.rmtree(self.base, ignore_errors=True)
+        shutil.rmtree(self.sockets, ignore_errors=True)
 
 
 def wait_for(condition, timeout=10, interval=0.05, stop=None):
@@ -634,9 +679,13 @@ OWNED_DIR = re.compile(r"^foamy-kit-[\w.-]*?-(\d+)-[\w]+$")
 
 def gc(tmp=None, dry_run=False):
     """Remove harness temp dirs whose owner process is gone and that no live
-    process references. Returns the removed paths."""
+    process references. Returns the removed paths. Without `tmp`, the socket
+    dirs a long temp dir's runs put in /tmp are looked at too."""
     removed = []
-    for path in sorted(Path(tmp or tempfile.gettempdir()).glob("foamy-kit-*")):
+    paths = list(Path(tmp or tempfile.gettempdir()).glob("foamy-kit-*"))
+    if tmp is None and Path(tempfile.gettempdir()) != Path("/tmp"):
+        paths += Path("/tmp").glob(f"{SOCKET_PREFIX}*")
+    for path in sorted(paths):
         match = OWNED_DIR.match(path.name)
         if not match or not path.is_dir() or path.is_symlink() or path.stat().st_uid != os.getuid():
             continue

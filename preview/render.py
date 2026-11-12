@@ -104,7 +104,7 @@ def render(
     finally:
         if keep:
             run.stop()
-            print(f"kept {run.base}", file=sys.stderr)
+            print(f"kept {run.base} (sockets in {run.sockets})", file=sys.stderr)
         else:
             run.cleanup()
 

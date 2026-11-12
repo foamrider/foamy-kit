@@ -837,10 +837,20 @@ MultiEffect, ShaderEffect and layer effects draw nothing under the software
 renderer the harness uses (as under Omarchy CPU rendering): gate them so the
 content still reads without them (DESIGN.md, "Effects").
 
-Temp dirs: each run owns one PID-tagged dir under `/tmp` and removes only that
-one. Never `rm -rf /tmp/foamy-kit-preview-*` — concurrent renders (other
-agents') live there. `python3 preview/harness.py --gc` removes only dirs of
-runs whose process is gone.
+Temp dirs: each run owns one PID-tagged dir under the temp dir (`$TMPDIR`,
+else `/tmp`) and removes only that one. Never `rm -rf /tmp/foamy-kit-preview-*`
+— concurrent renders (other agents') live there. `python3 preview/harness.py
+--gc` removes only dirs of runs whose process is gone.
+
+Sockets: a unix socket path holds at most 107 bytes, so each run keeps its
+runtime dir (`XDG_RUNTIME_DIR`, where qs binds
+`quickshell/by-id/<id>/ipc.sock`) and its private buses' sockets in a second,
+short dir, `Run.sockets` (`foamy-kit-s-<pid>-<random>`, 0700): in the temp
+dir when that fits, else in `/tmp`. A long `$TMPDIR` (an agent sandbox's)
+used to leave qs with only "Failed to start IPC server" in its log; that line
+is now a failure marker, and `Run.start()` stops with the reason when a
+test's `XDG_RUNTIME_DIR` is too long. Read the runtime dir from
+`run.env["XDG_RUNTIME_DIR"]`, not from `run.base`.
 
 Comparing screenshots: `preview/compare.py old.png new.png` (or two
 directories). It compares RGB and alpha; never compare one without the other.

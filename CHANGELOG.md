@@ -236,6 +236,18 @@
   After syncing: a plugin's own JSON copy in front of the queue
   (foamy-github's `settings: JSON.parse(JSON.stringify(root.settings || {}))`)
   is redundant and can go.
+- `preview/harness.py`: each run's runtime dir (`XDG_RUNTIME_DIR`) and its
+  private bus sockets live in a short socket dir, `Run.sockets`
+  (`foamy-kit-s-<pid>-<random>`, in the temp dir when it fits, else
+  `/tmp`), removed with the run and found by `--gc`. A long `TMPDIR` plus
+  the run prefix put qs's IPC socket past the 107-byte unix limit: qs only
+  logged "Failed to start IPC server", `qs ipc` found no instance and the
+  private bus never came up (six plugins' agents hit it).
+  "Failed to start IPC server" is a `FAILURE_MARKERS` entry, and
+  `Run.start()` stops with the reason when a test's `XDG_RUNTIME_DIR` would
+  still be too long. Plugin tests that read `run.env["XDG_RUNTIME_DIR"]`
+  need no change; one that built `run.base / "runtime"` or
+  `run.base / "bus"` reads `run.sockets` (or the env) instead.
 
 ### Removed
 - Omarchy 4.0 support, which the README no longer promised. The kit
