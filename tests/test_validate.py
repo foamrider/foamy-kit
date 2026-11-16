@@ -229,6 +229,47 @@ def main():
             summary(out),
         )
         (plugin / "Extra.qml").unlink()
+
+        # QML run from a root assembled at run time (Lock Studio's) imports
+        # what that root links in beside it: tests/lint/qmllint-links.txt
+        # gives qmllint's staged copy the same links. FoamyStyle.font is a
+        # typed object, so its members resolve too.
+        (plugin / "app").mkdir()
+        (plugin / "app/Panel.qml").write_text(
+            'import QtQuick\nimport "kit"\n\nItem {\n  width: FoamyStyle.font.body\n}\n'
+        )
+        code, out = validate(plugin, "--only", "qmllint")
+        ok &= report(
+            "without its links, an assembled root's import does not resolve",
+            code != 0 and "app/Panel.qml: import" in out,
+            summary(out),
+        )
+        links = plugin / "tests/lint/qmllint-links.txt"
+        links.write_text(
+            "app/kit  kit  # the app's root links the kit beside it\n"
+            "app/Commons  @shell/Commons  # and the shell's Commons\n"
+        )
+        code, out = validate(plugin, "--only", "qmllint")
+        ok &= report(
+            "with them it resolves, FoamyStyle.font.body included, and the links stay out of the repository",
+            code == 0 and "app/Panel.qml" not in out and not (plugin / "app/kit").exists(),
+            summary(out),
+        )
+        for line, expected in (
+            ("app/kit  kit\n", "needs a reason"),
+            ("../app/kit  kit  # outside\n", "plain relative path"),
+            ("/tmp/kit  kit  # absolute\n", "plain relative path"),
+            ("app/Panel.qml  kit  # an existing file\n", "already exists"),
+            ("app/kit  nowhere  # a missing target\n", "does not exist"),
+            ("app/kit  ../outside  # a target outside the repository\n", "does not exist"),
+            ("app/kit  # no target\n", "expected `<link> <target>"),
+            ("app/i18n  i18n  # a directory\napp/i18n/sub  kit  # inside it\n", "overlap"),
+        ):
+            links.write_text(line)
+            code, out = validate(plugin, "--only", "qmllint")
+            ok &= report(f"a bad link is refused ({expected})", code != 0 and expected in out, summary(out))
+        links.unlink()
+        shutil.rmtree(plugin / "app")
     else:
         print("SKIP qmllint/qmlformat: no Qt 6 qmllint or Omarchy shell")
 
