@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0 — unreleased (dev)
+## 0.10.0 — 2026-11-16
 
 ### Added
 - `FoamyClipboard`: `kit/clipboard.sh` as a component of its own, for a
