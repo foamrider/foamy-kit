@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.11.0 — unreleased (dev)
+## 0.11.0 — 2026-11-16
 
 ### Added
 - `FoamyClipboard.qml`: the QML side of `FoamyClipboard`, from foamy-menu's
