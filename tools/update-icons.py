@@ -34,14 +34,21 @@ def inner(svg_text):
 
 def read_table(text):
     start = text.index("readonly property var paths: ({") + len("readonly property var paths: ({")
-    end = text.index("\n  })", start)
+    # The closing "})" on its own line, at whatever indent qmlformat gave it.
+    closing = re.compile(r"\n[ \t]*\}\)").search(text, start)
+    if not closing:
+        raise SystemExit("icon table end not found")
+    end = closing.start()
     table = {}
     for line in text[start:end].strip().splitlines():
         match = re.match(r'\s*("(?:[^"\\]|\\.)*")\s*:\s*("(?:[^"\\]|\\.)*"),?\s*$', line)
         if not match:
             raise SystemExit(f"unexpected icon table line: {line!r}")
         table[json.loads(match.group(1))] = json.loads(match.group(2))
-    return start, end, table
+    # Keep the indent the file already uses for entries.
+    first = text[start:end].strip("\n").splitlines()[:1]
+    indent = first[0][: len(first[0]) - len(first[0].lstrip())] if first else "    "
+    return start, end, table, indent
 
 
 def main():
@@ -54,13 +61,13 @@ def main():
     aliases = dict(a.split("=", 1) for a in args.aliases)
     reverse = {lucide: kit for kit, lucide in aliases.items()}
     text = ICON_QML.read_text()
-    start, end, table = read_table(text)
+    start, end, table, indent = read_table(text)
     for name in args.names:
         svg = icons / f"{name}.svg"
         if not svg.is_file():
             raise SystemExit(f"missing {svg}")
         table[reverse.get(name, name)] = inner(svg.read_text())
-    body = "\n" + ",\n".join(f"    {json.dumps(k)}: {json.dumps(v)}" for k, v in sorted(table.items()))
+    body = "\n" + ",\n".join(f"{indent}{json.dumps(k)}: {json.dumps(v)}" for k, v in sorted(table.items()))
     ICON_QML.write_text(text[:start] + body + text[end:])
     print(f"{len(table)} icons in {ICON_QML}")
     return 0
