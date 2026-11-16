@@ -126,13 +126,31 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 108 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 118 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
-  Callers set size/alignment, never `background`.
+  Callers set size/alignment, never `background`. Secrets (API tokens,
+  passwords) use `masked: true` and read `secretText`, never `text`. Label
+  the field with visible text: Qt gives a password edit no accessible name.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
+- **Tab row** (`FoamyTabs`): a few views of one panel (Inbox / Today /
+  Upcoming), at the top of the popup body directly under the hero band, the
+  body's full width (never in the hero slot). Height `controlHeight + gap`;
+  tabs as wide as their content from the reading start, inset `gapLarge`
+  and padded `rowPadding`, so the first icon lines up with the rows'
+  content below. Each tab: icon `iconSize`, label `body`, optional count
+  (mono `caption`). Open: label `text` DemiBold, icon and count in the
+  accent, a 2px accent underline across the tab on the row's 1px `divider`
+  hairline (the row draws the hairline). Others: `secondaryText`, counts
+  `mutedText`; an urgent count is `error` (on the surface). The cursor is a
+  `hoverFill` with `radius` behind the tab; nothing moves. Labels elide from
+  the last tab inward; icons and counts never clip; it never scrolls and
+  has no overflow menu, so keep the labels short. Bind `value`, change it
+  in `onActivated`. One cursor stop: ←/→ move between tabs, Enter activates
+  (the file header shows the key catcher wiring). Settings choices stay
+  `FoamyDropdown`.
 - **Short values use the row form** (settings): any control whose value is
   short (a number, an enum choice, an interval, a count, a percentage) is one
   row: label (subtitle, normal weight) and an optional `description`

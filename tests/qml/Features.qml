@@ -478,7 +478,7 @@ ShellRoot {
 
   function stepOne() {
     // --- icons -----------------------------------------------------------------------------
-    var wanted = ["github", "git-branch", "arrow-up", "arrow-down", "eye", "chevron-left", "calendar", "bell", "bell-off", "search", "x", "ellipsis", "mouse", "keyboard", "message-square", "message", "chat", "users", "battery", "battery-low", "battery-medium", "battery-full", "battery-charging", "plug", "zap", "skip-back", "skip-forward", "play", "pause", "shuffle", "repeat", "repeat-1", "music", "megaphone", "info"]
+    var wanted = ["github", "git-branch", "arrow-up", "arrow-down", "eye", "chevron-left", "calendar", "bell", "bell-off", "search", "x", "ellipsis", "mouse", "keyboard", "message-square", "message", "chat", "users", "battery", "battery-low", "battery-medium", "battery-full", "battery-charging", "plug", "zap", "skip-back", "skip-forward", "play", "pause", "shuffle", "repeat", "repeat-1", "music", "megaphone", "info", "user", "inbox", "calendar-days", "hash"]
     var missing = wanted.filter(function (name) {
       return !icon.paths.hasOwnProperty(name)
     })
@@ -487,6 +487,13 @@ ShellRoot {
     icon.name = "chevron-left"
     check(icon.known, "chevron-left is known")
     check(icon.directional.indexOf("chevron-left") !== -1, "chevron-left mirrors in RTL")
+    // Brand marks (Simple Icons) are solid shapes: drawn filled, not stroked.
+    var marks = ["zendesk", "todoist"]
+    marks.forEach(function (mark) {
+      icon.name = mark
+      var svg = decodeURIComponent(String(icon.source))
+      check(icon.known && svg.indexOf('<g fill="' + icon.color.toString() + '" stroke="none">' + icon.paths[mark] + '</g>') !== -1, mark + " is a known mark, drawn filled")
+    })
 
     // --- tokens ----------------------------------------------------------------------------
     eq(FoamyStyle.font.numeral, Style.space(56), "numeral token")

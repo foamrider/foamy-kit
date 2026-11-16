@@ -17,6 +17,7 @@
   "FoamyInfoNote": {"files": ["FoamyInfoNote.qml"], "deps": ["FoamyAction", "FoamyStyle", "FoamyPalette", "FoamyMotion", "FoamyI18n"]},
   "FoamyPopup": {"files": ["FoamyPopup.qml"], "deps": ["FoamyStyle", "FoamyI18n"]},
   "FoamyPopupCard": {"files": ["FoamyPopupCard.qml"], "deps": ["FoamyStyle", "FoamyI18n"]},
+  "FoamyTabs": {"files": ["FoamyTabs.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyMotion", "FoamyI18n"]},
   "FoamyDropdown": {"files": ["FoamyDropdown.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyI18n"], "notices": ["LICENSE-OMARCHY"]},
   "FoamyClipboard": {"files": ["FoamyClipboard.qml", "clipboard.sh"], "deps": []},
   "SafeTextField": {"files": ["SafeTextField.qml"], "deps": ["FoamyStyle", "FoamyClipboard"]},
