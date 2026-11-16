@@ -87,15 +87,29 @@ def read_png(path):
     return width, height, pixel
 
 
-def run_shell(qml_name, host, plugin, tag, env=None, scale=1.0, timeout=60, keep_pngs_to=None, suffix="", notes=False):
+def run_shell(
+    qml_name,
+    host,
+    plugin,
+    tag,
+    env=None,
+    scale=1.0,
+    timeout=60,
+    keep_pngs_to=None,
+    suffix="",
+    notes=False,
+    theme="dark",
+):
     """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
     shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
-    <name>-<suffix>.png. Returns True when it passed."""
+    <name>-<suffix>.png. `theme` is a preview/themes name or a colors.toml
+    path. Returns True when it passed."""
     r = harness.Run(
         host,
         (KIT_ROOT / "tests/qml" / qml_name).read_text(),
         plugin=plugin,
         scale=scale,
+        theme=theme,
         prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-",
     )
     r.env.update(env or {})

@@ -37,10 +37,11 @@ edited in a plugin: change it here, then sync.
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 113 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 118 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
+| FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |
 | FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces |
-| SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength` |
+| SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
@@ -1151,7 +1152,8 @@ writes late; and a peer call that can't start), a `qs ipc` argument probe, harne
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and screen-height popups
-(`test_components.py`), and wheel scrolling (`test_wheel.py`, which also
+(`test_components.py`), the tab row (`test_tabs.py`: LTR/RTL, the
+standard and wide popup, dark and light), and wheel scrolling (`test_wheel.py`, which also
 prints how far Qt's own Flickable gets per notch).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 FoamyNative (0.5.0): `native.test.cjs` (command builder and the real `bash

@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `FoamyTabs`: a tab row (underline tabs, each with a label and an optional
+  icon and count, one open), for a view switch at the top of the popup
+  body, directly under the hero band. Full width, height `controlHeight +
+  gap`; tabs as wide as their content from the reading start, inset
+  `gapLarge` and padded `rowPadding`, so the first icon lines up with the
+  rows' content. The open tab has a DemiBold label, an accent icon and
+  count and a 2px accent underline on the row's 1px `divider` hairline,
+  which the row draws itself; an urgent count is in the error colour. When
+  the tabs don't fit, labels elide from the last tab inward; icons and
+  counts never clip, and the row never scrolls. It never assigns `value`:
+  a press or Enter/Space emits `activated(value)`. One cursor stop in the
+  panel's FoamyCursor: `hasCursor`, `cursorIndex`, `moveCursor(dx)` (dx
+  from PanelKeyCatcher, already in reading order), `activateCursor()`,
+  `hovered()`. Mirrors with LayoutMirroring; tab-list and page-tab
+  accessibility. `tests/test_tabs.py` (LTR/RTL, the standard and wide
+  popup, scale 1.0 and 1.25, dark and light).
+- FoamyIcon: `inbox`, `calendar-days`, `hash` and `user` (Lucide 1.65.0,
+  lucide-static), and the Todoist brand mark (Simple Icons, CC0, drawn
+  filled like `zendesk`; brand marks are listed in `filled`), 118 names.
+- `SafeTextField.masked`: a password-style field for secrets such as API
+  tokens. The editor holds only the mask (one • per code point), so Qt still
+  places the caret, selection and clicks; the value is in the read-only
+  `secretText`, and `text` is the mask. Typing, Backspace/Delete (word
+  variants delete to the start/end), arrows, Home/End, Shift and mouse
+  selection, Ctrl+A, Enter and paste (Ctrl+V, Shift+Insert, the menu,
+  middle-click; still through `clipboard.sh`) work, within `maximumLength`;
+  `textEdited` fires on each change of the value. Copy, cut, undo and redo do
+  nothing, and nothing is written to the clipboard or the primary selection;
+  input methods are off and accessibility reports a password edit. New
+  `clear()` empties text and value. Set `masked` at creation: assigning
+  `text`, or changing `masked` later, clears the field.
+  `tests/test_masked.py` (LTR/RTL, dark and light).
+
+### Fixed
+- The kit's qmllint baseline drops the 32 `FoamyStyle.font` entries
+  that 0.11.0's typed `TypeScale` fixed.
+- `tools/update-icons.py` works again on the qmlformat-formatted
+  `FoamyIcon.qml`: it finds the table's end and keeps the entries' indent
+  whatever the indentation, instead of assuming two and four spaces.
+
 ## 0.11.0 — 2026-11-16
 
 ### Added
