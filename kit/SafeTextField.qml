@@ -184,7 +184,9 @@ Flickable {
     id: editor
     objectName: "safeEditor"
 
+    // The editor is the tab stop: it carries the field's name and its role.
     Accessible.name: root.Accessible.name
+    Accessible.role: Accessible.EditableText
     activeFocusOnTab: true
     persistentSelection: true
     selectByMouse: true
