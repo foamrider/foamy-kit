@@ -1,4 +1,15 @@
 #!/bin/bash
+# Bounded clipboard read for a field that must never let Qt paste itself.
+#
+#   bash kit/clipboard.sh clipboard|primary
+#
+# Prints the selection's text as one JSON string (line breaks as spaces) on
+# stdout. Exit 0 on success; 5 when the text is over 16 KiB or contains NUL;
+# 137 when the 2 s deadline killed the read; 143 when the caller stopped it
+# (TERM, INT or HUP: the whole read is killed); 2 for a bad argument; any other
+# nonzero code when wl-paste failed (no Wayland display, nothing copied, no
+# text type). Read stdout only after exit 0: a failed wl-paste still leaves
+# "" there. Nothing is written to stderr.
 set -euo pipefail
 
 case ${1:-} in

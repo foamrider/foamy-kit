@@ -39,7 +39,8 @@ edited in a plugin: change it here, then sync.
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 113 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
-| SafeTextField | `SafeTextField.qml`, `clipboard.sh` | Text field with bounded, out-of-process paste, `maximumLength` |
+| FoamyClipboard | `clipboard.sh` | Bounded clipboard read for a plugin that pastes without Qt: `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces, a JSON string on stdout |
+| SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength` |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |

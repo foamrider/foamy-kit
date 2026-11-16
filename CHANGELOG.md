@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 — 2026-11-16
+
+### Added
+- `FoamyClipboard`: `kit/clipboard.sh` as a component of its own, for a
+  plugin that draws its own text input and must paste without Qt (Qt's
+  `paste()` reads the whole clipboard on the UI thread, with no byte cap or
+  total deadline). `SafeTextField` now depends on it and ships the same
+  files as before; a plugin's next sync adds `FoamyClipboard` to its lock.
+  The script's header documents its arguments, output and exit codes.
+
 ## 0.9.0 — 2026-11-12
 
 ### Added

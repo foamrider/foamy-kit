@@ -307,6 +307,25 @@ def main():
         os.access(a / "kit/clipboard.sh", os.X_OK) and os.access(a / "tests/kit-check.sh", os.X_OK),
     )
     ok &= report("kit files are regular files (no symlinks)", not any(p.is_symlink() for p in a.rglob("*")))
+    ok &= report(
+        "the lock records SafeTextField's clipboard dependency",
+        "FoamyClipboard" in foamykit.read_lock(a)["components"],
+        str(foamykit.read_lock(a)["components"]),
+    )
+    # A plugin with its own text input (foamy-menu's launcher) takes the
+    # bounded paste script alone, without the field or its style.
+    paste_only = base / "paste-only"
+    shutil.copytree(FIXTURES / "demo-plugin", paste_only, ignore=shutil.ignore_patterns("REVIEW.md"))
+    code, out = sh(SYNC, str(paste_only), "--components", "FoamyClipboard")
+    files = sorted(p.name for p in (paste_only / "kit").iterdir())
+    ok &= report(
+        "FoamyClipboard syncs clipboard.sh alone",
+        code == 0
+        and files == ["clipboard.sh", "qmldir", "tooling"]
+        and ".qml" not in (paste_only / "kit/qmldir").read_text()
+        and os.access(paste_only / "kit/clipboard.sh", os.X_OK),
+        f"{code} {files} {out.strip()}",
+    )
     if os.access(VALIDATE, os.X_OK):
         code, out = sh(VALIDATE, str(a))
         ok &= report("omarchy-plugin-validate accepts the synced plugin", code == 0, out.strip())
