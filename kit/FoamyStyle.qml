@@ -38,7 +38,8 @@ QtObject {
   // (the Omarchy font, which follows `omarchy font set`).
   readonly property string fontFamily: "sans-serif"
   readonly property string monoFamily: Style.font.family
-  readonly property QtObject font: QtObject {
+  // A named type, so qmllint knows the members (FoamyStyle.font.body).
+  component TypeScale: QtObject {
     readonly property int caption: Style.space(10)
     readonly property int bodySmall: Style.space(11)
     readonly property int body: Style.space(12)
@@ -55,6 +56,7 @@ QtObject {
     readonly property int numeral: Style.space(56)
     readonly property int numeralCompact: Style.space(40)
   }
+  readonly property TypeScale font: TypeScale {}
 
   // --- popup geometry ----------------------------------------------------------
   readonly property int popupWidth: Style.space(420)

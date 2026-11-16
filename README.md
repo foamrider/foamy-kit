@@ -39,7 +39,7 @@ edited in a plugin: change it here, then sync.
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 113 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
-| FoamyClipboard | `clipboard.sh` | Bounded clipboard read for a plugin that pastes without Qt: `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces, a JSON string on stdout |
+| FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces |
 | SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength` |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
@@ -229,6 +229,13 @@ non-ignored files.
   (`tests/qml/*  qmllint  # …`). The harness replaces `qs.Ui` with a staged
   copy that adds preview stand-ins, so qmllint's verdict on a harness file's
   imports is not evidence.
+- `tests/lint/qmllint-links.txt`: `<link> <target>  # reason` lines for QML
+  that runs from a root assembled at run time and imports what that root
+  links in beside it (Lock Studio: `studio/kit  kit  # …`). qmllint then
+  lints a staged copy of the plugin's QML and JavaScript with those links, so
+  the imports resolve instead of being baselined. `<link>` is a new relative
+  path in the repository; `<target>` a path in it, or `@shell/<path>` in the
+  Omarchy shell. Keep the list the same as the root's own.
 - `tests/lint/vulture-ignore.txt`: `<name>  # reason` lines for dynamic entry
   points Vulture can't see (atexit or signal handlers, names called by
   string).

@@ -271,6 +271,7 @@ def main():
         and files
         == sorted(
             [
+                "FoamyClipboard.qml",
                 "FoamyI18n.qml",
                 "FoamyI18nText.js",
                 "FoamyPalette.qml",
@@ -312,17 +313,18 @@ def main():
         "FoamyClipboard" in foamykit.read_lock(a)["components"],
         str(foamykit.read_lock(a)["components"]),
     )
-    # A plugin with its own text input (foamy-menu's launcher) takes the
-    # bounded paste script alone, without the field or its style.
+    # A plugin with its own text input (foamy-menu's launcher, foamy-lock's
+    # password field) takes the bounded reader alone, without the field or
+    # its style.
     paste_only = base / "paste-only"
     shutil.copytree(FIXTURES / "demo-plugin", paste_only, ignore=shutil.ignore_patterns("REVIEW.md"))
     code, out = sh(SYNC, str(paste_only), "--components", "FoamyClipboard")
     files = sorted(p.name for p in (paste_only / "kit").iterdir())
     ok &= report(
-        "FoamyClipboard syncs clipboard.sh alone",
+        "FoamyClipboard syncs its reader and clipboard.sh alone",
         code == 0
-        and files == ["clipboard.sh", "qmldir", "tooling"]
-        and ".qml" not in (paste_only / "kit/qmldir").read_text()
+        and files == ["FoamyClipboard.qml", "clipboard.sh", "qmldir", "tooling"]
+        and (paste_only / "kit/qmldir").read_text().splitlines()[1:] == ["FoamyClipboard 1.0 FoamyClipboard.qml"]
         and os.access(paste_only / "kit/clipboard.sh", os.X_OK),
         f"{code} {files} {out.strip()}",
     )

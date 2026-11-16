@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.11.0 — 2026-11-16
+
+### Added
+- `FoamyClipboard.qml`: the QML side of `FoamyClipboard`, from foamy-menu's
+  launcher, for a second plugin that needs it (foamy-lock's password
+  field). `start(primary)` runs `clipboard.sh` for the clipboard or the
+  primary selection; `read(text)` or `failed(message)` (English) follows
+  exactly once, on exit or a failed start, and never after `cancel()`.
+  It stays busy until a stopped read has exited, so a new read can't
+  take the old one's exit. `tests/test_clipboard_reader.py` runs it
+  against the `hostenv.clipboard_fakes()` stand-ins.
+
+- `tests/lint/qmllint-links.txt` (plugin-owned, optional): links qmllint's
+  staged copy adds for QML that runs from a root assembled at run time
+  (Lock Studio imports `kit`, `elements` and the lock's view beside its
+  own files). `validate.sh` lints a copy with those links, so those imports
+  resolve instead of filling the baseline; each link must be a new
+  relative path and its target an existing path in the repository or
+  `@shell/<path>`, with a reason.
+
+### Fixed
+- `SafeTextField`: its editor, the tab stop, has the editable-text
+  accessible role next to the field's name (it had no role).
+- `FoamyStyle.font` is a named type (`TypeScale`), so qmllint knows its
+  members: `FoamyStyle.font.body` and the rest no longer report a missing
+  property. The values are unchanged. A plugin's qmllint baseline may then
+  list fixed entries; shrink it.
+
 ## 0.10.0 — 2026-11-16
 
 ### Added
