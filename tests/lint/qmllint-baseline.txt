@@ -1,17 +1,11 @@
 # qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
 # finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
 # only to drop fixed entries or after reviewing every added one; never to pass a check.
-kit/FoamyAction.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyButton.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var base = Commons.Color.accent
-kit/FoamyButton.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < options.length; i++)
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < options.length; i++) {
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < root.options.length; i++)
 kit/FoamyDropdown.qml: missing-property: Member "background" not found on type "QObject" | property color background: Commons.Color.popups.background
-kit/FoamyDropdown.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-kit/FoamyDropdown.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
-kit/FoamyDropdown.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyDropdown.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyDropdown.qml: missing-property: Member "border" not found on type "QObject" | property color popupBorder: Commons.Color.popups.border
 kit/FoamyDropdown.qml: missing-property: Member "border" not found on type "QObject" | readonly property var popupBorderSpec: Border.localOrSurfaceSpec("popups", "border", popupBorder, Commons.Color.popups.border, Style.normalBorderWidth)
 kit/FoamyDropdown.qml: missing-property: Member "color" not found on type (component in kit/FoamyDropdown.qml)::item with type QObject | item.color = Qt.binding(function () {
@@ -31,7 +25,6 @@ kit/FoamyDropdown.qml: missing-property: Member "labelGap" not found on type "QO
 kit/FoamyDropdown.qml: missing-property: Member "md" not found on type "QObject" | anchors.rightMargin: trigger.borderRight + Style.spacing.md
 kit/FoamyDropdown.qml: missing-property: Member "md" not found on type "QObject" | readonly property real compactNaturalWidth: !compact ? 0 : Math.ceil(widestLabel()) + FoamyStyle.controlPaddingX + Style.spacing.md + FoamyStyle.iconSize + Styl
 kit/FoamyDropdown.qml: missing-property: Member "popupRowHeight" not found on type "QObject" | property int popupRowHeight: Style.spacing.popupRowHeight
-kit/FoamyDropdown.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
 kit/FoamyDropdown.qml: missing-property: Member "text" not found on type "QObject" | property color foreground: Commons.Color.popups.text
 kit/FoamyDropdown.qml: missing-property: Member "text" not found on type (component in kit/FoamyDropdown.qml)::item with type QObject | item.text = Qt.binding(function () {
 kit/FoamyDropdown.qml: missing-property: Member "xxs" not found on type "QObject" | implicitHeight: Math.min(root.options.length * root.popupRowHeight + Math.max(0, root.options.length - 1) * Style.spacing.labelGap + Style.spacing.xxs, root.pop
@@ -71,12 +64,10 @@ kit/FoamyHeader.qml: block-scope-var-declaration: var declaration in block scope
 kit/FoamyHeader.qml: id-shadows-member: Id for object FoamyAction shadows property "settingsButton". Rename one or the other. | readonly property real buttonsWidth: trailingRow.width + (settingsButton.visible ? settingsButton.width + row.spacing : 0)
 kit/FoamyHeader.qml: id-shadows-member: Note: Id defined here | id: settingsButton
 kit/FoamyHeader.qml: missing-property: Member "active" not found on type "QQuickItem" | enabled: !!action && action.active !== false
-kit/FoamyHeader.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyHeader.qml: missing-property: Member "clicked" not found on type "QQuickItem" | action.clicked()
 kit/FoamyHeader.qml: missing-property: Member "destructive" not found on type "QQuickItem" | destructive: !!action && action.destructive === true
 kit/FoamyHeader.qml: missing-property: Member "iconName" not found on type "QQuickItem" | iconName: action ? action.iconName : ""
 kit/FoamyHeader.qml: missing-property: Member "label" not found on type "QQuickItem" | text: action ? String(action.tooltipText || action.label || "") : ""
-kit/FoamyHeader.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
 kit/FoamyHeader.qml: missing-property: Member "tooltipText" not found on type "QQuickItem" | text: action ? String(action.tooltipText || action.label || "") : ""
 kit/FoamyHeroBand.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < items.length; i++)
 kit/FoamyHeroBand.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var item = parent; item; item = item.parent)
@@ -93,13 +84,9 @@ kit/FoamyHeroBand.qml: confusing-expression-statement: Expression statement has 
 kit/FoamyHeroBand.qml: confusing-expression-statement: Expression statement has no obvious effect. | band.y
 kit/FoamyHeroBand.qml: confusing-expression-statement: Expression statement has no obvious effect. | card.height
 kit/FoamyHeroBand.qml: incompatible-type: Cannot assign binding of type QObject to QQuickItem | readonly property Item backgroundItem: backgroundLoader.item
-kit/FoamyHeroBand.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyHeroBand.qml: missing-property: Member "contentBottomInset" not found on type "QQuickItem" | return Math.abs(bottom - (card.height - card.contentBottomInset)) <= 1
-kit/FoamyHeroBand.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
 kit/FoamyI18n.qml: import: Type FoamyI18n not declared as singleton in qmldir but using pragma Singleton
 kit/FoamyInfoNote.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var item = root.parent; item; item = item.parent)
-kit/FoamyInfoNote.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyInfoNote.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyInfoNote.qml: missing-property: Member "ensureVisible" not found on type "QQuickItem" | if (typeof item.ensureVisible === "function") {
 kit/FoamyInfoNote.qml: missing-property: Member "ensureVisible" not found on type "QQuickItem" | item.ensureVisible(note)
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < level.length; i++) {
@@ -108,7 +95,6 @@ kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope i
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var step = 0; step < n; step++) {
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var entry = level[i]
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var h0 = root.anchorItem.mapToItem(holder, 0, 0)
-kit/FoamyMenu.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type FoamyMenu::_reserveHolder with type QQuickItem | _reserveHolder.foamyMenuReserve = 0
 kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type FoamyMenu::_reserveHolder with type QQuickItem | holder.foamyMenuReserve = h0.y + root.anchorItem.height + FoamyStyle.gapSmall + naturalHeight + margin
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
@@ -127,11 +113,6 @@ kit/FoamyNumberField.qml: block-scope-var-declaration: var declaration in block 
 kit/FoamyNumberField.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var code = s.charCodeAt(i)
 kit/FoamyNumberField.qml: id-shadows-member: Id for object SafeTextField shadows property "field". Rename one or the other. | field.text = format(value)
 kit/FoamyNumberField.qml: id-shadows-member: Note: Id defined here | id: field
-kit/FoamyNumberField.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyNumberField.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyNumberField.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyNumberField.qml: missing-property: Member "caption" not found on type "QObject" | font.pixelSize: FoamyStyle.font.caption
-kit/FoamyNumberField.qml: missing-property: Member "subtitle" not found on type "QObject" | font.pixelSize: FoamyStyle.font.subtitle
 kit/FoamyPalette.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++) {
 kit/FoamyPalette.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < lines.length; i++) {
 kit/FoamyPalette.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]*)"\s*(#.*)?$/.exec(lines[i])
@@ -139,8 +120,6 @@ kit/FoamyPalette.qml: block-scope-var-declaration: var declaration in block scop
 kit/FoamyPalette.qml: import: Type FoamyPalette not declared as singleton in qmldir but using pragma Singleton
 kit/FoamyPalette.qml: missing-property: Member "background" not found on type "QObject" | readonly property color background: Commons.Color.popups.background
 kit/FoamyPalette.qml: missing-property: Member "text" not found on type "QObject" | readonly property color text: Commons.Color.popups.text
-kit/FoamyPanelFooter.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyPanelFooter.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamyPeerIpc.qml: unqualified: Unqualified access | root.running = Math.max(0, root.running - 1)
 kit/FoamyPeerIpc.qml: unqualified: Unqualified access | root.running = Math.max(0, root.running - 1)
 kit/FoamyPopup.qml: incompatible-type: Cannot assign binding of type QObject to QQuickItem | readonly property Item bodyItem: bodyLoader.item
@@ -157,16 +136,10 @@ kit/FoamyPrefsQueue.qml: block-scope-var-declaration: var declaration in block s
 kit/FoamyPrefsQueue.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var restored = Prefs.overlay({}, pending)
 kit/FoamyPrefsQueue.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var since = Prefs.overlay({}, pendingSince)
 kit/FoamyScheduleDay.qml: incompatible-type: Cannot assign binding of type QObject to QQuickItem | readonly property Item labelItem: labelLoader.item
-kit/FoamyScheduleDay.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 kit/FoamyScheduleDay.qml: missing-property: Member "text" not found on type "QObject" | foreground: Commons.Color.popups.text
 kit/FoamyScheduleDay.qml: missing-property: Member "text" not found on type (component in kit/FoamyScheduleDay.qml)::item with type QObject | onLoaded: item.text = Qt.binding(function () {
-kit/FoamySettingsError.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamySettingsHeader.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamySettingsHeader.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
 kit/FoamySettingsPage.qml: missing-property: Member "activeFocusItem" not found on type "QObject" | if (target && target.activeFocusItem)
 kit/FoamySettingsPage.qml: missing-property: Member "activeFocusItem" not found on type "QObject" | root.keepVisible(target.activeFocusItem)
-kit/FoamySettingsSection.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamySettingsSection.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
 kit/FoamySettingsState.qml: missing-property: Member "open" not found on type "QObject" | panel.open()
 kit/FoamySettingsState.qml: missing-property: Member "opened" not found on type "QObject" | if (panel && !panel.opened)
 kit/FoamySettingsState.qml: missing-property: Member "opened" not found on type "QObject" | if (state.panel && !state.panel.opened && !state.holdOnClose)
@@ -178,10 +151,6 @@ kit/FoamyStyle.qml: import: Type FoamyStyle not declared as singleton in qmldir 
 kit/FoamyStyle.qml: missing-property: Member "family" not found on type "QObject" | readonly property string monoFamily: Style.font.family
 kit/FoamyTextSettingField.qml: id-shadows-member: Id for object SafeTextField shadows property "field". Rename one or the other. | field.text = value
 kit/FoamyTextSettingField.qml: id-shadows-member: Note: Id defined here | id: field
-kit/FoamyTextSettingField.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
-kit/FoamyTextSettingField.qml: missing-property: Member "caption" not found on type "QObject" | font.pixelSize: FoamyStyle.font.caption
-kit/FoamyToggle.qml: missing-property: Member "bodySmall" not found on type "QObject" | property real descriptionSize: FoamyStyle.font.bodySmall
-kit/FoamyToggle.qml: missing-property: Member "subtitle" not found on type "QObject" | property real titleSize: FoamyStyle.font.subtitle
 kit/FoamyWheelScroll.qml: missing-property: Member "wheelScrollLines" not found on type "QObject" | property real notch: Math.max(1, Qt.styleHints.wheelScrollLines) * FoamyStyle.rowHeight
 kit/FoamyWheelScroll.qml: unqualified: Unqualified access | enabled: root.enabled && root.scrollable && root.target !== null && root.target.interactive
 kit/FoamyWheelScroll.qml: unqualified: Unqualified access | enabled: root.enabled && root.scrollable && root.target !== null && root.target.interactive
@@ -190,6 +159,5 @@ kit/FoamyWheelScroll.qml: unqualified: Unqualified access | enabled: root.enable
 kit/FoamyWheelScroll.qml: unqualified: Unqualified access | root.wheel(event)
 kit/SafeTextField.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var backwards = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier)
 kit/SafeTextField.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var value = JSON.parse(output)
-kit/SafeTextField.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
 kit/SafeTextField.qml: missing-property: Member "controlPaddingX" not found on type "QObject" | leftPadding: Style.spacing.controlPaddingX + Border.left(_borderSpec)
 kit/SafeTextField.qml: missing-property: Member "controlPaddingX" not found on type "QObject" | rightPadding: Style.spacing.controlPaddingX + Border.right(_borderSpec)
