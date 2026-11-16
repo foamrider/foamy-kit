@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 — 2026-11-16
 
 ### Added
 - `FoamyTabs`: a tab row (underline tabs, each with a label and an optional
