@@ -1,0 +1,7 @@
+interface:
+  display_name: "Omarchy Marketplace Update"
+  short_description: "Publish a plugin commit to the marketplace"
+  default_prompt: "Use $omarchy-marketplace-plugin-update to submit this pushed plugin commit to the Omarchy marketplace."
+
+policy:
+  allow_implicit_invocation: false

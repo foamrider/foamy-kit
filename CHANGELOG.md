@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- foamy-kit is the home repository for agent work across the plugins.
+  `AGENTS.md` lists every plugin under `## Plugins` with its local path and
+  clone URL. `CLAUDE.md` imports `AGENTS.md`.
+- `check.sh` fails for a published plugin (a checkout whose `origin` is a
+  `github.com/foamrider` repository) that the list leaves out, and when the
+  list is missing or malformed. `--lint-only` skips it. Plain copies, forks
+  and plugins that were never pushed are not checked.
+- The `omarchy-marketplace-plugin-update` skill, in `.agents/skills/` with a
+  `.claude/skills/` link. Submissions target the `main` merge commit.
+
 ## 0.12.0 — 2026-11-16
 
 ### Added

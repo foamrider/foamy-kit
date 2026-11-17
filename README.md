@@ -10,6 +10,13 @@ The shared code review standard lives in [REVIEW.md](REVIEW.md): structure,
 simplification, linting and dead-code analysis, defensive programming, security
 and validation evidence. Read it before reviewing kit or plugin changes.
 
+foamy-kit is also the home repository for agent work across the plugins.
+Start a session here when a task spans plugins. [AGENTS.md](AGENTS.md) lists
+every plugin with its local path and clone URL, and `check.sh` fails for a
+published plugin (origin on `github.com/foamrider`) that the list leaves out.
+Shared Foamy agent workflows are skills in `.agents/skills/`, linked from
+`.claude/skills/`. `CLAUDE.md` imports `AGENTS.md`.
+
 Plugins can't share files at runtime (each is a self-contained directory and
 `omarchy-plugin-validate` rejects symlinks), so the kit is **copied** into
 each plugin as stamped regular files under `kit/`. A stamped copy is never
@@ -130,8 +137,9 @@ every stamped file, so a local edit fails the plugin's own test run.
 
 Fails when plugins are on different kit versions, a stamped file, notice or
 `REVIEW.md` was edited, the `AGENTS.md` review block is missing or stale, a
-native helper doesn't match its pin ([Native helpers](#native-helpers)), or
-the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
+native helper doesn't match its pin ([Native helpers](#native-helpers)), a
+published plugin is missing from the plugin list in foamy-kit's `AGENTS.md`
+(not checked with `--lint-only`), or the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
 
 ## Tooling
