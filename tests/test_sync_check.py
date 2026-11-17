@@ -165,8 +165,96 @@ def lock_source_tests(base):
         str(lock_source(plugin)),
     )
     git(kit, "checkout", "-q", "--", "kit/FoamyStyle.qml")
+    # check.sh reads the plugin list from the kit commit the lock names, so an
+    # uncommitted list edit must not pass as the clean commit.
+    with open(kit / "AGENTS.md", "a") as agents:
+        agents.write("\nAn uncommitted plugin list edit.\n")
+    sh(str(kit / "sync.sh"), str(plugin))
+    ok &= report(
+        "a sync from an uncommitted AGENTS.md edit marks the source +dirty",
+        lock_source(plugin) == second + "+dirty",
+        str(lock_source(plugin)),
+    )
+    git(kit, "checkout", "-q", "--", "AGENTS.md")
     sh(str(kit / "sync.sh"), str(plugin))
     ok &= workflow_kit_tests(base, kit, plugin, second)
+    return ok
+
+
+def plugin_map_tests(base):
+    """check.sh fails for a published plugin that foamy-kit's AGENTS.md does
+    not list, and the list itself must stay well formed."""
+    ok = True
+    try:
+        listed = foamykit.mapped_plugins()
+        ok &= report("foamy-kit's AGENTS.md has a well-formed plugin list", bool(listed), str(len(listed)))
+    except foamykit.KitError as error:
+        return report("foamy-kit's AGENTS.md has a well-formed plugin list", False, str(error))
+    entry = "- foamy-x (a widget): ~/GitHub/Personal/foamy-x. Clone from https://github.com/foamrider/foamy-x.git if missing."
+    cases = [
+        ("a valid list", f"# A\n\n## Plugins\n\nIntro.\n\n{entry}\n\n## Other\n\n- foamy-y (not a map line)\n", True),
+        ("no Plugins heading", f"# A\n\n{entry}\n", False),
+        ("an empty list", "## Plugins\n\nIntro.\n", False),
+        ("a malformed line", "## Plugins\n\n- foamy-x: ~/GitHub/Personal/foamy-x.\n", False),
+        (
+            "a path for another repo",
+            "## Plugins\n\n" + entry.replace("Personal/foamy-x.", "Personal/foamy-z.") + "\n",
+            False,
+        ),
+        (
+            "a clone URL for another repo",
+            "## Plugins\n\n" + entry.replace("foamrider/foamy-x", "foamrider/foamy-z") + "\n",
+            False,
+        ),
+        ("a duplicate line", f"## Plugins\n\n{entry}\n{entry}\n", False),
+    ]
+    for label, text, valid in cases:
+        path = base / "map-AGENTS.md"
+        path.write_text(text)
+        try:
+            names, error = foamykit.mapped_plugins(path), ""
+        except foamykit.KitError as raised:
+            names, error = None, str(raised)
+        ok &= report(
+            f"plugin list: {label} is {'accepted' if valid else 'rejected'}",
+            names == {"foamy-x"} if valid else names is None and "AGENTS.md" in error,
+            error,
+        )
+
+    # A synced demo plugin whose origin decides whether it counts as published.
+    plugin = base / "map-plugin"
+    shutil.copytree(FIXTURES / "demo-plugin", plugin)
+    sh(SYNC, str(plugin))
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    ok &= report("check.sh passes a plugin that is not a git checkout", code == 0, out.strip())
+    git(plugin, "init", "-q")
+    known = sorted(listed)[0]
+    origins = [
+        (f"https://github.com/foamrider/{known}.git", True),
+        (f"git@github.com:foamrider/{known}.git", True),
+        (f"https://github.com/someone/{known}-fork.git", True),
+        ("https://github.com/foamrider/foamy-unlisted.git", False),
+        ("git@github.com:foamrider/foamy-unlisted", False),
+    ]
+    git(plugin, "remote", "add", "origin", origins[0][0])
+    for url, passes in origins:
+        git(plugin, "remote", "set-url", "origin", url)
+        code, out = sh(CHECK, "--no-lint", str(plugin))
+        ok &= report(
+            f"check.sh {'passes' if passes else 'fails'} a plugin whose origin is {url}",
+            code == 0 if passes else code != 0 and "foamy-unlisted is not listed under ## Plugins" in out,
+            out.strip(),
+        )
+    code, out = sh(CHECK, "--lint-only", str(plugin))
+    ok &= report("check.sh --lint-only does not check the plugin list", code == 0, out.strip())
+    kit = copy_kit(base / "map-kit")
+    (kit / "AGENTS.md").write_text("# foamy-kit\n\nNo plugin list.\n")
+    code, out = sh(str(kit / "check.sh"), "--no-lint", str(plugin))
+    ok &= report(
+        "check.sh fails when foamy-kit's plugin list is unusable",
+        code != 0 and "foamy-kit: AGENTS.md: expected one '## Plugins' section" in out,
+        out.strip(),
+    )
     return ok
 
 
@@ -646,7 +734,10 @@ def main():
     # 7. The lock's source line and checks.yml's kit checkout.
     ok &= lock_source_tests(base)
 
-    # 8. Design lint.
+    # 8. The plugin list in foamy-kit's AGENTS.md (the home repository's map).
+    ok &= plugin_map_tests(base)
+
+    # 9. Design lint.
     code, out = sh(
         "python3", "-I", str(KIT_ROOT / "tools/foamykit.py"), "lint", str(KIT_ROOT / "tests/lint-cases/Bad.qml")
     )

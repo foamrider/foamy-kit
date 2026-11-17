@@ -103,6 +103,7 @@ def kit_revision():
                 "VERSION",
                 "tools",
                 REVIEW_NAME,
+                AGENTS_NAME,  # the plugin list check.sh reads at this commit
                 *TOOLING_FILES.values(),
             ],
             capture_output=True,
@@ -586,6 +587,80 @@ def verify_plugin(plugin, native=True):
     return problems
 
 
+# ----------------------------------------------------------------- plugin map
+
+# foamy-kit is the home repository for agent work across the plugins: its
+# AGENTS.md lists every published plugin under PLUGINS_HEADING, one line each.
+# check.sh fails for a published plugin (origin on github.com/foamrider) that
+# the list leaves out, so the list can't silently fall behind.
+PLUGINS_HEADING = "## Plugins"
+PLUGIN_ENTRY_RE = re.compile(
+    r"- (foamy-[a-z0-9-]+) \([^()]+\): ~/GitHub/Personal/\1\. "
+    r"Clone from https://github\.com/foamrider/\1\.git if missing\."
+)
+FOAMY_ORIGIN_RE = re.compile(
+    r"(?:https://github\.com/|ssh://git@github\.com/|git@github\.com:)foamrider/(foamy-[a-z0-9-]+?)(?:\.git)?/?"
+)
+
+
+def mapped_plugins(agents=None):
+    """Repository names listed under PLUGINS_HEADING in foamy-kit's AGENTS.md.
+
+    Every "- " line in the section must be a full entry; a missing section,
+    an empty list, a malformed line or a duplicate raises KitError."""
+    agents = agents or KIT_ROOT / AGENTS_NAME
+    lines = agents.read_text(encoding="utf-8").splitlines()
+    if lines.count(PLUGINS_HEADING) != 1:
+        raise KitError(f"{AGENTS_NAME}: expected one {PLUGINS_HEADING!r} section")
+    names = set()
+    start = lines.index(PLUGINS_HEADING) + 1
+    for number, line in enumerate(lines[start:], start + 1):
+        if line.startswith("## "):
+            break
+        if not line.startswith("- "):
+            continue
+        match = PLUGIN_ENTRY_RE.fullmatch(line)
+        if not match:
+            raise KitError(
+                f"{AGENTS_NAME}:{number}: a {PLUGINS_HEADING} entry must read "
+                "'- foamy-<name> (<what it is>): ~/GitHub/Personal/foamy-<name>. "
+                "Clone from https://github.com/foamrider/foamy-<name>.git if missing.'"
+            )
+        if match.group(1) in names:
+            raise KitError(f"{AGENTS_NAME}:{number}: {match.group(1)} is listed twice")
+        names.add(match.group(1))
+    if not names:
+        raise KitError(f"{AGENTS_NAME}: {PLUGINS_HEADING} lists no plugins")
+    return names
+
+
+def git_output(plugin, *args):
+    """stdout of a git command in `plugin`, or None when git exits nonzero."""
+    result = subprocess.run(["git", "-C", str(plugin), *args], capture_output=True, text=True, timeout=10)
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def published_name(plugin):
+    """The plugin's repository name when it is the top of a git checkout whose
+    origin is a foamrider repository on GitHub; else None (a plain copy, a
+    fork, a test fixture, a plugin that was never pushed)."""
+    top = git_output(plugin, "rev-parse", "--show-toplevel")
+    if top is None or Path(top).resolve() != Path(plugin).resolve():
+        return None
+    match = FOAMY_ORIGIN_RE.fullmatch(git_output(plugin, "remote", "get-url", "origin") or "")
+    return match.group(1) if match else None
+
+
+def plugin_map_problems(plugin, mapped):
+    try:
+        name = published_name(plugin)
+    except (OSError, subprocess.SubprocessError) as error:
+        return [f"could not read the git origin to check the plugin list: {error}"]
+    if name is None or name in mapped:
+        return []
+    return [f"{name} is not listed under {PLUGINS_HEADING} in foamy-kit's {AGENTS_NAME}; add its line there"]
+
+
 # ----------------------------------------------------------------------- lint
 
 RULES = {
@@ -844,29 +919,49 @@ def cargo_target_dirs(plugin):
     return [d.relative_to(plugin).as_posix() for d in found if (d / "CACHEDIR.TAG").is_file()]
 
 
+def checked_plugin_map():
+    """(the plugin list, 0), or (None, 1) after printing why it is unusable."""
+    try:
+        return mapped_plugins(), 0
+    except KitError as error:
+        print(f"foamy-kit: {error}")
+        return None, 1
+
+
+def kit_problems(plugin, lock, lock_broken, allow_unsynced, mapped):
+    """check.sh's kit problems for one plugin: integrity (skipped for a
+    plugin without a lock under --allow-unsynced) and, when `mapped` is the
+    plugin list, whether a published plugin is on it."""
+    problems = []
+    if lock is not None or lock_broken or not allow_unsynced:
+        problems += verify_plugin(plugin)
+    if mapped is not None:
+        problems += plugin_map_problems(plugin, mapped)
+    return problems
+
+
 def cmd_check(args):
-    status = 0
+    status, mapped = 0, None
     versions = {}
     current = kit_version()
+    if not args.lint_only:
+        mapped, status = checked_plugin_map()
     for plugin in args.plugins:
         plugin = Path(plugin)
         if not (plugin / "manifest.json").is_file():
             continue
         name = plugin.resolve().name
-        problems = []
         # A lock that names paths foamy-kit doesn't own is this plugin's
         # problem (verify_plugin reports it), not a reason to stop checking.
         try:
             lock, lock_broken = read_lock(plugin), False
         except KitError:
             lock, lock_broken = None, True
+        problems = []
         if not args.lint_only:
-            if lock is None and args.allow_unsynced and not lock_broken:
-                pass
-            else:
-                problems += verify_plugin(plugin)
-                if lock and lock["version"]:
-                    versions.setdefault(lock["version"], []).append(name)
+            problems = kit_problems(plugin, lock, lock_broken, args.allow_unsynced, mapped)
+            if lock and lock["version"]:
+                versions.setdefault(lock["version"], []).append(name)
         findings = [] if args.no_lint else lint_plugin(plugin)
         for problem in problems:
             print(f"{name}: kit: {problem}")
