@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.12.1 — 2026-11-19
+
+### Fixed
+- `foamy_helper::io::read_stdin_limited` ends at the helper's run budget
+  (`process::set_run_budget`): a caller that wrote its request but never
+  closed standard input kept the helper waiting with no end. The read now
+  waits in `poll` for at most the time left and fails with kind `TimedOut`.
+  Without a run budget it reads as before.
 
 ### Added
 - foamy-kit is the home repository for agent work across the plugins.
