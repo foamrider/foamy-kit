@@ -66,6 +66,16 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   - Settings pages show the compact band (back, "Settings", "Saving…");
     `FoamySettingsPage` does it.
   - No band on menus (`FoamyPopupCard`) or toasts.
+  - **Field mode** (search, quick add): a text field grows out of the header
+    action that opens it, across the title row (`field`, `fieldOrigin`,
+    `fieldOpen`), while the title row and the buttons fade out; closing
+    reverses it. One field at a time: search and quick add share the band's
+    one field. The band's height is fixed: the field lies over the title
+    row, and the hero and the list under the band never move. "+" sits
+    left of Search (declare it first in `trailing`; RTL mirrors it). While
+    the field is open the buttons are inert and out of the cursor
+    (`buttonsActive`); the panel owns the keys (Esc closes, the focus goes
+    back to the key catcher).
   - **Centred** (`centered: true`): for a panel about one big value read at a
     glance (clock: the time; weather: the temperature and sky). No title icon;
     the hero comes first, centred (give hero items `Layout.alignment:
@@ -132,6 +142,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   Callers set size/alignment, never `background`. Secrets (API tokens,
   passwords) use `masked: true` and read `secretText`, never `text`. Label
   the field with visible text: Qt gives a password edit no accessible name.
+  Coloured tokens in a field (Quick Add) use its `runs`. Multi-line text
+  (a description) is `SafeTextArea`, for the same clipboard reason.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.13.0 — 2026-11-19
+
+### Added
+- `FoamyHeroBand` field mode: `field` (a caller's item, normally a
+  `SafeTextField`), `fieldOrigin` (the header action it grows from) and
+  `fieldOpen`. Opening, the field grows from the action's rectangle to the
+  full width between the side paddings, in the title row's slot, and the
+  title row and the buttons fade out; closing reverses it
+  (`FoamyMotion.grow`, `fadeOut`, `fadeIn`; instant under reduced motion;
+  mirrored in RTL). The band's height never changes, and a hero stays in
+  place. The band sets the field's text to `FoamyStyle.font.heading`.
+  While the field is open, `buttonsActive` is false: the buttons take no
+  pointer input or focus, `settingsHasCursor`/`menuHasCursor` light
+  nothing and the ⋯ menu closes and won't open. `fieldShown` and
+  `fieldProgress` expose the state and the animation; keys stay the
+  caller's. `menuHasCursor` is now a property of the band instead of an
+  alias (same use). DESIGN.md: one field at a time, the band height is
+  fixed, "+" sits left of Search. `tests/test_band_field.py`.
+- `SafeTextField.runs`: an array of `{text, color}` whose texts join to the
+  field's text. The field then draws each run in its colour over its own
+  glyphs (same font, each run placed where the editor puts its first
+  character, clipped where the editor clips), aligned while the field
+  scrolls, with the selection and the caret still drawn. Runs that don't
+  match the text, or that the editor lays out other than as one piece,
+  give the plain field (`runsShown` says which); a masked field ignores
+  them. The field's `color` is now its own property (same use).
+  `tests/test_text_runs.py` compares the styled field's pixels with a plain
+  field's.
+- `SafeTextArea`: the multi-line sibling of `SafeTextField`. Paste goes
+  through `FoamyClipboard` with line breaks kept (16 KiB, no NUL, 2 s
+  deadline, a late result dropped); `maximumLength` (typing at the limit
+  drops the key, a paste is cut to fit), word wrap, `minimumHeight` and
+  `maximumHeight` (it scrolls past it, following the caret, wheel through
+  `FoamyWheelScroll`), `placeholderText`, `translate`, the accessible name,
+  `textEdited`, `editingFinished` on focus loss, and the `keyPressed` hook.
+  Enter and Shift+Enter insert a newline. `tests/test_text_area.py`.
+- `FoamyStyle.controlPaddingY` (6): the padding above and below the text
+  of a multi-line field.
+- `clipboard.sh clipboard|primary multiline` and
+  `FoamyClipboard.multiline`: line breaks are kept as `\n` (CR LF, CR,
+  U+2028 and U+2029 each become one) instead of turning into spaces. The
+  same bounds; any other extra argument is refused (exit 2).
+  `hostenv.clipboard_fakes()` has a `breaks` mode.
+
 ## 0.12.1 — 2026-11-19
 
 ### Fixed

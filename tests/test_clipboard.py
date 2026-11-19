@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """kit/clipboard.sh through hostenv.clipboard_fakes(), the stand-ins plugin
-clipboard tests share: the paste's bounds (size, NUL, single line, the 2 s
+clipboard tests share: the paste's bounds (size, NUL, single line or
+`multiline` with its line breaks kept, the 2 s
 deadline, a producer that ignores SIGTERM) and that a paste which works
 still works when the machine is slow. Shell only: no Quickshell or Omarchy
 host, so tests/suite.sh --ci runs it too."""
@@ -22,13 +23,14 @@ import hostenv  # noqa: E402
 HELPER = KIT_ROOT / "kit/clipboard.sh"
 
 
-def paste(env, mode, selection="clipboard"):
-    """(result, seconds) of one clipboard.sh run in `mode`."""
+def paste(env, mode, selection="clipboard", *extra):
+    """(result, seconds) of one clipboard.sh run in `mode`; `extra` follows
+    the selection (multiline)."""
     Path(env["TEST_CLIPBOARD_STATE"]).write_text(mode)
     started = time.monotonic()
     deadline = mode in hostenv.CLIPBOARD_DEADLINE_MODES
     result = subprocess.run(
-        ["bash", str(HELPER), selection], env=env, capture_output=True, timeout=10 if deadline else 90
+        ["bash", str(HELPER), selection, *extra], env=env, capture_output=True, timeout=10 if deadline else 90
     )
     return result, time.monotonic() - started
 
@@ -81,6 +83,41 @@ def main():
                 f"exit {result.returncode}",
             )
         ok &= report("a failing wl-paste fails the paste", paste(env, "failure")[0].returncode != 0)
+
+        # multiline (SafeTextArea): the same bounds, line breaks kept as "\n".
+        for mode, selection, expected in (
+            ("lines", "clipboard", "one\ntwo\nthree"),
+            ("breaks", "primary", "a\nb\n\nc\nd\n"),
+            ("unicode", "clipboard", "/home/test/Blåbær 📁"),
+            ("limit", "clipboard", "x" * 16384),
+        ):
+            result, _ = paste(env, mode, selection, "multiline")
+            got = json.loads(result.stdout) if result.returncode == 0 and result.stdout else None
+            ok &= report(
+                f"multiline {mode}: line breaks kept as \\n", got == expected, f"exit {result.returncode}, {got!r:.60}"
+            )
+        args = json.loads(Path(state + ".args").read_text())
+        ok &= report(
+            "multiline passes the same wl-paste options", args == ["--no-newline", "--type", "text"], str(args)
+        )
+        result, _ = paste(env, "breaks")
+        ok &= report(
+            "without multiline, the same breaks are spaces",
+            result.returncode == 0 and json.loads(result.stdout) == "a b  c d  ",
+            result.stdout.decode(errors="replace").strip(),
+        )
+        for mode in ("large", "nul", "stream"):
+            result, _ = paste(env, mode, "clipboard", "multiline")
+            ok &= report(
+                f"multiline {mode}: refused, with no output",
+                result.returncode != 0 and result.stdout == b"" and result.stderr == b"",
+                f"exit {result.returncode}",
+            )
+        for extra in (["lines"], ["multiline", "multiline"], ["", "multiline"]):
+            ok &= report(
+                f"clipboard {' '.join(map(repr, extra))} is refused",
+                paste(env, "normal", "clipboard", *extra)[0].returncode == 2,
+            )
         ok &= report("an unknown selection is refused", paste(env, "normal", "secondary")[0].returncode == 2)
 
         # The deadline modes keep clipboard.sh's real 2 s.

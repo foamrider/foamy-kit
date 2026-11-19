@@ -36,6 +36,25 @@ import qs.Ui
 //     onAccepted: root.saveToken(secretText)
 //   }
 //
+// Styled runs (Quick Add tokens, syntax): `runs` is an array of
+// {text, color} whose texts, joined, equal `text`. The field then draws each
+// run in its colour exactly over its own glyphs: the same font, each run
+// placed where the editor puts its first character, so they stay aligned
+// while the field scrolls. The selection keeps its fill and
+// selectedTextColor, and the caret shows as usual. A run with no usable
+// `color` takes the field's colour.
+//
+//   SafeTextField {
+//     text: root.query
+//     runs: QuickAdd.runs(root.query)        // [{text: "Buy ", color: …}, {text: "#home", color: …}]
+//     onTextEdited: root.query = text
+//   }
+//
+// Plain text instead whenever the runs don't describe the text exactly
+// (texts that don't join to `text`, a stale array during an edit) or the
+// editor lays a run out other than one piece (mixed directions inside a
+// run): `runsShown` says which. A masked field ignores runs.
+//
 // Masked contract:
 // - The editor holds only the mask, one • (U+2022) per code point of the
 //   value, so Qt still places the caret, selection and clicks on the dots.
@@ -76,7 +95,12 @@ Flickable {
   readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
   property alias background: editor.background
   property bool editorReady: false
-  property alias color: editor.color
+  // The text colour (the editor's own, unless runs are shown).
+  property color color: foreground
+  // Styled runs [{text, color}] (header: "Styled runs").
+  property var runs: []
+  // Whether the runs draw the text now (they match it, and the field is not masked).
+  readonly property bool runsShown: _runPlaces.length > 0
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
   property alias horizontalAlignment: editor.horizontalAlignment
@@ -333,6 +357,78 @@ Flickable {
       root.textEdited()
   }
 
+  // The runs, checked against the text: [{start, end, text, color}] with
+  // the empty runs dropped, or [] when they don't join to exactly `text`.
+  readonly property var _runModel: {
+    var text = editor.text
+    var list = root.runs
+    if (root.masked || text === "" || !Array.isArray(list) || list.length === 0 || list.length > text.length)
+      return []
+    var model = []
+    var at = 0
+    for (let i = 0; i < list.length; i++) {
+      let run = list[i]
+      if (!run || typeof run.text !== "string")
+        return []
+      if (run.text === "")
+        continue
+      if (text.substr(at, run.text.length) !== run.text)
+        return []
+      let color = run.color
+      model.push({
+        start: at,
+        end: at + run.text.length,
+        color: (typeof color === "string" && color !== "") || (typeof color === "object" && color !== null && "r" in color) ? color : root.color
+      })
+      at += run.text.length
+    }
+    return at === text.length ? model : []
+  }
+  // Where the editor lays its text out: positionToRectangle() notifies
+  // nothing, so _runPlaces reads this to run again when any of it changes.
+  readonly property var _runLayout: [editor.width, editor.height, editor.contentWidth, editor.font, editor.leftPadding, editor.rightPadding, editor.effectiveHorizontalAlignment, editor.cursorRectangle, editor.renderType]
+  // Where each run (split around the selection, which the editor draws
+  // itself) sits in the run layer: [{text, x, y, height, color, font,
+  // renderType}]. [] when the editor lays any run out other than as one
+  // piece of its own width.
+  readonly property var _runPlaces: {
+    var model = _runModel
+    if (model.length === 0 || !editorReady)
+      return []
+    var layout = _runLayout
+    var text = editor.text
+    var from = editor.selectionStart
+    var to = editor.selectionEnd
+    var origin = root.contentX + editor.leftPadding
+    var places = []
+    for (let i = 0; i < model.length; i++) {
+      let run = model[i]
+      let a = editor.positionToRectangle(run.start)
+      let b = editor.positionToRectangle(run.end)
+      if (Math.abs(Math.abs(b.x - a.x) - runMetrics.advanceWidth(text.substring(run.start, run.end))) > 1)
+        return []
+      // The selected part is the editor's own (selection fill, selectedTextColor).
+      let pieces = from === to ? [[run.start, run.end]] : [[run.start, Math.min(run.end, from)], [Math.max(run.start, to), run.end]]
+      for (let j = 0; j < pieces.length; j++) {
+        let start = pieces[j][0]
+        let end = pieces[j][1]
+        if (end <= start)
+          continue
+        let p = editor.positionToRectangle(start)
+        let q = editor.positionToRectangle(end)
+        places.push({
+          text: text.substring(start, end),
+          x: Math.min(p.x, q.x) - origin,
+          y: p.y,
+          height: p.height,
+          color: run.color,
+          font: layout[3],
+          renderType: layout[8]
+        })
+      }
+    }
+    return places
+  }
   // Expose the native editable control, with the caller's field label.
   Accessible.ignored: true
   boundsBehavior: Flickable.StopAtBounds
@@ -346,7 +442,6 @@ Flickable {
   horizontalAlignment: TextEdit.AlignLeft
   font.family: FoamyStyle.fontFamily
   font.pixelSize: FoamyStyle.font.body
-  color: foreground
   selectionColor: selectionTint
   selectedTextColor: foreground
   placeholderTextColor: Qt.darker(foreground, 1.6)
@@ -376,6 +471,9 @@ Flickable {
     selectByMouse: !root.masked
     inputMethodHints: root.masked ? Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase : Qt.ImhNone
     textFormat: TextEdit.PlainText
+    // Runs draw the text over a transparent editor (selected text and the
+    // selection fill stay the editor's).
+    color: root.runsShown ? "transparent" : root.color
     // Attached TextArea margins otherwise shift centered single-line glyphs.
     topPadding: 0
     bottomPadding: 0
@@ -488,8 +586,43 @@ Flickable {
     }
     onTextEdited: root.textEdited()
 
-    // A read-only editor draws no caret: masked mode draws one on Qt's
-    // cursor rectangle, blinking at the platform's flash time.
+    // The styled runs, each over its own glyphs (see _runPlaces). Clipped
+    // where the editor clips its own text: the field's view inside the
+    // paddings.
+    Item {
+      id: runsLayer
+      objectName: "runsLayer"
+      visible: root.runsShown
+      clip: true
+      x: root.contentX + editor.leftPadding
+      width: Math.max(0, root.width - editor.leftPadding - editor.rightPadding)
+      height: editor.height
+
+      Repeater {
+        model: root._runPlaces
+
+        Text {
+          required property var modelData
+
+          x: modelData.x
+          y: modelData.y
+          height: modelData.height
+          text: modelData.text
+          textFormat: Text.PlainText
+          color: modelData.color
+          font: modelData.font
+          renderType: modelData.renderType
+        }
+      }
+    }
+    FontMetrics {
+      id: runMetrics
+      font: editor.font
+    }
+
+    // A read-only editor draws no caret, nor does a transparent one (runs):
+    // the field draws one on Qt's cursor rectangle, blinking at the
+    // platform's flash time.
     Rectangle {
       id: caret
 
@@ -502,12 +635,12 @@ Flickable {
       }
 
       objectName: "maskedCaret"
-      visible: root.masked && editor.activeFocus && lit
+      visible: (root.masked || root.runsShown) && editor.activeFocus && lit
       x: editor.cursorRectangle.x
       y: editor.cursorRectangle.y
       width: Math.max(1, editor.cursorRectangle.width)
       height: editor.cursorRectangle.height
-      color: editor.color
+      color: root.color
 
       Timer {
         id: blink
@@ -516,7 +649,7 @@ Flickable {
         repeat: true
         // Only while the field shows in an active window: a hidden popup can
         // keep the editor's activeFocus, and must not wake the shell.
-        running: root.masked && editor.activeFocus && root.visible && root.Window.active && Application.styleHints.cursorFlashTime >= 2
+        running: (root.masked || root.runsShown) && editor.activeFocus && root.visible && root.Window.active && Application.styleHints.cursorFlashTime >= 2
 
         onRunningChanged: caret.lit = true
         onTriggered: caret.lit = !caret.lit
