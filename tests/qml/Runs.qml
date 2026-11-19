@@ -11,8 +11,10 @@ import "plugin/kit"
 // on a styled field and on a plain one, then saves both (FOAMY_OUT) for
 // test_text_runs.py to compare. Runs in the field's own colour must look
 // exactly like the plain field: at the start, scrolled to the end, with a
-// selection, in RTL, at a larger font. Runs that don't match the text fall
-// back to the plain field. Coloured runs are logged with their x range for
+// selection (plain text then), in RTL, at a larger font, in Arabic.
+// Runs that don't match the text fall back to the plain field, and text
+// that shrinks under stale runs asks for no position past its end
+// (test_text_runs.py checks the log for "out of range"). Coloured runs are logged with their x range for
 // a colour check. FOAMY_RTL=1 mirrors.
 ShellRoot {
   id: shell
@@ -22,6 +24,17 @@ ShellRoot {
   property int checks: 0
   property int failures: 0
 
+  // A hint tone: between the background and the text, clearly apart from
+  // both (a placeholder must not read as typed text in either theme).
+  function hintTone(color, text) {
+    function lum(c) {
+      return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+    }
+    var b = lum(FoamyPalette.background)
+    var span = lum(text) - b
+    var p = lum(color) - b
+    return span !== 0 && p / span > 0.3 && p / span < 0.85
+  }
   function check(ok, label) {
     checks++
     if (!ok) {
@@ -166,7 +179,7 @@ ShellRoot {
   function selected() {
     styled.select(10, 30)
     plain.select(10, 30)
-    check(styled.runsShown, "runs stay shown with a selection")
+    check(!styled.runsShown && styled.editorItem.color.a === 1, "a selection shows the plain text")
     pair("selected", shell.larger)
   }
   function larger() {
@@ -257,7 +270,84 @@ ShellRoot {
     check(!secret.runsShown && secret.editorItem.color.a === 1, "a masked field ignores runs")
     plain.focusInput()
     wait.after(60, function () {
-      shot(styled, "coloured", shell.finish)
+      shot(styled, "coloured", shell.shrinking)
+    })
+  }
+  // The caller updates its runs after the edit: until then the runs are
+  // longer than the text, and nothing may ask the editor for a position
+  // past its end.
+  function shrinking() {
+    var fg = styled.foreground
+    var short = "Buy milk #home"
+    styled.text = short
+    styled.runs = sameColour(short, fg)
+    check(styled.runsShown, "shrinking: runs shown")
+    styled.focusInput()
+    styled.cursorPosition = short.length
+    for (var i = 0; i < 6; i++) {
+      ev.keyClick(Qt.Key_Backspace, Qt.NoModifier, -1)
+      check(!styled.runsShown, "shrinking: stale runs after Backspace give plain text")
+      styled.runs = sameColour(styled.text, fg)
+    }
+    check(styled.runsShown && styled.text === short.slice(0, short.length - 6), "shrinking: runs again once they match " + JSON.stringify(styled.text))
+    // Esc in a panel: the text clears, then the runs follow.
+    styled.text = ""
+    check(!styled.runsShown, "shrinking: cleared text with stale runs: plain")
+    styled.runs = []
+    styled.text = short
+    styled.runs = sameColour(short, fg)
+    styled.clear()
+    check(!styled.runsShown, "shrinking: clear() with stale runs: plain")
+    styled.runs = []
+    // Neither field focused, for the shots.
+    secret.focusInput()
+    shell.arabic()
+  }
+  // Context-shaped text: one run draws it as the editor does; a selection
+  // inside it (which would split it) shows the plain text, so every letter
+  // keeps its joined form.
+  function arabic() {
+    var word = "سلام"
+    styled.text = word
+    plain.text = word
+    styled.runs = [
+      {
+        text: word,
+        color: styled.foreground
+      }
+    ]
+    check(styled.runsShown, "Arabic: one run is shown")
+    styled.select(1, 4)
+    plain.select(1, 4)
+    check(!styled.runsShown && styled.editorItem.color.a === 1, "Arabic: a selection shows the plain, shaped text")
+    pair("arabic-selected", function () {
+      styled.select(0, 0)
+      plain.select(0, 0)
+      check(styled.runsShown, "Arabic: runs again without a selection")
+      pair("arabic", function () {
+        styled.runs = [
+          {
+            text: word.charAt(0),
+            color: styled.foreground
+          },
+          {
+            text: word.slice(1),
+            color: styled.foreground
+          }
+        ]
+        check(!styled.runsShown, "Arabic: runs that split a joined word give plain text")
+        shell.placeholder()
+      })
+    })
+  }
+  // The placeholder, in both themes: a hint tone, never near-black on light.
+  function placeholder() {
+    styled.runs = []
+    styled.text = ""
+    styled.placeholderText = "Buy milk #home"
+    check(hintTone(styled.placeholderTextColor, styled.foreground), "the placeholder is a hint tone " + [styled.placeholderTextColor, styled.foreground, FoamyPalette.background])
+    wait.after(60, function () {
+      shot(styled, "placeholder", shell.finish)
     })
   }
   function findByName(item, name) {

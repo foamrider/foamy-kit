@@ -69,9 +69,11 @@ import QtQuick.Layouts
 //   the fades; instant under reduced motion. Mirrored in RTL (the origin is
 //   where the action is; the open field is symmetric).
 // - The band's height never changes: the field lies over the title row, and
-//   the hero stays where it is. With no field, or in the compact form, the
-//   band has no field mode. An origin that is not in the row (moved into the
-//   ⋯ menu, hidden) grows from the row's trailing end.
+//   the hero stays where it is. Field mode is for bands with a title row:
+//   with no field, in the compact form or in the centred variant (its title
+//   is under the hero), the band has no field mode and ignores fieldOpen.
+//   An origin that is not in the row (moved into the ⋯ menu, hidden) grows
+//   from the row's trailing end.
 // - The band sets the field's text to FoamyStyle.font.heading, larger than
 //   body text, like a search field.
 // - While fieldOpen, `buttonsActive` is false: the buttons take no pointer
@@ -83,6 +85,9 @@ import QtQuick.Layouts
 //   closes; Esc, Enter and the rest are the field's keyPressed/accepted.
 //   `fieldShown` is true while the field shows (open, or still closing);
 //   `fieldProgress` runs 0 (closed) to 1 (open).
+// - The field takes pointer input and focus only while fieldOpen: closing,
+//   it is inert at once (a click on the fading field reaches nothing) and
+//   drops the active focus if it still has it, so no key edits hidden text.
 //
 // The base look is a Canvas (no MultiEffect), so it is the same under the
 // software renderer; it is static (no motion to reduce); it mirrors in RTL
@@ -134,7 +139,7 @@ Item {
   readonly property bool buttonsActive: !(_fieldMode && fieldOpen)
   readonly property bool fieldShown: _fieldMode && (fieldOpen || _fieldProgress > 0)
   readonly property real fieldProgress: _fieldProgress
-  readonly property bool _fieldMode: field !== null && !compact
+  readonly property bool _fieldMode: field !== null && !compact && !centered
   // Eased 0 → 1 over FoamyMotion.grow; the fades are parts of it.
   property real _fieldProgress: _fieldMode && fieldOpen ? 1 : 0
   Behavior on _fieldProgress {
@@ -504,6 +509,9 @@ Item {
     id: fieldSlot
     objectName: "foamyHeroBandField"
     visible: band.fieldShown
+    // Inert from the moment it starts closing: Qt drops the active focus of
+    // a disabled item, and a click can't hand it back while the field fades.
+    enabled: band._fieldMode && band.fieldOpen
     opacity: Math.min(1, band._fieldProgress / band._fieldFadeEnd)
     readonly property real t: band._fieldProgress
     x: band._fieldFrom.x + (band._fieldTo.x - band._fieldFrom.x) * t

@@ -2,9 +2,10 @@
 """SafeTextField `runs` (tests/qml/Runs.qml) on 4.5, LTR and RTL, dark and
 light. Runs in the field's own colour must give the same pixels as a plain
 field with the same text: at the start, scrolled to the end, with a
-selection and at a larger font; runs that don't match the text fall back to
-the plain field. Coloured runs show their colour where the editor puts
-their glyphs. Shots: tests/out/runs/."""
+selection, at a larger font and in Arabic (with and without a selection);
+runs that don't match the text fall back to the plain field. Text that
+shrinks under stale runs logs no "out of range" position. Coloured runs show
+their colour where the editor puts their glyphs. Shots: tests/out/runs/."""
 
 import json
 import shutil
@@ -14,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import KIT_ROOT, harness, read_png, report, synced_demo  # noqa: E402
 
-PAIRS = ("start", "scrolled", "selected", "larger", "mismatch")
+PAIRS = ("start", "scrolled", "selected", "larger", "mismatch", "arabic", "arabic-selected")
 
 
 def differing(a, b, edges):
@@ -69,6 +70,9 @@ def run(host, plugin, theme, rtl, out):
     r.run(timeout=60)
     detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"runs {host}/{name}", r.ok, detail)
+    # QTextCursor's warning when a position past the text's end is asked for.
+    stray = [line for line in r.log.splitlines() if "out of range" in line]
+    ok &= report(f"runs {host}/{name}: no position past the text's end", not stray, "; ".join(stray[:2]) or "none")
     if not ok:
         print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
         r.cleanup()

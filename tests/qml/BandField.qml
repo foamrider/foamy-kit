@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import QtTest
 import Quickshell
 import qs.Commons
@@ -14,8 +15,9 @@ import "plugin/kit"
 // title row's slot; the title row and buttons fade out and take no pointer,
 // cursor or menu while it is open. A band with a hero keeps its hero; a
 // hidden origin grows from the row's trailing end; reduced motion is
-// instant; the compact form has no field mode. FOAMY_RTL=1 mirrors. Shots
-// go to FOAMY_OUT.
+// instant; the compact form and the centred variant have no field mode.
+// Closing, the field drops the focus and a click on it reaches nothing, so
+// no key edits the hidden text. FOAMY_RTL=1 mirrors. Shots go to FOAMY_OUT.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -72,6 +74,9 @@ ShellRoot {
         property alias band: band
         property alias heroBand: heroBand
         property alias compactBand: compactBand
+        property alias centeredBand: centeredBand
+        property alias centeredHero: centeredHero
+        property alias catcher: catcher
         property alias list: list
         property alias addAction: addAction
         property alias searchAction: searchAction
@@ -138,6 +143,30 @@ ShellRoot {
           compact: true
           field: SafeTextField {}
           fieldOpen: true
+        }
+        FoamyHeroBand {
+          id: centeredBand
+          width: parent.width
+          centered: true
+          title: "Tuesday"
+          meta: "Week 47"
+          field: SafeTextField {}
+          Text {
+            id: centeredHero
+            Layout.alignment: Qt.AlignHCenter
+            text: "12:30"
+            color: FoamyPalette.text
+            font.pixelSize: FoamyStyle.font.numeralCompact
+          }
+        }
+        // The panel's key catcher: the focus goes back here when the field closes.
+        Item {
+          id: catcher
+          width: 1
+          height: 1
+          Keys.onPressed: function (event) {
+            event.accepted = true
+          }
         }
       }
     }
@@ -288,10 +317,21 @@ ShellRoot {
 
   function closing() {
     var b = popup.bodyItem.band
+    var slot = findByName(b, "foamyHeroBandField")
+    check(input.inputActiveFocus, "open: the field has the focus")
     samples = []
     sampling = true
     b.fieldOpen = false
     check(b.buttonsActive && b.fieldShown, "closing: the buttons are active at once, the field still shows")
+    check(!input.inputActiveFocus && !slot.enabled, "closing: the field drops the focus and is inert at once")
+    // The caller gives the focus back; a click on the fading field must not
+    // take it again, or later keys would edit the hidden text.
+    var catcher = popup.bodyItem.catcher
+    catcher.forceActiveFocus()
+    ev.mouseClick(slot, slot.width / 2, slot.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+    check(!input.inputActiveFocus && catcher.activeFocus, "closing: a click on the fading field takes no focus")
+    ev.keyClickChar("z", Qt.NoModifier, -1)
+    check(input.text === "a", "closing: keys don't reach the field " + JSON.stringify(input.text))
     wait.waitFor(function () {
       return !b.fieldShown
     }, 3000, function () {
@@ -343,7 +383,31 @@ ShellRoot {
     check(sameRect([from.x, from.y, from.width, from.height], search), "Search as the origin")
     var compact = body.compactBand
     check(!compact.fieldShown && compact.buttonsActive, "the compact form has no field mode")
-    shell.finish()
+    shell.centeredIgnores()
+  }
+
+  // The centred variant has no title row to cover (its title is under the
+  // hero): fieldOpen changes nothing.
+  function centeredIgnores() {
+    var body = popup.bodyItem
+    var cb = body.centeredBand
+    var slot = findByName(cb, "foamyHeroBandField")
+    var title = findByName(cb, "foamyHeroBandCenteredTitle")
+    var before = {
+      height: cb.height,
+      hero: rectOf(body.centeredHero, cb),
+      title: rectOf(title, cb),
+      header: cb.titleRow.opacity
+    }
+    cb.fieldOpen = true
+    wait.after(FoamyMotion.grow + 200, function () {
+      check(!cb.fieldShown && cb.fieldProgress === 0 && cb.buttonsActive, "centred: fieldOpen gives no field mode")
+      check(!slot.visible && !slot.enabled && !cb.field.visible, "centred: the field stays hidden")
+      check(near(cb.height, before.height) && sameRect(rectOf(body.centeredHero, cb), before.hero) && sameRect(rectOf(title, cb), before.title), "centred: the band, its hero and its title don't move")
+      check(cb.titleRow.opacity === before.header && cb.titleRow.enabled, "centred: the buttons stay shown and active")
+      cb.fieldOpen = false
+      shell.finish()
+    })
   }
 
   function findByName(item, name) {

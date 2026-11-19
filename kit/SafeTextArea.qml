@@ -228,7 +228,8 @@ Flickable {
   color: foreground
   selectionColor: selectionTint
   selectedTextColor: foreground
-  placeholderTextColor: Qt.darker(foreground, 1.6)
+  // A hint: the palette's muted text (as SafeTextField).
+  placeholderTextColor: FoamyPalette.mutedText
   wrapMode: TextEdit.Wrap
   leftPadding: FoamyStyle.controlPaddingX + Border.left(_borderSpec)
   rightPadding: FoamyStyle.controlPaddingX + Border.right(_borderSpec)

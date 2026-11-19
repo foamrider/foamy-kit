@@ -75,7 +75,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     left of Search (declare it first in `trailing`; RTL mirrors it). While
     the field is open the buttons are inert and out of the cursor
     (`buttonsActive`); the panel owns the keys (Esc closes, the focus goes
-    back to the key catcher).
+    back to the key catcher). Closing, the field is inert at once and drops
+    the focus. Field mode is for bands with a title row: a centred band
+    ignores `fieldOpen`.
   - **Centred** (`centered: true`): for a panel about one big value read at a
     glance (clock: the time; weather: the temperature and sky). No title icon;
     the hero comes first, centred (give hero items `Layout.alignment:
@@ -136,7 +138,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 118 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 119 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`. Secrets (API tokens,

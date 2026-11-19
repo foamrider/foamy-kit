@@ -12,10 +12,11 @@ import QtQuick
 // 1.65.0). 0.5.1 adds undo-2, undo-dot and check-check (Lucide 1.65.0) and
 // the CC0 Zendesk mark from
 // https://github.com/simple-icons/simple-icons/blob/develop/icons/zendesk.svg.
-// Unreleased: inbox, calendar-days, hash and user (Lucide 1.65.0),
+// 0.12.0 adds inbox, calendar-days, hash and user (Lucide 1.65.0),
 // and the CC0 Todoist mark from
 // https://github.com/simple-icons/simple-icons/blob/c37b20d397a710fdd402aae3cb643b820b142074/icons/todoist.svg
-// (source: https://doist.com/press). Brand marks are drawn filled (`filled`).
+// (source: https://doist.com/press). 0.13.0 adds calendar-range (Lucide
+// 1.65.0). Brand marks are drawn filled (`filled`).
 // Refresh with tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
@@ -56,6 +57,7 @@ Image {
       "box": "<path d=\"m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5\"/>",
       "calendar": "<path d=\"M8 2v3\"/><path d=\"M16 2v3\"/><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M3 9h18\"/>",
       "calendar-days": "<path d=\"M8 2v3\"/><path d=\"M16 2v3\"/><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M3 9h18\"/><path d=\"M8 13h.01\"/><path d=\"M12 13h.01\"/><path d=\"M16 13h.01\"/><path d=\"M8 17h.01\"/><path d=\"M12 17h.01\"/><path d=\"M16 17h.01\"/>",
+      "calendar-range": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M16 2v3\"/><path d=\"M3 9h18\"/><path d=\"M8 2v3\"/><path d=\"M17 13h-6\"/><path d=\"M13 17H7\"/><path d=\"M7 13h.01\"/><path d=\"M17 17h.01\"/>",
       "cancelled": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m9 9 6 6m0-6-6 6\"/>",
       "chat": "<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\"/>",
       "check": "<path d=\"m20 6-11 11-5-5\"/>",

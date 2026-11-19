@@ -30,6 +30,17 @@ ShellRoot {
   property int finished: 0
   property int saves: 0
 
+  // A hint tone: between the background and the text, clearly apart from
+  // both (a placeholder must not read as typed text in either theme).
+  function hintTone(color, text) {
+    function lum(c) {
+      return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+    }
+    var b = lum(FoamyPalette.background)
+    var span = lum(text) - b
+    var p = lum(color) - b
+    return span !== 0 && p / span > 0.3 && p / span < 0.85
+  }
   function check(ok, label) {
     checks++
     if (!ok) {
@@ -339,6 +350,7 @@ ShellRoot {
       check(near(right, editor.width - editor.rightPadding, 1.5), "RTL: text ends at the right padding " + [right, editor.width - editor.rightPadding])
     else
       check(near(left, editor.leftPadding, 1.5), "LTR: text starts at the padding " + left)
+    check(hintTone(area.placeholderTextColor, area.foreground), "the placeholder is a hint tone " + [area.placeholderTextColor, area.foreground, FoamyPalette.background])
     area.text = "First line\nSecond line"
     area.select(0, 5)
     wait.after(50, function () {
