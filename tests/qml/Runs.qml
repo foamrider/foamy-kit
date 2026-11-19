@@ -14,8 +14,12 @@ import "plugin/kit"
 // selection (plain text then), in RTL, at a larger font, in Arabic.
 // Runs that don't match the text fall back to the plain field, and text
 // that shrinks under stale runs asks for no position past its end
-// (test_text_runs.py checks the log for "out of range"). Coloured runs are logged with their x range for
-// a colour check. FOAMY_RTL=1 mirrors.
+// (test_text_runs.py checks the log for "out of range"). Mixed Latin and
+// CJK runs sit on the editor's baseline, a run whose colour Qt doesn't know
+// takes the field's colour, and while an input method composes
+// (FOAMY_FAKE_IME=1: tests/fixtures/fake-ime) the plain editor shows the
+// preedit. Coloured runs are logged with their x range for a colour check.
+// FOAMY_RTL=1 mirrors.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -23,6 +27,10 @@ ShellRoot {
   readonly property string tag: host + "/" + (rtl ? "rtl" : "ltr") + "/" + Quickshell.env("FOAMY_THEME")
   property int checks: 0
   property int failures: 0
+  // FakeIme (tests/fixtures/fake-ime), when test_text_runs.py built it.
+  property var ime: null
+  Component.onCompleted: if (Quickshell.env("FOAMY_FAKE_IME") === "1")
+    ime = Qt.createQmlObject("import QtQml; import FoamyFakeIme; QtObject { function compose(item, text) { FakeIme.compose(item, text) } function commit(item, text) { FakeIme.commit(item, text) } }", shell, "FakeIme")
 
   // A hint tone: between the background and the text, clearly apart from
   // both (a placeholder must not read as typed text in either theme).
@@ -336,8 +344,75 @@ ShellRoot {
           }
         ]
         check(!styled.runsShown, "Arabic: runs that split a joined word give plain text")
-        shell.placeholder()
+        shell.mixed()
       })
+    })
+  }
+  // The Text items the runs layer draws.
+  function runTexts(field) {
+    var layer = findByName(field.editorItem, "runsLayer")
+    return layer ? layer.children.filter(function (child) {
+      return child.text !== undefined
+    }) : []
+  }
+  // Latin and CJK runs: the editor's line is as tall as the CJK fallback
+  // font, and every run must sit on the editor's own baseline (the
+  // pixels match the plain field).
+  function mixed() {
+    var text = "Buy 漢字 milk"
+    styled.text = text
+    plain.text = text
+    styled.runs = sameColour(text, styled.foreground)
+    styled.cursorPosition = 0
+    plain.cursorPosition = 0
+    check(styled.runsShown && runTexts(styled).length === tokens(text).length, "mixed: Latin and CJK runs are shown")
+    pair("mixed", shell.bogus)
+  }
+  // A colour string Qt can't read takes the field's colour, not black.
+  function bogus() {
+    styled.text = sentence
+    plain.text = sentence
+    styled.runs = sameColour(sentence, "bogus")
+    check(styled.runsShown, "bogus: runs with an unusable colour are shown")
+    var texts = runTexts(styled)
+    check(texts.length > 0 && texts.every(function (item) {
+      return Qt.colorEqual(item.color, styled.color)
+    }), "bogus: every run takes the field's colour " + (texts.length ? texts[0].color : "none") + " vs " + styled.color)
+    pair("bogus", shell.composing)
+  }
+  // An input method composing in a styled field: its preedit shows only in
+  // the editor's own text, so the field shows the plain editor until the
+  // composition ends.
+  function composing() {
+    if (!ime) {
+      shell.placeholder()
+      return
+    }
+    var text = "Buy milk"
+    styled.text = text
+    plain.text = text
+    styled.runs = [
+      {
+        text: "Buy ",
+        color: styled.foreground
+      },
+      {
+        text: "milk",
+        color: Commons.Color.urgent
+      }
+    ]
+    styled.cursorPosition = 0
+    plain.cursorPosition = 0
+    check(styled.runsShown, "composing: runs shown before")
+    ime.compose(styled.editorItem, "候选")
+    ime.compose(plain.editorItem, "候选")
+    check(styled.editorItem.inputMethodComposing && styled.editorItem.preeditText === "候选", "composing: the editor has the preedit")
+    check(!styled.runsShown && styled.editorItem.color.a === 1, "composing: the plain editor shows the preedit")
+    pair("composing", function () {
+      ime.commit(styled.editorItem, "")
+      ime.commit(plain.editorItem, "")
+      check(!styled.editorItem.inputMethodComposing && styled.runsShown, "composing: runs again once the composition ends")
+      shell.placeholder()
     })
   }
   // The placeholder, in both themes: a hint tone, never near-black on light.

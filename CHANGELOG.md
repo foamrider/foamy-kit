@@ -26,16 +26,21 @@
 - `SafeTextField.runs`: an array of `{text, color}` whose texts join to the
   field's text. The field then draws each run in its colour over its own
   glyphs (same font, each run placed where the editor puts its first
-  character, clipped where the editor clips), aligned while the field
-  scrolls, with the caret still drawn. Runs that don't match the text
-  (also during an edit, before the caller updates them), that the editor
-  lays out other than as one piece (mixed directions, letters joined
-  across runs), or while text is selected (a run cut at the selection
-  would lose its shaping) give the plain field (`runsShown` says which); no
-  position past the text's end is ever asked for. A masked field ignores
-  them. The field's `color` is now its own property (same use).
-  `tests/test_text_runs.py` compares the styled field's pixels with a plain
-  field's, in Arabic too, and fails on Qt's "out of range" warning.
+  character and on the editor's baseline, so a Latin run next to CJK text
+  doesn't jump up; clipped where the editor clips), aligned while the field
+  scrolls, with the caret still drawn. A run whose colour is missing or
+  not one Qt can read ("bogus") takes the field's `color`. Runs that don't
+  match the text (also during an edit, before the caller updates them),
+  that the editor lays out other than as one piece (mixed directions,
+  letters joined across runs), while text is selected (a run cut at the
+  selection would lose its shaping) or while an input method composes (its
+  preedit shows only in the editor) give the plain field (`runsShown` says
+  which); no position past the text's end is ever asked for. A masked
+  field ignores them. The field's `color` is now its own property (same
+  use). `tests/test_text_runs.py` compares the styled field's pixels with a
+  plain field's, in Arabic, mixed Latin and CJK and during a composition
+  too (with `tests/fixtures/fake-ime`, a test-only QML module it builds
+  with moc and g++), and fails on Qt's "out of range" warning.
 - `SafeTextArea`: the multi-line sibling of `SafeTextField`. Paste goes
   through `FoamyClipboard` with line breaks kept (16 KiB, no NUL, 2 s
   deadline, a late result dropped); `maximumLength` (typing at the limit

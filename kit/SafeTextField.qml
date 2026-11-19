@@ -39,9 +39,11 @@ import qs.Ui
 // Styled runs (Quick Add tokens, syntax): `runs` is an array of
 // {text, color} whose texts, joined, equal `text`. The field then draws each
 // run in its colour exactly over its own glyphs: the same font, each run
-// placed where the editor puts its first character, so they stay aligned
-// while the field scrolls. The caret shows as usual. A run with no usable
-// `color` takes the field's colour.
+// placed where the editor puts its first character and on the editor's
+// baseline (a Latin run next to CJK text sits where the editor draws it,
+// not on its own shorter font's line), so they stay aligned while the field
+// scrolls. The caret shows as usual. A run whose `color` is missing or not
+// a colour Qt knows ("bogus") takes the field's colour.
 //
 //   SafeTextField {
 //     text: root.query
@@ -52,8 +54,9 @@ import qs.Ui
 // Plain text instead whenever the runs don't describe the text exactly
 // (texts that don't join to `text`, a stale array during an edit, before
 // the caller updates it), the editor lays a run out other than one piece
-// (mixed directions, letters that join across runs), or text is selected
-// (a run cut at the selection would lose its shaping): `runsShown` says
+// (mixed directions, letters that join across runs), text is selected
+// (a run cut at the selection would lose its shaping), or an input method
+// is composing (its preedit shows in the editor only): `runsShown` says
 // which. A masked field ignores runs.
 //
 // Masked contract:
@@ -376,11 +379,10 @@ Flickable {
         continue
       if (text.substr(at, run.text.length) !== run.text)
         return null
-      let color = run.color
       model.push({
         start: at,
         end: at + run.text.length,
-        color: (typeof color === "string" && color !== "") || (typeof color === "object" && color !== null && "r" in color) ? color : root.color
+        color: _runColor(run.color)
       })
       at += run.text.length
     }
@@ -389,15 +391,35 @@ Flickable {
       runs: model
     } : null
   }
+  // A run's colour: a color value, or a string Qt reads as one; anything
+  // else (missing, "", "bogus") is the field's colour.
+  function _runColor(color) {
+    if (typeof color === "object" && color !== null && "r" in color)
+      return color
+    if (typeof color !== "string" || color === "")
+      return root.color
+    try {
+      return Qt.color(color)
+    } catch (error) {
+      // Qt.color() throws on a name it doesn't know: not a caller error to
+      // report per keystroke, the documented fallback applies.
+      return root.color
+    }
+  }
   // Where the editor lays its text out: positionToRectangle() notifies
   // nothing, so _runPlaces reads this to run again when any of it changes.
-  readonly property var _runLayout: [editor.width, editor.height, editor.contentWidth, editor.font, editor.leftPadding, editor.rightPadding, editor.effectiveHorizontalAlignment, editor.cursorRectangle, editor.renderType]
-  // Where each run sits in the run layer: [{text, x, y, height, color,
-  // font, renderType}]. [] while text is selected, and when the editor lays
-  // any run out other than as one piece of its own width.
+  readonly property var _runLayout: [editor.width, editor.height, editor.contentWidth, editor.font, editor.leftPadding, editor.rightPadding, editor.effectiveHorizontalAlignment, editor.cursorRectangle, editor.renderType, editor.baselineOffset]
+  // Where each run sits in the run layer: [{text, x, baseline, color,
+  // font, renderType}], `baseline` being the editor's (see runsLayer). []
+  // while text is selected, while an input method composes (the preedit is
+  // laid out inside the editor's text, so the runs would hide it), and
+  // when the editor lays any run out other than as one piece of its own
+  // width.
   readonly property var _runPlaces: {
     var model = _runModel
     if (!model || !editorReady || editor.selectionStart !== editor.selectionEnd)
+      return []
+    if (editor.inputMethodComposing || editor.preeditText !== "")
       return []
     // During an edit this can run before _runModel has seen the new text:
     // a stale model may reach past the end, and the editor must never be
@@ -418,8 +440,7 @@ Flickable {
       places.push({
         text: piece,
         x: Math.min(a.x, b.x) - origin,
-        y: a.y,
-        height: a.height,
+        baseline: layout[9],
         color: run.color,
         font: layout[3],
         renderType: layout[8]
@@ -587,7 +608,9 @@ Flickable {
 
     // The styled runs, each over its own glyphs (see _runPlaces). Clipped
     // where the editor clips its own text: the field's view inside the
-    // paddings.
+    // paddings. Each run's baseline is the editor's: the editor's line is
+    // as tall as its tallest font (CJK fallback), and a run in a shorter
+    // font placed at the line's top would sit above the editor's glyphs.
     Item {
       id: runsLayer
       objectName: "runsLayer"
@@ -601,11 +624,12 @@ Flickable {
         model: root._runPlaces
 
         Text {
+          id: runText
+
           required property var modelData
 
           x: modelData.x
-          y: modelData.y
-          height: modelData.height
+          y: modelData.baseline - runText.baselineOffset
           text: modelData.text
           textFormat: Text.PlainText
           color: modelData.color
