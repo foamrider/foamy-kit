@@ -74,8 +74,8 @@ import QtQuick.Layouts
 //   is under the hero), the band has no field mode and ignores fieldOpen.
 //   An origin that is not in the row (moved into the ⋯ menu, hidden) grows
 //   from the row's trailing end.
-// - The band sets the field's text to FoamyStyle.font.heading, larger than
-//   body text, like a search field.
+// - The band sets the field's text (and its placeholder) to
+//   FoamyStyle.font.title, the size of the title it covers.
 // - While fieldOpen, `buttonsActive` is false: the buttons take no pointer
 //   input or focus, settingsHasCursor/menuHasCursor light nothing, and the
 //   ⋯ menu closes and won't open. Drop the band's stops (Settings, ⋯,
@@ -192,11 +192,11 @@ Item {
     band.field.anchors.fill = fieldSlot
   }
   onFieldChanged: _adoptField()
-  // Any item may be the field; a text field takes the larger text size.
+  // Any item may be the field; a text field takes the title's size.
   Binding {
     target: band.field
     property: "font.pixelSize"
-    value: FoamyStyle.font.heading
+    value: FoamyStyle.font.title
     when: band.field !== null && "font" in band.field
   }
   onFieldOpenChanged: if (fieldOpen)

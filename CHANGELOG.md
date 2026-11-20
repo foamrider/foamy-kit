@@ -10,7 +10,8 @@
   title row and the buttons fade out; closing reverses it
   (`FoamyMotion.grow`, `fadeOut`, `fadeIn`; instant under reduced motion;
   mirrored in RTL). The band's height never changes, and a hero stays in
-  place. The band sets the field's text to `FoamyStyle.font.heading`.
+  place. The band sets the field's text to `FoamyStyle.font.title`, the
+  size of the title it covers.
   While the field is open, `buttonsActive` is false: the buttons take no
   pointer input or focus, `settingsHasCursor`/`menuHasCursor` light
   nothing and the ⋯ menu closes and won't open. `fieldShown` and

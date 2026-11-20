@@ -226,7 +226,7 @@ ShellRoot {
     check(!b.fieldShown && b.fieldProgress === 0 && b.buttonsActive, "closed: no field, buttons active")
     check(!input.visible, "closed: the field is hidden")
     check(input.parent && input.parent.objectName === "foamyHeroBandField", "the band holds the field")
-    check(input.font.pixelSize === FoamyStyle.font.heading && FoamyStyle.font.heading > FoamyStyle.font.body, "the field's text is heading size " + input.font.pixelSize)
+    check(input.font.pixelSize === FoamyStyle.font.title, "the field's text is the title's size " + input.font.pixelSize)
     check(openRect[3] <= b.titleRow.height && near(openRect[3], FoamyStyle.controlHeight), "the open field fits the title row")
     var add = body.addAction.mapToItem(b, 0, 0).x
     var search = body.searchAction.mapToItem(b, 0, 0).x
