@@ -43,7 +43,8 @@ edited in a plugin: change it here, then sync.
 | FoamyButton | `FoamyButton.qml` | Form button (primary/secondary/destructive, icon, busy, focus ring) |
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
-| FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
+| FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)`; a click-away under its content (`spaceClicked`, `clickAway`) |
+| FoamyClickAway | `FoamyClickAway.qml` | A click on empty space takes the keys from a focused text field and gives them to its key home (`foamyKeyHome`); in FoamyPopup's body, FoamyWheelScroll's Flickables and settings pages by default |
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 122 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |

@@ -3,6 +3,19 @@
 ## 0.13.0 — 2026-11-19
 
 ### Added
+- Click-away (`FoamyClickAway`): a click on space that does nothing in a
+  Foamy popup takes the keys from a focused text field (`SafeTextField`,
+  `SafeTextArea`, any `TextInput` or `TextEdit`), which ends its edit
+  (`editingFinished`), and gives them to its key home: the nearest
+  ancestor's `foamyKeyHome` (FoamyPopup's body: `focusTarget`, the body
+  item while that is the default; `FoamySettingsPage`: the page, so Esc
+  still goes back). It lies under the content, so rows, buttons and fields
+  keep their clicks, a drag on empty space still flicks and the wheel
+  still scrolls. FoamyPopup puts one under its body; `FoamyWheelScroll`
+  one in its Flickable's content item, covering the view (`clickAway`,
+  default true; `SafeTextArea`'s own is off) and says `spaceClicked` on
+  each click there. No plugin change is needed. DESIGN.md: Click-away.
+  `tests/test_click_away.py`.
 - `FoamyHeroBand` field mode: `field` (a caller's item, normally a
   `SafeTextField`), `fieldOrigin` (the header action it grows from) and
   `fieldOpen`. Opening, the field grows from the action's rectangle to the

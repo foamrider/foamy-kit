@@ -226,6 +226,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   loses most of a high-resolution notch (a few px per notch). When a section
   expands, call `ensureVisible(section)` (the page's or the FoamyWheelScroll's)
   so the new content scrolls into view.
+- **Click-away**: a click on space that does nothing (the popup body's empty
+  area, a list's space below or between its rows, a settings page's empty
+  space) takes the keys from a focused text field, which ends its edit, and
+  gives them back to the panel's key catcher (FoamyPopup's `focusTarget`;
+  a settings page or an editor page keeps them: `foamyKeyHome`).
+  `FoamyClickAway` does it; FoamyPopup and FoamyWheelScroll put it in by
+  themselves, so a plugin adds nothing. A list that reacts to a click on
+  its empty space (clearing a selection) uses `FoamyWheelScroll.spaceClicked`.
   Whether it shows: `FoamySettingsState` (`show()` opens the popup on
   Settings; resets on close, never on open).
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no

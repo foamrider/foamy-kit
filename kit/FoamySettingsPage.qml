@@ -25,6 +25,9 @@ import QtQuick.Controls as Controls
 // notch). ensureVisible(item) scrolls a section that just expanded (or any
 // item on the page) into view and follows it while it grows; FoamyInfoNote
 // calls it by itself.
+//
+// Click-away: a click on the page's empty space takes the keys from a text
+// field and leaves them with the page (FoamyClickAway).
 FocusScope {
   id: root
 
@@ -35,6 +38,9 @@ FocusScope {
   property alias backTarget: header.backButton
   property real maxHeight: FoamyStyle.popupMaxHeight
   default property alias content: body.data
+  // A click-away from one of the page's fields leaves the keys here (Esc
+  // still goes back), not with the panel's key catcher (FoamyClickAway).
+  readonly property Item foamyKeyHome: root
 
   signal back
   signal retry

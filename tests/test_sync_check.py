@@ -386,6 +386,7 @@ def main():
         and files
         == sorted(
             [
+                "FoamyClickAway.qml",
                 "FoamyClipboard.qml",
                 "FoamyI18n.qml",
                 "FoamyI18nText.js",

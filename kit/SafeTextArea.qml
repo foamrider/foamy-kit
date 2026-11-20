@@ -384,6 +384,8 @@ Flickable {
 
   FoamyWheelScroll {
     target: root
+    // The field is the Flickable: a click in it is the field's own.
+    clickAway: false
     // A notch scrolls the platform's wheel lines of this field's text.
     notch: Math.max(1, Application.styleHints.wheelScrollLines) * Math.max(1, editor.cursorRectangle.height)
   }
