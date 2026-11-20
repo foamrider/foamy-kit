@@ -153,9 +153,17 @@ Flickable {
   signal accepted
   signal textEdited
 
+  // The focus went into the field's own context menu: the edit goes on
+  // until the menu closes without giving the focus back.
+  property bool _finishAfterMenu: false
+
   function cancelPaste() {
     pasteRevision = -1
     clipboard.running = false
+  }
+  function _finishEditing() {
+    cancelPaste()
+    editingFinished()
   }
   // Empties the text and, when masked, the value. No textEdited: the caller
   // made the change. Setting the text also drops the editor's undo history.
@@ -522,6 +530,12 @@ Flickable {
 
       objectName: "clipboardMenu"
 
+      onClosed: if (root._finishAfterMenu) {
+        root._finishAfterMenu = false
+        if (!editor.activeFocus)
+          root._finishEditing()
+      }
+
       Controls.MenuItem {
         enabled: !root.masked && editor.canUndo
         text: root.translate("Undo")
@@ -592,10 +606,15 @@ Flickable {
       if (root.masked && root.maskedKey(event, false))
         event.accepted = true
     }
-    onActiveFocusChanged: if (!activeFocus) {
-      root.cancelPaste()
-      root.editingFinished()
-    }
+    // Opening the context menu moves the focus into it. That is not the end
+    // of the edit: the caller must not save or hide the field then (the
+    // menu's Paste needs it shown); editingFinished waits for the menu.
+    onActiveFocusChanged: if (activeFocus)
+      root._finishAfterMenu = false
+    else if (editMenu.visible)
+      root._finishAfterMenu = true
+    else
+      root._finishEditing()
     onCursorPositionChanged: caret.wake()
     onCursorRectangleChanged: {
       // Initial layout can fire before the QML JavaScript context is ready.

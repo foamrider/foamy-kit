@@ -11,7 +11,9 @@ import "plugin/kit"
 // screen: at most three buttons top right, trailing in priority order,
 // Settings into the ⋯ menu when overflowing, the menu as an in-card overlay
 // anchored to the ⋯ button's trailing edge (LTR and RTL), single-cursor
-// keyboard navigation, submenus, Esc, press outside, focus restore.
+// keyboard navigation, submenus, Esc, press outside, focus restore; a menu
+// taller than its room keeps the keyboard's entry in view (the least
+// scroll), while the wheel and hover leave the scroll and the entry alone.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -68,6 +70,8 @@ ShellRoot {
         property alias noSettings: noSettings
         property alias catcher: catcher
         property alias rowBelow: rowBelow
+        property alias longMenu: longMenu
+        property alias longButton: longButton
         // Synthetic keys and clicks go to the window the card is in.
         property alias ev: bodyEvent
         TestEvent {
@@ -197,6 +201,73 @@ ShellRoot {
             width: 10
             height: 10
             focus: true
+          }
+          // A fixed room, shorter than the long menu: the menu scrolls.
+          Item {
+            id: longHost
+            width: parent.width
+            height: 220
+            FoamyAction {
+              id: longButton
+              anchors.right: parent.right
+              iconName: "ellipsis"
+            }
+          }
+        }
+        FoamyMenu {
+          id: longMenu
+          anchorItem: longButton
+          host: longHost
+          FoamyMenuItem {
+            text: "Entry 1"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            separator: true
+          }
+          FoamyMenuItem {
+            text: "Entry 2"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 3"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 4"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 5"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 6"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 7"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 8"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 9"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 10"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 11"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Entry 12"
+            iconName: "check"
           }
         }
       }
@@ -483,6 +554,104 @@ ShellRoot {
     interval: 600
     onTriggered: {
       check(near(shortPopup.cardItem.height, shell.shortBefore), "the card shrinks back after " + shortPopup.cardItem.height)
+      step7.start()
+    }
+  }
+
+  // The long menu's Flickable and the shown row of entry i.
+  function scrollerOf(menu) {
+    for (var i = 0; i < menu.panel.children.length; i++)
+      if (menu.panel.children[i].objectName === "foamyMenuScroller")
+        return menu.panel.children[i]
+    return null
+  }
+  function rowOf(menu, index) {
+    var list = scrollerOf(menu).contentItem.children[0]
+    for (var i = 0; i < list.children.length; i++) {
+      var row = list.children[i]
+      if (row.objectName === "foamyMenuRow" && row.index === index)
+        return row
+    }
+    return null
+  }
+  // "" when entry i shows whole in the menu's view; else where it is.
+  function shown(menu, index) {
+    var view = scrollerOf(menu)
+    var row = rowOf(menu, index)
+    if (!row)
+      return "no row " + index
+    var top = row.mapToItem(view, 0, 0).y
+    return top >= -0.5 && top + row.height <= view.height + 0.5 ? "" : "row " + index + " at " + top + ".." + (top + row.height) + " of " + view.height
+  }
+  // Entry i's bottom on the view's bottom edge: the least scroll down.
+  function onBottom(menu, index) {
+    var view = scrollerOf(menu)
+    var row = rowOf(menu, index)
+    return near(row.mapToItem(view, 0, row.height).y, view.height)
+  }
+
+  // A menu taller than its room: each keyboard move keeps its entry in
+  // view, with the least scroll; the wheel and hover don't fight it.
+  Timer {
+    id: step7
+    interval: 100
+    onTriggered: {
+      var body = popup.bodyItem
+      var menu = body.longMenu
+      body.catcher.forceActiveFocus()
+      menu.open(true)
+      var view = scrollerOf(menu)
+      check(menu.opened && menu.panel.height + 1 < menu.overlayItem.naturalHeight && view.contentHeight > view.height + 1, "the long menu scrolls " + [menu.panel.height, menu.overlayItem.naturalHeight])
+      eq([menu.currentIndex, shown(menu, 0), view.contentY], [0, "", 0], "opens on the first entry, at the top")
+      var last = menu.entries.length - 1
+      ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+      eq([menu.currentIndex, shown(menu, last)], [last, ""], "End: the last entry, in view")
+      check(onBottom(menu, last), "End: the least scroll (the last entry on the bottom edge)")
+      ev.keyClick(Qt.Key_Home, Qt.NoModifier, -1)
+      eq([menu.currentIndex, shown(menu, 0), view.contentY], [0, "", 0], "Home: the first entry, back at the top")
+      // Down through the menu: past the fold each entry lands on the bottom edge.
+      var hidden = []
+      var pushed = false
+      for (var i = 0; i < last; i++) {
+        var before = view.contentY
+        ev.keyClick(Qt.Key_Down, Qt.NoModifier, -1)
+        var where = shown(menu, menu.currentIndex)
+        if (where !== "")
+          hidden.push(where)
+        if (view.contentY !== before && !onBottom(menu, menu.currentIndex))
+          hidden.push("not the least scroll at " + menu.currentIndex)
+        pushed = pushed || view.contentY > before
+      }
+      eq([menu.currentIndex, hidden], [last, []], "Down keeps each entry in view")
+      check(pushed, "Down scrolled the menu")
+      // Up from the bottom: an entry above the view lands on its top edge.
+      var upHidden = []
+      for (i = 0; i < last; i++) {
+        var was = view.contentY
+        ev.keyClick(Qt.Key_Up, Qt.NoModifier, -1)
+        var at = shown(menu, menu.currentIndex)
+        if (at !== "")
+          upHidden.push(at)
+        if (view.contentY !== was && !near(rowOf(menu, menu.currentIndex).mapToItem(view, 0, 0).y, 0))
+          upHidden.push("not the least scroll at " + menu.currentIndex)
+      }
+      eq([menu.currentIndex, upHidden, view.contentY], [0, [], 0], "Up keeps each entry in view, back to the top")
+      // The wheel scrolls without moving the entry; hover doesn't scroll back.
+      ev.mouseWheel(menu.panel, menu.panel.width / 2, menu.panel.height / 2, Qt.NoButton, Qt.NoModifier, 0, -120, -1)
+      step8.start()
+    }
+  }
+  Timer {
+    id: step8
+    interval: 500
+    onTriggered: {
+      var menu = popup.bodyItem.longMenu
+      var view = scrollerOf(menu)
+      var scrolled = view.contentY
+      check(scrolled > 1 && menu.currentIndex === 0, "the wheel scrolls, the entry stays " + [scrolled, menu.currentIndex])
+      menu.hover(menu.entries.length - 1)
+      eq([menu.currentIndex, view.contentY], [menu.entries.length - 1, scrolled], "hover moves the entry, not the scroll")
+      menu.close()
       {
         console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
         console.log("FOAMY DONE")

@@ -40,7 +40,9 @@ import qs.Ui
 //   inside a surrogate pair; a longer `text` given by the caller is cut at
 //   the end.
 // - textEdited fires on every change the user makes (typing, paste, cut,
-//   undo, redo); editingFinished when the field loses the focus.
+//   undo, redo); editingFinished when the field loses the focus (to
+//   anything but its own context menu: then when the menu closes without
+//   giving the focus back).
 // - Styled like SafeTextField (foamy radius, control fill and border), with
 //   its `quiet` mode for text edited in place.
 //   clipboardScript resolves relative to FoamyClipboard.qml unless absolute.
@@ -122,9 +124,17 @@ Flickable {
   signal editingFinished
   signal textEdited
 
+  // The focus went into the field's own context menu: the edit goes on
+  // until the menu closes without giving the focus back.
+  property bool _finishAfterMenu: false
+
   function cancelPaste() {
     pasteRevision = -1
     clipboard.cancel()
+  }
+  function _finishEditing() {
+    cancelPaste()
+    editingFinished()
   }
   // Empties the text. No textEdited: the caller made the change.
   function clear() {
@@ -278,6 +288,11 @@ Flickable {
     Controls.ContextMenu.menu: Controls.Menu {
       id: editMenu
       objectName: "clipboardMenu"
+      onClosed: if (root._finishAfterMenu) {
+        root._finishAfterMenu = false
+        if (!editor.activeFocus)
+          root._finishEditing()
+      }
 
       Controls.MenuItem {
         enabled: editor.canUndo
@@ -333,10 +348,15 @@ Flickable {
         event.accepted = true
       }
     }
-    onActiveFocusChanged: if (!activeFocus) {
-      root.cancelPaste()
-      root.editingFinished()
-    }
+    // Opening the context menu moves the focus into it. That is not the end
+    // of the edit: the caller must not save or hide the field then (the
+    // menu's Paste needs it shown); editingFinished waits for the menu.
+    onActiveFocusChanged: if (activeFocus)
+      root._finishAfterMenu = false
+    else if (editMenu.visible)
+      root._finishAfterMenu = true
+    else
+      root._finishEditing()
     onCursorRectangleChanged: root._followCursor()
     onTextChanged: {
       // A longer text from elsewhere (the caller's `text`, an input method)

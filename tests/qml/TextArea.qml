@@ -18,7 +18,10 @@ import "plugin/kit"
 // key instead of the text's end; the height grows from minimumHeight to
 // maximumHeight and then scrolls to the caret; accessibility and the menu;
 // `quiet` on both fields (no fill or border at rest, the usual field under
-// the cursor or with the focus, the text where a plain field puts it).
+// the cursor or with the focus, the text where a plain field puts it);
+// the context menu on either field: opening it is not the end of the edit
+// (no editingFinished, the menu's Paste lands), closing it back into the
+// field ends nothing, leaving from it ends the edit once.
 // FOAMY_RTL=1 mirrors. A shot of the field goes to FOAMY_OUT.
 ShellRoot {
   id: shell
@@ -30,6 +33,7 @@ ShellRoot {
   property int failures: 0
   property int edits: 0
   property int finished: 0
+  property int fieldFinished: 0
   property int saves: 0
 
   // A hint tone: between the background and the text, clearly apart from
@@ -113,6 +117,7 @@ ShellRoot {
         SafeTextField {
           id: after
           width: parent.width
+          onEditingFinished: shell.fieldFinished++
         }
         // Qt's own (offscreen, in-process) clipboard, as a native TextEdit reads it.
         TextEdit {
@@ -348,8 +353,78 @@ ShellRoot {
         probe.text = ""
         probe.paste()
         eq(probe.text, "sentinel", "Qt's clipboard was never written")
-        shell.sizing()
+        shell.contextMenu(area, function () {
+          return shell.finished
+        }, "area", function () {
+          shell.contextMenu(after, function () {
+            return shell.fieldFinished
+          }, "field", shell.sizing)
+        })
       })
+    })
+  }
+
+  // The context menu takes the focus from the field without ending the
+  // edit: a caller that saves and hides the field on editingFinished keeps
+  // it shown, so the menu's Paste lands. Esc gives the focus back (nothing
+  // ends); a press on another field from the menu ends the edit once.
+  function contextMenu(field, count, label, then) {
+    var editor = field.editorItem
+    var menu = editor.Controls.ContextMenu.menu
+    var pasteItem = null
+    for (var i = 0; i < menu.count; i++) {
+      var entry = menu.itemAt(i)
+      if (entry && (entry.text === "«Paste»" || entry.text === "Paste"))
+        pasteItem = entry
+    }
+    field.clear()
+    field.focusInput()
+    type("ab")
+    var ended = count()
+    var other = field === area ? after : area
+    var rightClick = function () {
+      ev.mouseClick(editor, editor.width / 2, editor.height / 2, Qt.RightButton, Qt.NoModifier, -1)
+    }
+    setClipboard("normal", function () {
+      rightClick()
+      wait.waitFor(function () {
+        return menu.opened
+      }, 3000, function () {
+        check(!editor.activeFocus, label + ": the menu has the focus")
+        eq(count(), ended, label + ": opening the menu doesn't end the edit")
+        ev.mouseClick(pasteItem, pasteItem.width / 2, pasteItem.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+        wait.waitFor(function () {
+          return !menu.visible && !field.pasteRunning
+        }, 10000, function () {
+          eq([field.text, count(), editor.activeFocus], ["abfolder", ended, true], label + ": the menu's Paste lands, the edit goes on")
+          rightClick()
+          wait.waitFor(function () {
+            return menu.opened
+          }, 3000, function () {
+            key(Qt.Key_Escape)
+            wait.waitFor(function () {
+              return !menu.visible
+            }, 3000, function () {
+              eq([count(), editor.activeFocus], [ended, true], label + ": Esc closes the menu back into the field, nothing ends")
+              rightClick()
+              wait.waitFor(function () {
+                return menu.opened
+              }, 3000, function () {
+                // Press the other field beside the menu, not under it.
+                var target = other.editorItem
+                var menuLeft = menu.contentItem.mapToItem(target, 0, 0).x
+                ev.mouseClick(target, menuLeft > 12 ? 6 : target.width - 6, target.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+                wait.waitFor(function () {
+                  return !menu.visible && count() !== ended
+                }, 3000, function () {
+                  eq([count(), editor.activeFocus, other.inputActiveFocus], [ended + 1, false, true], label + ": a press on another field from the menu ends the edit once")
+                  then()
+                }, label + ": the menu closes on a press outside")
+              }, label + ": the menu opens again")
+            }, label + ": Esc closes the menu")
+          }, label + ": the menu opens again")
+        }, label + ": the menu's Paste ends")
+      }, label + ": a right-click opens the menu")
     })
   }
 

@@ -81,6 +81,19 @@
   page needs no `SafeTextArea` in its sync set. `tests/test_wheel.py`, and
   `tests/test_sync_check.py` now fails a component that names a kit type
   its deps don't sync.
+- `SafeTextField` and `SafeTextArea`: opening the field's own context menu
+  (a right-click) no longer emits `editingFinished`. The menu takes the
+  focus, so a caller that saves and hides the field on `editingFinished`
+  (an editor's date field) hid it under the menu, and the menu's Paste
+  was refused because the field was hidden. Now the edit goes on while the
+  menu is open; `editingFinished` comes when the menu closes without
+  giving the focus back (a press elsewhere), once, and not at all when
+  the focus returns to the field (Esc, Paste). `tests/test_text_area.py`.
+- `FoamyMenu` keeps the keyboard's entry in view: in a menu taller than
+  its room, Up, Down, Home, End, opening from the keyboard and leaving or
+  entering a submenu scroll the least that shows the entry, so Enter never
+  picks an entry the user can't see. The wheel and hover scroll and
+  highlight as before. `tests/test_menu.py`.
 
 ## 0.12.1 — 2026-11-19
 
