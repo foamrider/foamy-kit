@@ -63,6 +63,10 @@
   `FoamyPalette.mutedText` instead of `Qt.darker(foreground, 1.6)`, which
   in a light theme came out darker than the text itself. The placeholder
   now reads as a hint in light and dark themes.
+- `FoamySettingsPage` focus follow with a `SafeTextArea`: the page now
+  scrolls to the area's box. Before, it measured the area's inner editor,
+  which is as tall as the whole text, and scrolled a field that already
+  showed. `tests/test_wheel.py`.
 
 ## 0.12.1 — 2026-11-19
 
