@@ -23,7 +23,9 @@ import qs.Ui
 //   }
 //
 // Styled once (foamy radius, control fill and border); callers set size and
-// alignment, never background. clipboardScript resolves relative to this
+// alignment, never background. `quiet: true` is for text edited in place
+// (an editor's title that reads as text): no fill or border at rest, the
+// usual field under the pointer or the cursor and with the focus. clipboardScript resolves relative to this
 // file (kit/clipboard.sh by default) unless absolute.
 //
 // Secrets (API tokens, passwords): `masked: true`, set at creation.
@@ -35,6 +37,29 @@ import qs.Ui
 //     onTextEdited: root.tokenDraft = secretText
 //     onAccepted: root.saveToken(secretText)
 //   }
+//
+// Styled runs (Quick Add tokens, syntax): `runs` is an array of
+// {text, color} whose texts, joined, equal `text`. The field then draws each
+// run in its colour exactly over its own glyphs: the same font, each run
+// placed where the editor puts its first character and on the editor's
+// baseline (a Latin run next to CJK text sits where the editor draws it,
+// not on its own shorter font's line), so they stay aligned while the field
+// scrolls. The caret shows as usual. A run whose `color` is missing or not
+// a colour Qt knows ("bogus") takes the field's colour.
+//
+//   SafeTextField {
+//     text: root.query
+//     runs: QuickAdd.runs(root.query)        // [{text: "Buy ", color: …}, {text: "#home", color: …}]
+//     onTextEdited: root.query = text
+//   }
+//
+// Plain text instead whenever the runs don't describe the text exactly
+// (texts that don't join to `text`, a stale array during an edit, before
+// the caller updates it), the editor lays a run out other than one piece
+// (mixed directions, letters that join across runs), text is selected
+// (a run cut at the selection would lose its shaping), or an input method
+// is composing (its preedit shows in the editor only): `runsShown` says
+// which. A masked field ignores runs.
 //
 // Masked contract:
 // - The editor holds only the mask, one • (U+2022) per code point of the
@@ -74,9 +99,28 @@ Flickable {
   readonly property bool _focused: editor.activeFocus
   readonly property bool _hot: editor.hovered || hasCursor
   readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  // Quiet: text edited in place (a title that reads as text). At rest it
+  // has no fill and no border; hover, the cursor or the focus show the
+  // usual field. The border keeps its width, so the text never moves.
+  property bool quiet: false
+  readonly property bool _resting: quiet && !_focused && !_hot
+  readonly property var _restingBorder: ({
+      "color": "transparent",
+      "widths": _borderSpec.widths,
+      "gradient": {
+        "colors": [],
+        "angle": 0,
+        "enabled": false
+      }
+    })
   property alias background: editor.background
   property bool editorReady: false
-  property alias color: editor.color
+  // The text colour (the editor's own, unless runs are shown).
+  property color color: foreground
+  // Styled runs [{text, color}] (header: "Styled runs").
+  property var runs: []
+  // Whether the runs draw the text now (they match it, and the field is not masked).
+  readonly property bool runsShown: _runPlaces.length > 0
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
   property alias horizontalAlignment: editor.horizontalAlignment
@@ -109,9 +153,17 @@ Flickable {
   signal accepted
   signal textEdited
 
+  // The focus went into the field's own context menu: the edit goes on
+  // until the menu closes without giving the focus back.
+  property bool _finishAfterMenu: false
+
   function cancelPaste() {
     pasteRevision = -1
     clipboard.running = false
+  }
+  function _finishEditing() {
+    cancelPaste()
+    editingFinished()
   }
   // Empties the text and, when masked, the value. No textEdited: the caller
   // made the change. Setting the text also drops the editor's undo history.
@@ -333,6 +385,93 @@ Flickable {
       root.textEdited()
   }
 
+  // The runs, checked against the text: {text, runs: [{start, end,
+  // color}]} with the empty runs dropped, or null when they don't join to
+  // exactly `text`. `text` is the text they were checked against.
+  readonly property var _runModel: {
+    var text = editor.text
+    var list = root.runs
+    if (root.masked || text === "" || !Array.isArray(list) || list.length === 0 || list.length > text.length)
+      return null
+    var model = []
+    var at = 0
+    for (let i = 0; i < list.length; i++) {
+      let run = list[i]
+      if (!run || typeof run.text !== "string")
+        return null
+      if (run.text === "")
+        continue
+      if (text.substr(at, run.text.length) !== run.text)
+        return null
+      model.push({
+        start: at,
+        end: at + run.text.length,
+        color: _runColor(run.color)
+      })
+      at += run.text.length
+    }
+    return at === text.length ? {
+      text: text,
+      runs: model
+    } : null
+  }
+  // A run's colour: a color value, or a string Qt reads as one; anything
+  // else (missing, "", "bogus") is the field's colour.
+  function _runColor(color) {
+    if (typeof color === "object" && color !== null && "r" in color)
+      return color
+    if (typeof color !== "string" || color === "")
+      return root.color
+    try {
+      return Qt.color(color)
+    } catch (error) {
+      // Qt.color() throws on a name it doesn't know: not a caller error to
+      // report per keystroke, the documented fallback applies.
+      return root.color
+    }
+  }
+  // Where the editor lays its text out: positionToRectangle() notifies
+  // nothing, so _runPlaces reads this to run again when any of it changes.
+  readonly property var _runLayout: [editor.width, editor.height, editor.contentWidth, editor.font, editor.leftPadding, editor.rightPadding, editor.effectiveHorizontalAlignment, editor.cursorRectangle, editor.renderType, editor.baselineOffset]
+  // Where each run sits in the run layer: [{text, x, baseline, color,
+  // font, renderType}], `baseline` being the editor's (see runsLayer). []
+  // while text is selected, while an input method composes (the preedit is
+  // laid out inside the editor's text, so the runs would hide it), and
+  // when the editor lays any run out other than as one piece of its own
+  // width.
+  readonly property var _runPlaces: {
+    var model = _runModel
+    if (!model || !editorReady || editor.selectionStart !== editor.selectionEnd)
+      return []
+    if (editor.inputMethodComposing || editor.preeditText !== "")
+      return []
+    // During an edit this can run before _runModel has seen the new text:
+    // a stale model may reach past the end, and the editor must never be
+    // asked for a position there.
+    var text = editor.text
+    if (model.text !== text || text.length !== editor.length)
+      return []
+    var layout = _runLayout
+    var origin = root.contentX + editor.leftPadding
+    var places = []
+    for (let i = 0; i < model.runs.length; i++) {
+      let run = model.runs[i]
+      let a = editor.positionToRectangle(run.start)
+      let b = editor.positionToRectangle(run.end)
+      let piece = text.substring(run.start, run.end)
+      if (Math.abs(Math.abs(b.x - a.x) - runMetrics.advanceWidth(piece)) > 1)
+        return []
+      places.push({
+        text: piece,
+        x: Math.min(a.x, b.x) - origin,
+        baseline: layout[9],
+        color: run.color,
+        font: layout[3],
+        renderType: layout[8]
+      })
+    }
+    return places
+  }
   // Expose the native editable control, with the caller's field label.
   Accessible.ignored: true
   boundsBehavior: Flickable.StopAtBounds
@@ -346,15 +485,16 @@ Flickable {
   horizontalAlignment: TextEdit.AlignLeft
   font.family: FoamyStyle.fontFamily
   font.pixelSize: FoamyStyle.font.body
-  color: foreground
   selectionColor: selectionTint
   selectedTextColor: foreground
-  placeholderTextColor: Qt.darker(foreground, 1.6)
+  // A hint: the palette's muted text, readable as a placeholder in light
+  // and dark themes alike.
+  placeholderTextColor: FoamyPalette.mutedText
   leftPadding: Style.spacing.controlPaddingX + Border.left(_borderSpec)
   rightPadding: Style.spacing.controlPaddingX + Border.right(_borderSpec)
   background: BorderSurface {
-    color: Style.controlFill(root._focused, root._hot, root.foreground, root.accent)
-    borderSpec: root._borderSpec
+    color: root._resting ? "transparent" : Style.controlFill(root._focused, root._hot, root.foreground, root.accent)
+    borderSpec: root._resting ? root._restingBorder : root._borderSpec
     radius: root.cornerRadius
   }
 
@@ -376,6 +516,8 @@ Flickable {
     selectByMouse: !root.masked
     inputMethodHints: root.masked ? Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase : Qt.ImhNone
     textFormat: TextEdit.PlainText
+    // Runs draw the text over a transparent editor.
+    color: root.runsShown ? "transparent" : root.color
     // Attached TextArea margins otherwise shift centered single-line glyphs.
     topPadding: 0
     bottomPadding: 0
@@ -387,6 +529,12 @@ Flickable {
       id: editMenu
 
       objectName: "clipboardMenu"
+
+      onClosed: if (root._finishAfterMenu) {
+        root._finishAfterMenu = false
+        if (!editor.activeFocus)
+          root._finishEditing()
+      }
 
       Controls.MenuItem {
         enabled: !root.masked && editor.canUndo
@@ -458,10 +606,15 @@ Flickable {
       if (root.masked && root.maskedKey(event, false))
         event.accepted = true
     }
-    onActiveFocusChanged: if (!activeFocus) {
-      root.cancelPaste()
-      root.editingFinished()
-    }
+    // Opening the context menu moves the focus into it. That is not the end
+    // of the edit: the caller must not save or hide the field then (the
+    // menu's Paste needs it shown); editingFinished waits for the menu.
+    onActiveFocusChanged: if (activeFocus)
+      root._finishAfterMenu = false
+    else if (editMenu.visible)
+      root._finishAfterMenu = true
+    else
+      root._finishEditing()
     onCursorPositionChanged: caret.wake()
     onCursorRectangleChanged: {
       // Initial layout can fire before the QML JavaScript context is ready.
@@ -488,8 +641,46 @@ Flickable {
     }
     onTextEdited: root.textEdited()
 
-    // A read-only editor draws no caret: masked mode draws one on Qt's
-    // cursor rectangle, blinking at the platform's flash time.
+    // The styled runs, each over its own glyphs (see _runPlaces). Clipped
+    // where the editor clips its own text: the field's view inside the
+    // paddings. Each run's baseline is the editor's: the editor's line is
+    // as tall as its tallest font (CJK fallback), and a run in a shorter
+    // font placed at the line's top would sit above the editor's glyphs.
+    Item {
+      id: runsLayer
+      objectName: "runsLayer"
+      visible: root.runsShown
+      clip: true
+      x: root.contentX + editor.leftPadding
+      width: Math.max(0, root.width - editor.leftPadding - editor.rightPadding)
+      height: editor.height
+
+      Repeater {
+        model: root._runPlaces
+
+        Text {
+          id: runText
+
+          required property var modelData
+
+          x: modelData.x
+          y: modelData.baseline - runText.baselineOffset
+          text: modelData.text
+          textFormat: Text.PlainText
+          color: modelData.color
+          font: modelData.font
+          renderType: modelData.renderType
+        }
+      }
+    }
+    FontMetrics {
+      id: runMetrics
+      font: editor.font
+    }
+
+    // A read-only editor draws no caret, nor does a transparent one (runs):
+    // the field draws one on Qt's cursor rectangle, blinking at the
+    // platform's flash time.
     Rectangle {
       id: caret
 
@@ -502,12 +693,12 @@ Flickable {
       }
 
       objectName: "maskedCaret"
-      visible: root.masked && editor.activeFocus && lit
+      visible: (root.masked || root.runsShown) && editor.activeFocus && lit
       x: editor.cursorRectangle.x
       y: editor.cursorRectangle.y
       width: Math.max(1, editor.cursorRectangle.width)
       height: editor.cursorRectangle.height
-      color: editor.color
+      color: root.color
 
       Timer {
         id: blink
@@ -516,7 +707,7 @@ Flickable {
         repeat: true
         // Only while the field shows in an active window: a hidden popup can
         // keep the editor's activeFocus, and must not wake the shell.
-        running: root.masked && editor.activeFocus && root.visible && root.Window.active && Application.styleHints.cursorFlashTime >= 2
+        running: (root.masked || root.runsShown) && editor.activeFocus && root.visible && root.Window.active && Application.styleHints.cursorFlashTime >= 2
 
         onRunningChanged: caret.lit = true
         onTriggered: caret.lit = !caret.lit

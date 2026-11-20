@@ -64,8 +64,22 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     the rounded top using `topRadius`). Same geometry and text treatment; a
     readability scrim is drawn over pictures.
   - Settings pages show the compact band (back, "Settings", "Saving…");
-    `FoamySettingsPage` does it.
+    `FoamySettingsPage` does it. A sub-view built like a settings page (an
+    editor page) uses the same band, with its icon actions at the end
+    (`compactTrailing`).
   - No band on menus (`FoamyPopupCard`) or toasts.
+  - **Field mode** (search, quick add): a text field grows out of the header
+    action that opens it, across the title row (`field`, `fieldOrigin`,
+    `fieldOpen`), while the title row and the buttons fade out; closing
+    reverses it. One field at a time: search and quick add share the band's
+    one field. The band's height is fixed: the field lies over the title
+    row, and the hero and the list under the band never move. "+" sits
+    left of Search (declare it first in `trailing`; RTL mirrors it). While
+    the field is open the buttons are inert and out of the cursor
+    (`buttonsActive`); the panel owns the keys (Esc closes, the focus goes
+    back to the key catcher). Closing, the field is inert at once and drops
+    the focus. Field mode is for bands with a title row: a centred band
+    ignores `fieldOpen`.
   - **Centred** (`centered: true`): for a panel about one big value read at a
     glance (clock: the time; weather: the temperature and sky). No title icon;
     the hero comes first, centred (give hero items `Layout.alignment:
@@ -126,12 +140,17 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 118 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 122 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
-  Callers set size/alignment, never `background`. Secrets (API tokens,
+  Callers set size/alignment, never `background`. Text edited in place, where
+  it reads as text (an editor's task title or description), sets `quiet:
+  true`: no fill or border at rest, the usual field on hover, under the
+  cursor and with the focus. Secrets (API tokens,
   passwords) use `masked: true` and read `secretText`, never `text`. Label
   the field with visible text: Qt gives a password edit no accessible name.
+  Coloured tokens in a field (Quick Add) use its `runs`. Multi-line text
+  (a description) is `SafeTextArea`, for the same clipboard reason.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
@@ -207,6 +226,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   loses most of a high-resolution notch (a few px per notch). When a section
   expands, call `ensureVisible(section)` (the page's or the FoamyWheelScroll's)
   so the new content scrolls into view.
+- **Click-away**: a click on space that does nothing (the popup body's empty
+  area, a list's space below or between its rows, a settings page's empty
+  space) takes the keys from a focused text field, which ends its edit, and
+  gives them back to the panel's key catcher (FoamyPopup's `focusTarget`;
+  a settings page or an editor page keeps them: `foamyKeyHome`).
+  `FoamyClickAway` does it; FoamyPopup and FoamyWheelScroll put it in by
+  themselves, so a plugin adds nothing. A list that reacts to a click on
+  its empty space (clearing a selection) uses `FoamyWheelScroll.spaceClicked`.
   Whether it shows: `FoamySettingsState` (`show()` opens the popup on
   Settings; resets on close, never on open).
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no

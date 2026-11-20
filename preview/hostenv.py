@@ -251,6 +251,7 @@ case $mode in
   large) xs 16385 ;;
   nul) printf 'a\0b' ;;
   lines) printf 'one\r\ntwo\xe2\x80\xa8three' ;;
+  breaks) printf 'a\rb\n\nc\xe2\x80\xa9d\r\n' ;;
   long) xs 400 ;;
   *) printf folder ;;
 esac
@@ -277,7 +278,8 @@ def clipboard_fakes(folder, env=None):
     `folder` first.
 
     Modes: normal ("folder"), unicode, empty, limit (16384 bytes), large
-    (16385), nul, lines (CR LF and U+2028), long (400 bytes), delayed (0.4
+    (16385), nul, lines (CR LF and U+2028), breaks (CR, LF LF, U+2029 and
+    a trailing CR LF), long (400 bytes), delayed (0.4
     s), loaded (2.5 s: a paste on a loaded machine), failure (exit 1),
     stream (endless), and the deadline modes stall, slow (a byte per 0.1 s)
     and ignore (ignores SIGTERM). Each paste writes its argv to

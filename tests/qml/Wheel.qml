@@ -18,6 +18,7 @@ ShellRoot {
   readonly property string tag: host + "@" + Quickshell.env("FOAMY_SCALE")
   property int checks: 0
   property int failures: 0
+  property real notesAt: 0
   function check(ok, label) {
     checks++
     if (!ok) {
@@ -126,6 +127,16 @@ ShellRoot {
               value: "a"
               options: ["a", "b"]
             }
+          }
+          // Taller text than the page: focus follow shows the area's box.
+          SafeTextArea {
+            id: notes
+            width: parent.width
+            text: Array.from({
+              length: 60
+            }, function (_, i) {
+              return "Line " + i
+            }).join("\n")
           }
         }
         FoamySettingsSection {
@@ -281,6 +292,18 @@ ShellRoot {
         burst(page, 200, 330, 8, 15)
       }, function () {
         check(near(page.flickable.contentY, page.wheel.notch), "settings page: over a field or dropdown too " + page.flickable.contentY)
+      }),
+      // Focus in a multi-line field: its box in view, not its whole text.
+      step(function () {
+        // The area's top a little below the view's: its whole box shows.
+        page.flickable.contentY = notes.mapToItem(page.flickable.contentItem, 0, 0).y - 40
+        notesAt = page.flickable.contentY
+        notes.focusInput()
+      }, function () {
+        var y = notes.mapToItem(page.flickable.contentItem, 0, 0).y
+        var view = page.flickable
+        check(notes.inputActiveFocus && notes.height < view.height && near(view.contentY, notesAt) && y >= view.contentY - 1 && y + notes.height <= view.contentY + view.height + 1, "a focused text area in view: no scroll " + [y, notes.height, notesAt, view.contentY, view.height])
+        notes.focus = false
       }),
       // ensureVisible follows a section while it grows.
       step(function () {

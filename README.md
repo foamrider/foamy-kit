@@ -37,18 +37,20 @@ edited in a plugin: change it here, then sync.
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
-| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene |
+| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene; field mode (`field`, `fieldOrigin`, `fieldOpen`; not in the centred variant): a text field grows out of a header action across the title row, the band's height fixed |
 | FoamyMenu | `FoamyMenu.qml`, `FoamyMenuItem.qml` | In-card menu dropping from a button (the ⋯ menu): icons, separators, submenus, single-cursor keys, RTL |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
 | FoamyButton | `FoamyButton.qml` | Form button (primary/secondary/destructive, icon, busy, focus ring) |
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
-| FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 118 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)`; a click-away under its content (`spaceClicked`, `clickAway`) |
+| FoamyClickAway | `FoamyClickAway.qml` | A click on empty space takes the keys from a focused text field and gives them to its key home (`foamyKeyHome`); in FoamyPopup's body, FoamyWheelScroll's Flickables and settings pages by default |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 122 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |
-| FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces |
-| SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes |
+| FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces (kept as `\n` with `multiline`) |
+| SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes; styled `runs` ({text, color}) drawn over its own glyphs, plain text when they don't match or text is selected |
+| SafeTextArea | `SafeTextArea.qml` | Multi-line SafeTextField: the same bounded paste with line breaks kept, `maximumLength`, wrapping, `minimumHeight`/`maximumHeight` (scrolls past it), Enter for a newline, `keyPressed` hook (Ctrl+Enter), `editingFinished` on focus loss |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
@@ -1061,7 +1063,8 @@ import harness, hostenv
     whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
     fake.
   - `clipboard_fakes(folder, env=None)`: stand-ins for a test of
-    `kit/clipboard.sh` (directly, or through `SafeTextField` in a qs):
+    `kit/clipboard.sh` (directly, or through `SafeTextField`,
+    `SafeTextArea` or `FoamyClipboard` in a qs):
     `wl-paste`, `clipboard-fixture MODE` and `timeout` in `folder`; returns
     `TEST_CLIPBOARD_STATE` and `PATH` (`folder` first) to add to the
     environment. The stand-in wl-paste is bash builtins only, so it starts

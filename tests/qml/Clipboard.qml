@@ -55,6 +55,22 @@ ShellRoot {
       }
     },
     {
+      mode: "lines",
+      primary: false,
+      multiline: true,
+      expect: {
+        read: "one\ntwo\nthree"
+      }
+    },
+    {
+      mode: "nul",
+      primary: false,
+      multiline: true,
+      expect: {
+        failed: shell.tooLarge
+      }
+    },
+    {
       mode: "limit",
       primary: false,
       expect: {
@@ -196,6 +212,7 @@ ShellRoot {
       if (!fixture.done)
         return
       outcomes = []
+      clipboard.multiline = c.multiline === true
       check(clipboard.start(c.primary) === true && clipboard.busy, c.mode + ": a read starts")
       next()
       return
@@ -208,6 +225,7 @@ ShellRoot {
         check(took < 4000, "stall: ends at the 2 s deadline, after " + took + " ms")
       var argv = JSON.parse(readFile(state + ".args") || "[]")
       check((argv.indexOf("--primary") >= 0) === c.primary, c.mode + ": wl-paste argv " + JSON.stringify(argv))
+      clipboard.multiline = false
       caseIndex++
       stage = 0
       return

@@ -2,6 +2,7 @@
 """sync.sh / check.sh / design lint, on throwaway plugin copies in /tmp."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -336,8 +337,34 @@ def workflow_step_script(workflow, name):
     return "\n".join(body) + "\n"
 
 
+def component_reference_tests():
+    """Each component's QML and JS names only kit types its deps sync too: a
+    plugin syncs a subset, and a type left out is a ReferenceError there."""
+    components = foamykit.load_components()
+    owner = {
+        Path(file).stem: name
+        for name, spec in components.items()
+        for file in spec["files"]
+        if file.endswith((".qml", ".js")) and not any(ch in file for ch in "*?[")
+    }
+    missing = []
+    for name, spec in components.items():
+        synced = set(foamykit.resolve([name], components))
+        for file in spec["files"]:
+            path = KIT_ROOT / "kit" / file
+            if path.suffix not in (".qml", ".js") or not path.is_file():
+                continue
+            code = re.sub(r"//.*", "", path.read_text())
+            missing += [
+                f"{file} uses {stem} ({other})"
+                for stem, other in owner.items()
+                if other not in synced and re.search(rf"\b{re.escape(stem)}\b", code)
+            ]
+    return report("components name only kit types their deps sync", not missing, "; ".join(missing))
+
+
 def main():
-    ok = True
+    ok = component_reference_tests()
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
     sources = [PLUGINS / "foamy-bolt", PLUGINS / "foamy-tray"]
     sources = [s for s in sources if (s / "manifest.json").is_file()] or [FIXTURES / "demo-plugin"]
@@ -359,6 +386,7 @@ def main():
         and files
         == sorted(
             [
+                "FoamyClickAway.qml",
                 "FoamyClipboard.qml",
                 "FoamyI18n.qml",
                 "FoamyI18nText.js",

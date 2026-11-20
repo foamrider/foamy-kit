@@ -96,6 +96,8 @@ QtObject {
   // switch or a compact dropdown.
   readonly property int unitWidthCompact: Style.space(18)
   readonly property int controlPaddingX: Style.space(10)
+  // Above and below the text of a multi-line field (SafeTextArea).
+  readonly property int controlPaddingY: Style.space(6)
   readonly property int actionSize: Style.space(28)
   readonly property int iconSize: Style.space(15)
   readonly property int settingsButtonSize: Style.space(32)

@@ -7,7 +7,7 @@ import "harness"
 import "plugin/kit"
 
 // FoamyHeroBand inside a real FoamyPopup on the simulated screen: geometry
-// against the card, compact form, picture background. FOAMY_RTL=1 mirrors
+// against the card, compact form (with a trailing action), picture background. FOAMY_RTL=1 mirrors
 // the body. Captures go to FOAMY_OUT for pixel checks in test_band.py.
 ShellRoot {
   id: shell
@@ -73,6 +73,14 @@ ShellRoot {
           width: parent.width
           compact: true
           topRadius: 0
+          saving: true
+          compactTrailing: [
+            FoamyAction {
+              objectName: "compactOpen"
+              iconName: "external-link"
+              tooltipText: "Open"
+            }
+          ]
         }
         Item {
           width: 1
@@ -124,6 +132,20 @@ ShellRoot {
       check(near(band.topRadius, card.radius - 1) && card.radius === 12, "band corners follow the popup radius " + band.topRadius)
       check(band.hasHero && band.height > popup.bodyItem.compactBand.height, "hero band is taller than the compact form")
       check(popup.bodyItem.compactBand.height >= FoamyStyle.settingsButtonSize + FoamyStyle.bandPaddingTop + FoamyStyle.bandPaddingBottom - 1, "compact band fits the back button")
+      // compactTrailing: the action at the trailing end, after "Saving…",
+      // centred on the back button; the band no taller for it.
+      var compact = popup.bodyItem.compactBand
+      var open = compact.compactTrailing[0]
+      var back = compact.backButton
+      var openX = open.mapToItem(compact, 0, 0).x
+      var backX = back.mapToItem(compact, 0, 0).x
+      check(open.visible && open.objectName === "compactOpen", "the compact band shows its trailing action")
+      if (rtl)
+        check(near(openX, FoamyStyle.padding) && backX > compact.width / 2, "RTL: the trailing action on the left, Back on the right " + openX + " / " + backX)
+      else
+        check(near(openX + open.width, compact.width - FoamyStyle.padding) && backX < compact.width / 2, "LTR: the trailing action on the right, Back on the left " + openX + " / " + backX)
+      check(near(open.mapToItem(compact, 0, open.height / 2).y, back.mapToItem(compact, 0, back.height / 2).y), "the trailing action centred on Back")
+      check(near(compact.height, FoamyStyle.settingsButtonSize + FoamyStyle.bandPaddingTop + FoamyStyle.bandPaddingBottom), "the trailing action keeps the compact height " + compact.height)
       var icon = band.titleRow.children[0].children[0]
       var settings = band.settingsButton.mapToItem(band, 0, 0).x
       if (rtl)

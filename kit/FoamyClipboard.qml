@@ -7,11 +7,13 @@ import Quickshell.Io
 // clipboard change, read the whole offer on the UI thread with no byte cap
 // and no total deadline: a clipboard owner that keeps sending can fill the
 // shell's memory or hold its UI. clipboard.sh reads it in its own process
-// instead: at most 16 KiB of text without NUL, line breaks as spaces,
-// killed with its producer at 2 s.
+// instead: at most 16 KiB of text without NUL, line breaks as spaces (or
+// kept as "\n" with `multiline: true`, for a multi-line editor), killed
+// with its producer at 2 s.
 //
 //   FoamyClipboard {
 //     id: clipboard
+//     multiline: false                     // true keeps line breaks ("\n")
 //     onRead: function (text) { … }        // the text, possibly ""
 //     onFailed: function (message) { … }   // English; FoamyI18n.t() it to show
 //   }
@@ -26,6 +28,9 @@ Item {
   id: reader
 
   property string clipboardScript: "clipboard.sh"
+  // Keep line breaks (each CR LF, CR, U+2028 or U+2029 as "\n") instead of
+  // turning them into spaces. Read at start().
+  property bool multiline: false
   // Busy until a stopped read has also exited: running = false only sends
   // TERM, and a start before the exit would be a no-op whose result is the
   // stopped read's exit.
@@ -38,7 +43,10 @@ Item {
     if (reader.busy)
       return false
     proc.pending = true
-    proc.command = ["bash", decodeURIComponent(Qt.resolvedUrl(reader.clipboardScript).toString().replace(/^file:\/\//, "")), primary ? "primary" : "clipboard"]
+    var command = ["bash", decodeURIComponent(Qt.resolvedUrl(reader.clipboardScript).toString().replace(/^file:\/\//, "")), primary ? "primary" : "clipboard"]
+    if (reader.multiline)
+      command.push("multiline")
+    proc.command = command
     proc.running = true
     return true
   }

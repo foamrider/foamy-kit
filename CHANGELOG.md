@@ -1,5 +1,114 @@
 # Changelog
 
+## 0.13.0 — 2026-11-19
+
+### Added
+- Click-away (`FoamyClickAway`): a click on space that does nothing in a
+  Foamy popup takes the keys from a focused text field (`SafeTextField`,
+  `SafeTextArea`, any `TextInput` or `TextEdit`), which ends its edit
+  (`editingFinished`), and gives them to its key home: the nearest
+  ancestor's `foamyKeyHome` (FoamyPopup's body: `focusTarget`, the body
+  item while that is the default; `FoamySettingsPage`: the page, so Esc
+  still goes back). It lies under the content, so rows, buttons and fields
+  keep their clicks, a drag on empty space still flicks and the wheel
+  still scrolls. FoamyPopup puts one under its body; `FoamyWheelScroll`
+  one in its Flickable's content item, covering the view (`clickAway`,
+  default true; `SafeTextArea`'s own is off) and says `spaceClicked` on
+  each click there. No plugin change is needed. DESIGN.md: Click-away.
+  `tests/test_click_away.py`.
+- `FoamyHeroBand` field mode: `field` (a caller's item, normally a
+  `SafeTextField`), `fieldOrigin` (the header action it grows from) and
+  `fieldOpen`. Opening, the field grows from the action's rectangle to the
+  full width between the side paddings, in the title row's slot, and the
+  title row and the buttons fade out; closing reverses it
+  (`FoamyMotion.grow`, `fadeOut`, `fadeIn`; instant under reduced motion;
+  mirrored in RTL). The band's height never changes, and a hero stays in
+  place. The band sets the field's text to `FoamyStyle.font.title`, the
+  size of the title it covers.
+  While the field is open, `buttonsActive` is false: the buttons take no
+  pointer input or focus, `settingsHasCursor`/`menuHasCursor` light
+  nothing and the ⋯ menu closes and won't open. `fieldShown` and
+  `fieldProgress` expose the state and the animation; keys stay the
+  caller's. `menuHasCursor` is now a property of the band instead of an
+  alias (same use). The field takes pointer input and focus only while
+  `fieldOpen`: closing, it is inert at once and drops the active focus,
+  so a click on the fading field can't take the focus back and no key
+  edits the hidden text. Field mode is for bands with a title row: a
+  `centered` band ignores `fieldOpen` (its title is under the hero).
+  DESIGN.md: one field at a time, the band height is fixed, "+" sits left
+  of Search. `tests/test_band_field.py`.
+- `SafeTextField.runs`: an array of `{text, color}` whose texts join to the
+  field's text. The field then draws each run in its colour over its own
+  glyphs (same font, each run placed where the editor puts its first
+  character and on the editor's baseline, so a Latin run next to CJK text
+  doesn't jump up; clipped where the editor clips), aligned while the field
+  scrolls, with the caret still drawn. A run whose colour is missing or
+  not one Qt can read ("bogus") takes the field's `color`. Runs that don't
+  match the text (also during an edit, before the caller updates them),
+  that the editor lays out other than as one piece (mixed directions,
+  letters joined across runs), while text is selected (a run cut at the
+  selection would lose its shaping) or while an input method composes (its
+  preedit shows only in the editor) give the plain field (`runsShown` says
+  which); no position past the text's end is ever asked for. A masked
+  field ignores them. The field's `color` is now its own property (same
+  use). `tests/test_text_runs.py` compares the styled field's pixels with a
+  plain field's, in Arabic, mixed Latin and CJK and during a composition
+  too (with `tests/fixtures/fake-ime`, a test-only QML module it builds
+  with moc and g++), and fails on Qt's "out of range" warning.
+- `SafeTextArea`: the multi-line sibling of `SafeTextField`. Paste goes
+  through `FoamyClipboard` with line breaks kept (16 KiB, no NUL, 2 s
+  deadline, a late result dropped); `maximumLength` (typing at the limit
+  drops the key, a paste is cut to fit), word wrap, `minimumHeight` and
+  `maximumHeight` (it scrolls past it, following the caret, wheel through
+  `FoamyWheelScroll`), `placeholderText`, `translate`, the accessible name,
+  `textEdited`, `editingFinished` on focus loss, and the `keyPressed` hook.
+  Enter and Shift+Enter insert a newline. `tests/test_text_area.py`.
+- `FoamyStyle.controlPaddingY` (6): the padding above and below the text
+  of a multi-line field.
+- `clipboard.sh clipboard|primary multiline` and
+  `FoamyClipboard.multiline`: line breaks are kept as `\n` (CR LF, CR,
+  U+2028 and U+2029 each become one) instead of turning into spaces. The
+  same bounds; any other extra argument is refused (exit 2).
+  `hostenv.clipboard_fakes()` has a `breaks` mode.
+- FoamyIcon: `calendar-range`, `flag`, `target` and `text` (Lucide
+  1.65.0, lucide-static), 122 names.
+- `FoamyHeroBand.compactTrailing` (`FoamySettingsHeader.trailing`): icon
+  actions at the compact band's trailing end, after "Saving…", for a
+  sub-view built like the settings page (an editor page's "Open in …").
+  The band keeps its height. `tests/test_band.py`.
+- `SafeTextField.quiet` and `SafeTextArea.quiet`: text edited in place (an
+  editor's title or description that reads as text). At rest the field
+  has no fill and no border; hover, the cursor (`hasCursor`) and the focus
+  show the usual field. The border keeps its width, so the text doesn't
+  move. DESIGN.md, "Inputs". `tests/test_text_area.py`.
+
+### Fixed
+- `SafeTextField` placeholder colour (since 0.1.0) and `SafeTextArea`'s:
+  `FoamyPalette.mutedText` instead of `Qt.darker(foreground, 1.6)`, which
+  in a light theme came out darker than the text itself. The placeholder
+  now reads as a hint in light and dark themes.
+- `FoamySettingsPage` focus follow with a `SafeTextArea`: the page now
+  scrolls to the area's box. Before, it measured the area's inner editor,
+  which is as tall as the whole text, and scrolled a field that already
+  showed. The area says so with its new read-only `scrollsItself`, so the
+  page needs no `SafeTextArea` in its sync set. `tests/test_wheel.py`, and
+  `tests/test_sync_check.py` now fails a component that names a kit type
+  its deps don't sync.
+- `SafeTextField` and `SafeTextArea`: opening the field's own context menu
+  (a right-click) no longer emits `editingFinished`. The menu takes the
+  focus, so a caller that saves and hides the field on `editingFinished`
+  (an editor's date field) hid it under the menu, and the menu's Paste
+  was refused because the field was hidden. Now the edit goes on while the
+  menu is open; `editingFinished` comes when the menu closes without
+  giving the focus back (a press elsewhere), once, and not at all when
+  the focus returns to the field (Esc, Paste). `tests/test_text_area.py`.
+- `FoamyMenu` keeps the keyboard's entry in view: in a menu taller than
+  its room, Up, Down, Home, End, opening from the keyboard and leaving or
+  entering a submenu scroll the least that shows the entry, so Enter never
+  picks an entry the user can't see. The wheel scrolls as before. Only a
+  pointer that moved takes the highlight: rows scrolling under a resting
+  pointer no longer replace the keys' entry. `tests/test_menu.py`.
+
 ## 0.12.1 — 2026-11-19
 
 ### Fixed
