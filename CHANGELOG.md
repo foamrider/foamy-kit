@@ -66,7 +66,10 @@
 - `FoamySettingsPage` focus follow with a `SafeTextArea`: the page now
   scrolls to the area's box. Before, it measured the area's inner editor,
   which is as tall as the whole text, and scrolled a field that already
-  showed. `tests/test_wheel.py`.
+  showed. The area says so with its new read-only `scrollsItself`, so the
+  page needs no `SafeTextArea` in its sync set. `tests/test_wheel.py`, and
+  `tests/test_sync_check.py` now fails a component that names a kit type
+  its deps don't sync.
 
 ## 0.12.1 — 2026-11-19
 

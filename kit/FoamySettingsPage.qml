@@ -62,11 +62,13 @@ FocusScope {
   function keepVisible(focused) {
     // In a SafeTextArea the focused item is its inner editor, as tall as
     // the whole text and moved by the area's own scroll: the area's box is
-    // what shows (the area keeps its caret in view itself).
+    // what shows (the area keeps its caret in view itself). The area says
+    // so with `scrollsItself`: a page synced without SafeTextArea can't
+    // name its type.
     var item = focused
     var ancestor = focused
     while (ancestor && ancestor !== scroll.contentItem) {
-      if (item === focused && ancestor instanceof SafeTextArea)
+      if (item === focused && ancestor.scrollsItself === true)
         item = ancestor
       ancestor = ancestor.parent
     }

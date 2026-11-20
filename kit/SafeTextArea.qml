@@ -64,6 +64,10 @@ Flickable {
   readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
   property alias background: editor.background
   property bool editorReady: false
+  // A scroll view around the field (FoamySettingsPage's focus follow)
+  // shows the field's box, not its inner editor: the field scrolls its
+  // own text to the caret.
+  readonly property bool scrollsItself: true
   property alias color: editor.color
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
