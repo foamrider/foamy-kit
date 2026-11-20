@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 
@@ -171,6 +172,18 @@ QtObject {
   function hover(i) {
     if (selectable(i))
       _index = i
+  }
+  // Where the pointer last was, in the menu panel's coordinates. Rows
+  // that scroll under a resting pointer (a keyboard move revealing its
+  // entry, the wheel) send hover events too; only a pointer that moved
+  // takes the highlight, so Enter keeps the entry the keys chose.
+  property point _pointer: Qt.point(-1, -1)
+  function _pointerHover(area, i) {
+    var at = area.mapToItem(menuPanel, area.mouseX, area.mouseY)
+    if (Math.abs(at.x - _pointer.x) < 0.5 && Math.abs(at.y - _pointer.y) < 0.5)
+      return
+    _pointer = at
+    hover(i)
   }
 
   // Activate entry i (the highlighted one by default).
@@ -497,8 +510,8 @@ QtObject {
                 enabled: !row.separator
                 hoverEnabled: true
                 cursorShape: row.usable ? Qt.PointingHandCursor : Qt.ArrowCursor
-                onEntered: root.hover(row.index)
-                onPositionChanged: root.hover(row.index)
+                onEntered: root._pointerHover(this, row.index)
+                onPositionChanged: root._pointerHover(this, row.index)
                 onClicked: root.activate(row.index)
               }
             }

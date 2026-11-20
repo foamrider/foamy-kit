@@ -105,8 +105,9 @@
 - `FoamyMenu` keeps the keyboard's entry in view: in a menu taller than
   its room, Up, Down, Home, End, opening from the keyboard and leaving or
   entering a submenu scroll the least that shows the entry, so Enter never
-  picks an entry the user can't see. The wheel and hover scroll and
-  highlight as before. `tests/test_menu.py`.
+  picks an entry the user can't see. The wheel scrolls as before. Only a
+  pointer that moved takes the highlight: rows scrolling under a resting
+  pointer no longer replace the keys' entry. `tests/test_menu.py`.
 
 ## 0.12.1 — 2026-11-19
 

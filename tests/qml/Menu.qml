@@ -651,6 +651,26 @@ ShellRoot {
       check(scrolled > 1 && menu.currentIndex === 0, "the wheel scrolls, the entry stays " + [scrolled, menu.currentIndex])
       menu.hover(menu.entries.length - 1)
       eq([menu.currentIndex, view.contentY], [menu.entries.length - 1, scrolled], "hover moves the entry, not the scroll")
+      // The pointer rests on the menu while End scrolls rows under it: the
+      // keys' entry stays once the hover events settle.
+      menu.close()
+      popup.bodyItem.catcher.forceActiveFocus()
+      menu.open(true)
+      ev.mouseMove(menu.panel, menu.panel.width / 2, menu.panel.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+      check(menu.currentIndex > 0, "a moved pointer takes the highlight " + menu.currentIndex)
+      ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+      step9.start()
+    }
+  }
+  Timer {
+    id: step9
+    interval: 300
+    onTriggered: {
+      var menu = popup.bodyItem.longMenu
+      var last = menu.entries.length - 1
+      eq([menu.currentIndex, shown(menu, last)], [last, ""], "End under a resting pointer keeps the last entry")
+      ev.mouseMove(menu.panel, menu.panel.width / 2, menu.panel.height / 2 + 2, -1, Qt.NoButton, Qt.NoModifier)
+      check(menu.currentIndex !== last, "moving the pointer again takes the highlight " + menu.currentIndex)
       menu.close()
       {
         console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)

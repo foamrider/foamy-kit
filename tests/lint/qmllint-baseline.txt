@@ -100,13 +100,6 @@ kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
-kit/FoamyMenu.qml: unqualified: Unqualified access | Accessible.onPressAction: root.activate(index)
-kit/FoamyMenu.qml: unqualified: Unqualified access | onClicked: root.activate(row.index)
-kit/FoamyMenu.qml: unqualified: Unqualified access | onEntered: root.hover(row.index)
-kit/FoamyMenu.qml: unqualified: Unqualified access | onPositionChanged: root.hover(row.index)
-kit/FoamyMenu.qml: unqualified: Unqualified access | readonly property bool current: root._index === index
-kit/FoamyMenu.qml: unqualified: Unqualified access | readonly property bool isBack: modelData === root._back
-kit/FoamyMenu.qml: unqualified: Unqualified access | width: list.width
 kit/FoamyMenuItem.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < items.length; i++)
 kit/FoamyMotion.qml: import: Type FoamyMotion not declared as singleton in qmldir but using pragma Singleton
 kit/FoamyNumberField.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < s.length; i++) {
