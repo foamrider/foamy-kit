@@ -23,7 +23,9 @@ import qs.Ui
 //   }
 //
 // Styled once (foamy radius, control fill and border); callers set size and
-// alignment, never background. clipboardScript resolves relative to this
+// alignment, never background. `quiet: true` is for text edited in place
+// (an editor's title that reads as text): no fill or border at rest, the
+// usual field under the pointer or the cursor and with the focus. clipboardScript resolves relative to this
 // file (kit/clipboard.sh by default) unless absolute.
 //
 // Secrets (API tokens, passwords): `masked: true`, set at creation.
@@ -97,6 +99,20 @@ Flickable {
   readonly property bool _focused: editor.activeFocus
   readonly property bool _hot: editor.hovered || hasCursor
   readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  // Quiet: text edited in place (a title that reads as text). At rest it
+  // has no fill and no border; hover, the cursor or the focus show the
+  // usual field. The border keeps its width, so the text never moves.
+  property bool quiet: false
+  readonly property bool _resting: quiet && !_focused && !_hot
+  readonly property var _restingBorder: ({
+      "color": "transparent",
+      "widths": _borderSpec.widths,
+      "gradient": {
+        "colors": [],
+        "angle": 0,
+        "enabled": false
+      }
+    })
   property alias background: editor.background
   property bool editorReady: false
   // The text colour (the editor's own, unless runs are shown).
@@ -469,8 +485,8 @@ Flickable {
   leftPadding: Style.spacing.controlPaddingX + Border.left(_borderSpec)
   rightPadding: Style.spacing.controlPaddingX + Border.right(_borderSpec)
   background: BorderSurface {
-    color: Style.controlFill(root._focused, root._hot, root.foreground, root.accent)
-    borderSpec: root._borderSpec
+    color: root._resting ? "transparent" : Style.controlFill(root._focused, root._hot, root.foreground, root.accent)
+    borderSpec: root._resting ? root._restingBorder : root._borderSpec
     radius: root.cornerRadius
   }
 

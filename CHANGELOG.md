@@ -57,7 +57,17 @@
   U+2028 and U+2029 each become one) instead of turning into spaces. The
   same bounds; any other extra argument is refused (exit 2).
   `hostenv.clipboard_fakes()` has a `breaks` mode.
-- FoamyIcon: `calendar-range` (Lucide 1.65.0, lucide-static), 119 names.
+- FoamyIcon: `calendar-range`, `flag`, `target` and `text` (Lucide
+  1.65.0, lucide-static), 122 names.
+- `FoamyHeroBand.compactTrailing` (`FoamySettingsHeader.trailing`): icon
+  actions at the compact band's trailing end, after "Saving…", for a
+  sub-view built like the settings page (an editor page's "Open in …").
+  The band keeps its height. `tests/test_band.py`.
+- `SafeTextField.quiet` and `SafeTextArea.quiet`: text edited in place (an
+  editor's title or description that reads as text). At rest the field
+  has no fill and no border; hover, the cursor (`hasCursor`) and the focus
+  show the usual field. The border keeps its width, so the text doesn't
+  move. DESIGN.md, "Inputs". `tests/test_text_area.py`.
 
 ### Fixed
 - `SafeTextField` placeholder colour (since 0.1.0) and `SafeTextArea`'s:

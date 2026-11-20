@@ -16,7 +16,9 @@ import "plugin/kit"
 // dropped after newer typing or clear(), middle-click pastes the primary
 // selection), never Qt's own clipboard; typing at maximumLength drops the
 // key instead of the text's end; the height grows from minimumHeight to
-// maximumHeight and then scrolls to the caret; accessibility and the menu.
+// maximumHeight and then scrolls to the caret; accessibility and the menu;
+// `quiet` on both fields (no fill or border at rest, the usual field under
+// the cursor or with the focus, the text where a plain field puts it).
 // FOAMY_RTL=1 mirrors. A shot of the field goes to FOAMY_OUT.
 ShellRoot {
   id: shell
@@ -119,6 +121,19 @@ ShellRoot {
           height: 1
           opacity: 0
         }
+        // Quiet (text edited in place): no fill or border at rest.
+        SafeTextArea {
+          id: quietArea
+          width: parent.width
+          quiet: true
+          text: "In place"
+        }
+        SafeTextField {
+          id: quietField
+          width: parent.width
+          quiet: true
+          text: "In place"
+        }
       }
     }
     Item {
@@ -164,7 +179,28 @@ ShellRoot {
     onTriggered: shell.typing()
   }
 
+  // `quiet`: at rest neither fill nor border, with the border's width kept
+  // (the text sits where a plain field's does); the cursor and the focus
+  // show the usual field.
+  function quietness(field, plain, label) {
+    var surface = field.background
+    check(Qt.colorEqual(surface.color, "transparent") && Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": no fill or border at rest")
+    eq(surface.borderSpec.widths, plain._borderSpec.widths, label + ": the border keeps its width at rest")
+    eq([field.leftPadding, field.rightPadding], [plain.leftPadding, plain.rightPadding], label + ": the text sits where a plain field's does")
+    field.hasCursor = true
+    check(!Qt.colorEqual(surface.color, "transparent") && !Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": the cursor shows the field")
+    field.hasCursor = false
+    field.focusInput()
+    check(Qt.colorEqual(surface.color, Style.controlFill(true, false, field.foreground, field.accent)), label + ": the focus shows the focused fill")
+    check(Qt.colorEqual(surface.borderSpec.color, Border.controlSpec("focus", field.foreground, field.accent).color), label + ": the focus shows the focus border")
+    field.editorItem.focus = false
+    check(Qt.colorEqual(surface.color, "transparent"), label + ": at rest again after the focus leaves")
+    check(!Qt.colorEqual(plain.background.color, "transparent") || !Qt.colorEqual(plain.background.borderSpec.color, "transparent"), label + ": a plain field keeps its look at rest")
+  }
+
   function typing() {
+    shell.quietness(quietArea, area, "quiet area")
+    shell.quietness(quietField, after, "quiet field")
     var editor = area.editorItem
     check(editor.Accessible.role === Accessible.EditableText && editor.Accessible.multiLine === true, "accessible as a multi-line edit")
     eq(editor.Accessible.name, "Description", "the editor carries the field's name")

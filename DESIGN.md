@@ -64,7 +64,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     the rounded top using `topRadius`). Same geometry and text treatment; a
     readability scrim is drawn over pictures.
   - Settings pages show the compact band (back, "Settings", "Saving…");
-    `FoamySettingsPage` does it.
+    `FoamySettingsPage` does it. A sub-view built like a settings page (an
+    editor page) uses the same band, with its icon actions at the end
+    (`compactTrailing`).
   - No band on menus (`FoamyPopupCard`) or toasts.
   - **Field mode** (search, quick add): a text field grows out of the header
     action that opens it, across the title row (`field`, `fieldOrigin`,
@@ -138,10 +140,13 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 119 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 122 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
-  Callers set size/alignment, never `background`. Secrets (API tokens,
+  Callers set size/alignment, never `background`. Text edited in place, where
+  it reads as text (an editor's task title or description), sets `quiet:
+  true`: no fill or border at rest, the usual field on hover, under the
+  cursor and with the focus. Secrets (API tokens,
   passwords) use `masked: true` and read `secretText`, never `text`. Label
   the field with visible text: Qt gives a password edit no accessible name.
   Coloured tokens in a field (Quick Add) use its `runs`. Multi-line text

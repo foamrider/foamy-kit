@@ -4,7 +4,8 @@ newlines, the key hook, focus, paste through kit/clipboard.sh `multiline`
 with the hostenv.clipboard_fakes() wl-paste (never the real clipboard):
 line breaks kept, NUL and oversized text refused, maximumLength, late
 results dropped; the height between minimumHeight and maximumHeight, and
-scrolling to the caret. Field shots: tests/out/text-area/."""
+scrolling to the caret; `quiet` on SafeTextArea and SafeTextField.
+Field shots: tests/out/text-area/."""
 
 import shutil
 import sys

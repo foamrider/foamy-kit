@@ -44,7 +44,7 @@ edited in a plugin: change it here, then sync.
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)` |
-| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 119 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
+| FoamyIcon | `FoamyIcon.qml` | Lucide superset, 122 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |
 | FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces (kept as `\n` with `multiline`) |

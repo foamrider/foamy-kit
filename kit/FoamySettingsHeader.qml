@@ -3,12 +3,15 @@ import QtQuick.Layouts
 
 // Settings page header: back button, "Settings", and "Saving…" while a save
 // is in flight. Part of FoamySettingsPage; use it alone only for a custom page.
+// A sub-view built like the settings page (an editor page) may put icon
+// actions (FoamyAction) at the trailing end with `trailing`, after "Saving…".
 Item {
   id: root
 
   property string title: FoamyI18n.t("Settings")
   property bool saving: false
   property alias backButton: backButton
+  property alias trailing: trailingRow.data
   property real horizontalPadding: FoamyStyle.padding
   property real topPadding: FoamyStyle.padding
   property real bottomPadding: FoamyStyle.padding
@@ -56,6 +59,12 @@ Item {
       color: FoamyPalette.secondaryText
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.bodySmall
+    }
+    Row {
+      id: trailingRow
+      visible: children.length > 0
+      Layout.alignment: Qt.AlignVCenter
+      spacing: FoamyStyle.gapSmall
     }
   }
 }
