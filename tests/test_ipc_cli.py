@@ -5,7 +5,6 @@
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -32,15 +31,14 @@ def main():
     with harness.Run("4.5", SHELL, prefix="foamy-kit-ipc-cli-") as run:
         run.start()
         by_id = Path(run.env["XDG_RUNTIME_DIR"]) / "quickshell/by-id"
-        for _ in range(100):
-            if (
-                by_id.is_dir()
-                and any(by_id.iterdir())
-                and "FOAMY UP" in (run.base / "qs.log").read_text(errors="replace")
-            ):
-                break
-            time.sleep(0.1)
-        instance = next(by_id.iterdir()).name
+        up = run.wait_for_log("FOAMY UP", 30)
+        sockets = up and harness.wait_for(lambda: sorted(by_id.glob("*/ipc.sock")), 10)
+        if not sockets:
+            log = run.base / "qs.log"
+            tail = log.read_text(errors="replace")[-300:] if log.exists() else "no log"
+            report("qs ipc instance is up", False, f"FOAMY UP {'seen' if up else 'missing'}; {tail}")
+            return 1
+        instance = sockets[0].parent.name
 
         def call(value):
             result = subprocess.run(
