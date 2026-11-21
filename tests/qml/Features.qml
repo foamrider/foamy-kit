@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtTest
 import Quickshell
 import qs.Commons
 import qs.Commons as Commons
@@ -35,6 +36,14 @@ ShellRoot {
   function eq(actual, expected, label) {
     check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
   }
+  // Real key events to the focused item, through the window.
+  function key(k) {
+    ev.keyClick(k, Qt.NoModifier, -1)
+  }
+  function type(text) {
+    for (var i = 0; i < text.length; i++)
+      ev.keyClickChar(text.charAt(i), Qt.NoModifier, -1)
+  }
 
   FloatingWindow {
     id: window
@@ -68,27 +77,45 @@ ShellRoot {
         width: 400
         title: "Covers"
       }
-      FoamyNumberField {
-        id: numberField
-        width: 300
-        label: "Refresh every"
-        value: shell.numberSetting
-        from: 1
-        to: 100
-        stepSize: 5
-        onCommitted: function (v) {
-          shell.numberCommits = shell.numberCommits.concat([v])
+      Item {
+        width: 1
+        height: 1
+        TestEvent {
+          id: ev
         }
       }
-      FoamyTextSettingField {
-        id: textSetting
+      // On a settings page, as in a plugin: Escape that a field leaves
+      // unhandled would go back.
+      FoamySettingsPage {
+        id: keyPage
         width: 300
-        value: shell.textSetting
-        validate: function (text) {
-          return text.length <= 5 || "Too long"
-        }
-        onCommitted: function (v) {
-          shell.textCommits = shell.textCommits.concat([v])
+        height: 300
+        onBack: shell.pageBacks++
+        FoamySettingsSection {
+          width: parent.width
+          FoamyNumberField {
+            id: numberField
+            width: parent.width
+            label: "Refresh every"
+            value: shell.numberSetting
+            from: 1
+            to: 100
+            stepSize: 5
+            onCommitted: function (v) {
+              shell.numberCommits = shell.numberCommits.concat([v])
+            }
+          }
+          FoamyTextSettingField {
+            id: textSetting
+            width: parent.width
+            value: shell.textSetting
+            validate: function (text) {
+              return text.length <= 5 || "Too long"
+            }
+            onCommitted: function (v) {
+              shell.textCommits = shell.textCommits.concat([v])
+            }
+          }
         }
       }
       Column {
@@ -257,6 +284,7 @@ ShellRoot {
     }
   }
   property real numberSetting: 5
+  property int pageBacks: 0
   property var numberCommits: []
   property string textSetting: "abc"
   property var textCommits: []
@@ -533,10 +561,10 @@ ShellRoot {
     check(numberField.editing, "typing starts a draft")
     shell.numberSetting = 8
     eq(numberField.field.text, "9", "an external change doesn't overwrite the draft")
-    check(numberField.commitEdit(false), "Enter commits")
-    eq(shell.numberCommits, [9], "a valid changed draft commits once")
-    numberField.commitEdit(false)
-    numberField.field.editingFinished()
+    numberField.field.focusInput()
+    key(Qt.Key_Return)
+    eq(shell.numberCommits, [9], "Enter commits a valid changed draft once")
+    textSetting.field.focusInput()
     eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
     shell.numberSetting = 9
     eq(numberField.field.text, "9", "shows the saved value")
@@ -553,11 +581,17 @@ ShellRoot {
     numberField.field.textEdited()
     check(numberField.commitEdit(true) && numberField.field.text === "12" && numberField.error !== "", "focus-out on an out-of-range draft restores the value")
     eq(shell.numberCommits, [9], "invalid drafts never commit")
-    numberField.field.text = "33"
-    numberField.field.textEdited()
-    check(numberField.handleKey(Qt.Key_Escape) && numberField.field.text === "12" && !numberField.editing, "Escape restores the value and is consumed (page stays)")
-    check(numberField.handleKey(Qt.Key_Up) && numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize")
-    check(!numberField.handleKey(Qt.Key_A), "other keys pass through")
+    numberField.field.focusInput()
+    type("33")
+    check(numberField.editing && numberField.field.text.indexOf("33") !== -1, "typed digits reach the field and start a draft: " + numberField.field.text)
+    key(Qt.Key_Escape)
+    check(numberField.field.text === "12" && !numberField.editing && shell.pageBacks === 0, "Escape restores the value and the page stays: " + [numberField.field.text, numberField.editing, shell.pageBacks])
+    key(Qt.Key_Up)
+    check(numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize: " + numberField.field.text)
+    key(Qt.Key_Return)
+    eq(shell.numberCommits, [9, 17], "Enter commits the stepped draft once")
+    textSetting.field.focusInput()
+    eq(shell.numberCommits, [9, 17], "focus-out after Enter doesn't commit it again")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
@@ -589,7 +623,10 @@ ShellRoot {
     textSetting.field.text = "toolong"
     textSetting.field.textEdited()
     check(!textSetting.commitEdit(false) && textSetting.error === "Too long", "validate() message on Enter")
-    check(textSetting.handleKey(Qt.Key_Escape) && textSetting.field.text === "other" && !textSetting.editing, "Escape restores the bound value")
+    textSetting.field.focusInput()
+    type("x")
+    key(Qt.Key_Escape)
+    check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === 0, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks])
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
 
