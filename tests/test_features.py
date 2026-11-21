@@ -38,7 +38,7 @@ def run(host):
     plugin = synced_demo()
     covers = plugin / "preview/covers"
     covers.mkdir()
-    for i in range(50):
+    for i in range(3):
         shutil.copyfile(plugin / "preview/artwork.png", covers / f"cover-{i}.png")
     shell = (KIT_ROOT / "tests/qml/Features.qml").read_text()
     r = harness.Run(

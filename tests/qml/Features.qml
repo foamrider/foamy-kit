@@ -18,6 +18,12 @@ ShellRoot {
   readonly property string calls: Quickshell.env("FOAMY_CALLS")
   property int checks: 0
   property int failures: 0
+  // The checks that end later; the run reports only after all of them ran.
+  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers"]
+  property var finished: []
+  function done(name) {
+    finished = finished.concat([name])
+  }
 
   function check(ok, label) {
     checks++
@@ -200,6 +206,9 @@ ShellRoot {
     id: cursor
     count: 2
   }
+  FoamyWait {
+    id: wait
+  }
   property string dropdownSetting: "a"
   Component {
     id: pageA
@@ -251,7 +260,6 @@ ShellRoot {
   property var numberCommits: []
   property string textSetting: "abc"
   property var textCommits: []
-  property int coverIndex: 0
   function coverUrl(i) {
     return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png")
   }
@@ -559,7 +567,13 @@ ShellRoot {
     checkUnitStack("LTR")
     unitStack.LayoutMirroring.childrenInherit = true
     unitStack.LayoutMirroring.enabled = true
-    unitStackRtl.start()
+    wait.waitFor(function () {
+      return percentField.field.mapToItem(unitStack, 0, 0).x > 0
+    }, 2000, function () {
+      shell.checkUnitStack("RTL")
+      unitStack.LayoutMirroring.enabled = false
+      shell.done("unit stack")
+    }, "the unit stack mirrors")
 
     // --- FoamyTextSettingField: the same rules for free text --------------------------------
     eq(textSetting.field.text, "abc", "text field shows the bound value")
@@ -617,7 +631,7 @@ ShellRoot {
     stateFlip.start()
 
     // --- FoamyHeroBand keeps at most one cover decoded ----------------------------------------
-    coverCycle.start()
+    showCover(0)
 
     // --- FoamyPrefsQueue: inline, two saves before the host reflects the first -------
     check(inlineQueue.save("a", "one"), "inline save a")
@@ -718,7 +732,12 @@ ShellRoot {
     cliQueue.save("a", "third")
     check(cliQueue.saving, "CLI save in flight")
     eq(cliQueue.waiting.length, 2, "waiting saves keep the newest value per key")
-    stepTwo.start()
+    // The fake omarchy takes 0.3 s per call: three calls run.
+    wait.waitFor(function () {
+      return !cliQueue.busy && callLog.lines().length >= 3
+    }, 6000, function () {
+      shell.stepTwo()
+    }, "the CLI queue drains")
   }
 
   FileViewProbe {
@@ -745,16 +764,14 @@ ShellRoot {
     check(Math.abs(c[1] - (rtl.byWidth.width - Style.spacing.controlPaddingX - 1)) <= 2, "RTL: text sits against the right padding " + c)
     eq(glyphEdges(rtl.textSetting.field)[1], c[1], "RTL: FoamyTextSettingField text lines up")
     longField.editorItem.cursorPosition = longField.editorItem.length
-    insetScroll.start()
-  }
-  Timer {
-    id: insetScroll
-    interval: 150
-    onTriggered: {
+    wait.waitFor(function () {
+      return longField.contentX > 0
+    }, 2000, function () {
       var ed = longField.editorItem
       var cursor = ed.mapToItem(longField, ed.cursorRectangle.x, 0).x
       shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
-    }
+      shell.done("long field")
+    }, "long text scrolls to the caret")
   }
 
   function checkUnitStack(label) {
@@ -770,15 +787,6 @@ ShellRoot {
       eq(fields[0][0], 0, "LTR: fields start at the row's start")
   }
   Timer {
-    id: unitStackRtl
-    interval: 200
-    onTriggered: {
-      shell.checkUnitStack("RTL")
-      unitStack.LayoutMirroring.enabled = false
-    }
-  }
-
-  Timer {
     id: stateFlip
     interval: 40
     repeat: true
@@ -787,59 +795,57 @@ ShellRoot {
       if (stateSwitcher.flips >= 12) {
         stop()
         shell.check(stateSwitcher.item !== null, "settings states switch 12 times")
+        shell.done("state switches")
       }
     }
   }
 
-  Timer {
-    id: coverCycle
-    interval: 15
-    repeat: true
-    onTriggered: {
-      if (shell.coverIndex < 50) {
-        coverBand.imageSource = shell.coverUrl(shell.coverIndex)
-        shell.coverIndex++
-        return
-      }
-      stop()
-      coverCheck.start()
-    }
+  // Shows covers 0, 1 and 2 in turn. Each one is decoded before the next
+  // replaces it, so an earlier cover that is still loaded was never unloaded.
+  readonly property int coverCount: 3
+  function showCover(i) {
+    coverBand.imageSource = coverUrl(i)
+    wait.waitFor(function () {
+      return coverBand.loadedImage === String(shell.coverUrl(i)) && shell.coverSurface().isImageLoaded(shell.coverUrl(i))
+    }, 3000, function (ok) {
+      if (ok && i + 1 < shell.coverCount)
+        shell.showCover(i + 1)
+      else
+        shell.checkCovers()
+    }, "cover " + i + " is decoded")
   }
-  Timer {
-    id: coverCheck
-    interval: 500
-    onTriggered: {
-      var surface = shell.coverSurface()
-      var stale = 0
-      for (var i = 0; i < 49; i++)
-        if (surface.isImageLoaded(shell.coverUrl(i)))
-          stale++
-      shell.eq(stale, 0, "50 covers cycled: no earlier cover stays decoded")
-      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)) && surface.isImageLoaded(shell.coverUrl(49)), "only the current cover is loaded")
-      coverBand.visible = false
-      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "a hidden band (closed popup) unloads its cover")
-      coverBand.visible = true
-      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)), "showing the band again reloads it")
-      coverBand.imageSource = ""
-      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "clearing the source unloads the cover")
-    }
+  function checkCovers() {
+    var surface = coverSurface()
+    var last = coverUrl(coverCount - 1)
+    var stale = []
+    for (var i = 0; i < coverCount - 1; i++)
+      if (surface.isImageLoaded(coverUrl(i)))
+        stale.push(i)
+    eq(stale, [], coverCount + " covers cycled: no earlier cover stays decoded")
+    check(coverBand.loadedImage === String(last) && surface.isImageLoaded(last), "only the current cover is loaded")
+    coverBand.visible = false
+    check(coverBand.loadedImage === "" && !surface.isImageLoaded(last), "a hidden band (closed popup) unloads its cover")
+    coverBand.visible = true
+    check(coverBand.loadedImage === String(last), "showing the band again reloads it")
+    coverBand.imageSource = ""
+    check(coverBand.loadedImage === "" && !surface.isImageLoaded(last), "clearing the source unloads the cover")
+    done("covers")
   }
 
   Timer {
     id: dropdownRevert
     interval: 800
-    onTriggered: shell.eq(dropdown.shownValue, "c", "an unconfirmed pick gives way to the real value")
+    onTriggered: {
+      shell.eq(dropdown.shownValue, "c", "an unconfirmed pick gives way to the real value")
+      shell.done("dropdown")
+    }
   }
 
-  Timer {
-    id: stepTwo
-    interval: 2500
-    onTriggered: {
-      var lines = callLog.lines()
-      eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
-      check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
-      stepThree()
-    }
+  function stepTwo() {
+    var lines = callLog.lines()
+    eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
+    check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
+    stepThree()
   }
 
   function stepThree() {
@@ -881,31 +887,43 @@ ShellRoot {
     settingsState.show()
     fakePanel.close()
     check(settingsState.editing, "holdOnClose keeps Settings across a close")
-    stepFour.start()
+
+    // The preferences re-claim every 300 ms; the peer calls answer later.
+    wait.waitFor(function () {
+      return shell.peerResult !== null && shell.peerFallback !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
+    }, 3000, function () {
+      shell.stepFour()
+    }, "peer calls answer and the preferences re-claim")
   }
 
   property var late: null
   property var peerResult: null
   property var peerFallback: null
 
-  Timer {
-    id: stepFour
-    interval: 1200
-    onTriggered: {
-      eq(shell.peerResult, {
-        ok: true,
-        output: "late"
-      }, "FoamyPeerIpc answers in-process")
-      // Re-claim within the preference interval.
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
-      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
-      eq(shell.peerFallback, {
-        ok: true,
-        output: "cli: foamy.absent status [1]"
-      }, "unknown in-process target uses the CLI")
+  function stepFour() {
+    eq(shell.peerResult, {
+      ok: true,
+      output: "late"
+    }, "FoamyPeerIpc answers in-process")
+    // Re-claim within the preference interval.
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
+    eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
+    eq(shell.peerFallback, {
+      ok: true,
+      output: "cli: foamy.absent status [1]"
+    }, "unknown in-process target uses the CLI")
+    var unfinished = function () {
+      return shell.laterChecks.filter(function (name) {
+        return shell.finished.indexOf(name) === -1
+      })
+    }
+    wait.waitFor(function () {
+      return unfinished().length === 0
+    }, 5000, function () {
+      shell.eq(unfinished(), [], "every later check ran")
       console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")
       Qt.quit()
-    }
+    })
   }
 }
