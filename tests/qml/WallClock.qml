@@ -1,16 +1,23 @@
 import QtQuick
 import Quickshell
+import "harness"
 import "plugin/kit" as Kit
 
 ShellRoot {
   property int checks: 0
+  property int failures: 0
   property int changes: 0
   property int pausedChanges: 0
   property real pausedDate: 0
   function check(ok, label) {
     checks++
-    if (!ok)
+    if (!ok) {
+      failures++
       console.log("FOAMY FAIL " + label)
+    }
+  }
+  FoamyWait {
+    id: wait
   }
   Kit.FoamyWallClock {
     id: clock
@@ -37,37 +44,40 @@ ShellRoot {
     clock.step = 1000
     pausedDate = clock.date.getTime()
     pausedChanges = changes
-    phase.start()
+    disabledPhase()
   }
-  Timer {
-    id: phase
-    interval: 1200
-    repeat: true
-    property int stage: 0
-    onTriggered: {
-      if (stage === 0) {
-        check(changes === pausedChanges && clock.date.getTime() === pausedDate, "disabled clock does not tick")
-        clock.enabled = true
-        check(clock.running && Date.now() - clock.date.getTime() < 100, "enabling refreshes immediately")
-        pausedChanges = changes
-      } else if (stage === 1) {
-        check(changes > pausedChanges, "second ticks advance the clock")
+  // A disabled clock must not change during a window longer than its step:
+  // a fixed window, because the check is an absence.
+  function disabledPhase() {
+    wait.after(1200, function () {
+      check(changes === pausedChanges && clock.date.getTime() === pausedDate, "disabled clock does not tick")
+      clock.enabled = true
+      check(clock.running && Date.now() - clock.date.getTime() < 100, "enabling refreshes immediately")
+      pausedChanges = changes
+      // The first second tick: waited for, so a loaded machine is no failure.
+      wait.waitFor(function () {
+        return changes > pausedChanges
+      }, 5000, function (ok) {
+        check(ok, "second ticks advance the clock")
         clock.step = 60000
         check(clock.running && clock.interval > 0 && clock.interval <= 60000, "cadence changes rearm")
         clock.enabled = false
         check(!clock.running, "hiding stops the timer")
         pausedChanges = changes
         pausedDate = clock.date.getTime()
-      } else {
-        check(changes === pausedChanges && clock.date.getTime() === pausedDate, "hidden clock remains paused")
-        clock.enabled = true
-        check(clock.running && clock.date.getTime() > pausedDate, "resume refreshes stale date")
-        clock.enabled = false
-        console.log("FOAMY RESULT " + checks + " checks")
-        console.log("FOAMY DONE")
-        Qt.quit()
-      }
-      stage++
-    }
+        pausedPhase()
+      })
+    })
+  }
+  function pausedPhase() {
+    wait.after(1200, function () {
+      check(changes === pausedChanges && clock.date.getTime() === pausedDate, "hidden clock remains paused")
+      clock.enabled = true
+      check(clock.running && clock.date.getTime() > pausedDate, "resume refreshes stale date")
+      clock.enabled = false
+      console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
+    })
   }
 }
