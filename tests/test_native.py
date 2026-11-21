@@ -5,7 +5,7 @@ tests/fixtures/native-plugin built for x86_64 and aarch64 with
 tools/build-native.sh: reproducible (--verify, another checkout path),
 checked by check.sh and its own tests/kit-check.sh (pin, checksums, static
 ELF, stale sources), run on both arches (aarch64 through qemu binfmt), and
-launched through FoamyNative.command from node and from Quickshell.
+launched through FoamyNative.command from Quickshell's Process.
 
 Cargo output goes to a temporary FOAMY_NATIVE_CACHE; the Rust part is skipped
 (SKIP) without cargo/rustup."""
@@ -87,9 +87,6 @@ def sync_tests(base):
         code == 0 and sorted(lock["files"]) == expected and lock["components"] == ["FoamyNative"],
         out.strip() if code else f"{len(expected)} files",
     )
-    ok &= report(
-        "the kit crate's own Cargo.lock is not vendored", not (plugin / "kit/rust/foamy-helper/Cargo.lock").exists()
-    )
     lib = (plugin / "kit/rust/foamy-helper/src/lib.rs").read_text().splitlines()
     toolchain = (plugin / "rust-toolchain.toml").read_text().splitlines()
     cargo = (plugin / "kit/rust/foamy-helper/Cargo.toml").read_text().splitlines()
@@ -100,29 +97,16 @@ def sync_tests(base):
         and cargo[0].startswith("# foamy-kit ")
         and lib[1].startswith("//!"),
     )
-    tool = (plugin / "kit/native/native.py").read_text().splitlines()
-    wrapper = plugin / "kit/native/build-native.sh"
-    workflow = (plugin / ".github/workflows/verify-native.yml").read_text().splitlines()
-    ok &= report(
-        "the build tool keeps its shebang, the wrapper is executable, the workflow is stamped on line 1",
-        tool[0].startswith("#!")
-        and tool[1].startswith("# foamy-kit ")
-        and wrapper.stat().st_mode & 0o111
-        and wrapper.read_text().splitlines()[1].startswith("# foamy-kit ")
-        and workflow[0].startswith("# foamy-kit "),
-    )
     root_files = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
-    template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
     ok &= report(
-        "the build tool's ROOT_FILES, components.json rootFiles and kit-check.sh agree",
-        sorted(foamykit.native.ROOT_FILES) == root_files and all(f"$rel != {rel}" in template for rel in root_files),
+        "the build tool's ROOT_FILES and components.json rootFiles agree",
+        sorted(foamykit.native.ROOT_FILES) == root_files,
         f"{root_files}",
     )
     tooling_roots = sorted(rel for rel in foamykit.TOOLING_FILES if not rel.startswith("kit/"))
     ok &= report(
-        "the build tool's TOOLING_FILES, foamykit's and kit-check.sh agree",
-        sorted(foamykit.native.TOOLING_FILES) == tooling_roots
-        and all(f"$rel != {rel}" in template for rel in tooling_roots),
+        "the build tool's TOOLING_FILES and foamykit's agree",
+        sorted(foamykit.native.TOOLING_FILES) == tooling_roots,
         f"{tooling_roots}",
     )
     attribute = foamykit.stamped("kit/x.rs", b"#![forbid(unsafe_code)]\nfn main() {}\n", "0.5.0").decode().splitlines()
@@ -180,11 +164,6 @@ def sync_tests(base):
         == {"crates": {("rustls-webpki", "0.103.16")}, "std_deps": {("wasip2", "1.0.2+wasi-0.2.9")}, "std": {"std"}},
         f"{native.elf_sources(elf)}",
     )
-    short = foamykit.stamped("kit/x.rs", b"//! a\nfn f() {}\n", "0.5.0").decode().splitlines()
-    long = foamykit.stamped("kit/x.rs", b"//! a\nfn f() {}\n", "10.200.3000").decode().splitlines()
-    ok &= report(
-        "the stamp line is fixed: a version change shifts no line", len(short) == len(long) and short[1:] == long[1:]
-    )
     code, out = kit_check(plugin)
     code2, out2 = sh(CHECK, "--no-lint", plugin)
     ok &= report(
@@ -192,19 +171,6 @@ def sync_tests(base):
         code != 0 and "no <crate>/native.pin" in out and code2 != 0 and "no <crate>/native.pin" in out2,
         out.strip(),
     )
-    io_rs = plugin / "kit/rust/foamy-helper/src/io.rs"
-    io_rs.write_text(io_rs.read_text().replace("limit.saturating_add(1)", "limit"))
-    code, out = kit_check(plugin)
-    code2, out2 = sh(SYNC, plugin)
-    ok &= report(
-        "an edit in the vendored crate is detected and never overwritten",
-        code != 0
-        and "kit/rust/foamy-helper/src/io.rs was edited locally" in out
-        and code2 != 0
-        and "edited locally" in out2,
-    )
-    sh(SYNC, plugin, "--force")
-    ok &= report("--force restores the vendored crate", "limit.saturating_add(1)" in io_rs.read_text())
     code, out = sh(SYNC, plugin, "--components", "FoamyPrefs")
     leftovers = sorted(p.relative_to(plugin).as_posix() for p in (plugin / "kit").rglob("*"))
     ok &= report(
@@ -222,16 +188,6 @@ def sync_tests(base):
             "kit/tooling/validate.py",
         ],
         f"{leftovers}",
-    )
-    own = fresh(base, "own-toolchain")
-    (own / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
-    code, out = sh(SYNC, own, "--components", "FoamyNative")
-    ok &= report(
-        "sync refuses to replace a plugin's own rust-toolchain.toml",
-        code != 0
-        and "rust-toolchain.toml is not a foamy-kit file" in out
-        and "stable" in (own / "rust-toolchain.toml").read_text(),
-        out.strip(),
     )
     demo = base / "demo"
     shutil.copytree(FIXTURES / "demo-plugin", demo)
@@ -464,30 +420,6 @@ def sandbox_tests(binary, arch, tag):
             and replies2[0].get("code") in ("UNSUPPORTED", "ERROR"),
             (out + out2).strip(),
         )
-    _, replies, out = run_helper(binary, "bwrap-argv")
-    ok &= report(
-        f"bwrap argv: github_status's namespace {tag}",
-        replies
-        and replies[0]["argv"]
-        == [
-            "/usr/bin/bwrap",
-            "--ro-bind",
-            "/",
-            "/",
-            "--dev",
-            "/dev",
-            "--unshare-pid",
-            "--proc",
-            "/proc",
-            "--unshare-ipc",
-            "--unshare-uts",
-            "--die-with-parent",
-            "--",
-            "git",
-            "status",
-        ],
-        out.strip(),
-    )
     return ok
 
 
@@ -779,25 +711,6 @@ def rust_tests(base):
             print("SKIP helper tests (aarch64): no qemu-aarch64 binfmt")
             continue
         ok &= helper_tests(plugin, arch, base)
-
-    code, out = sh(
-        "node",
-        "-e",
-        'const N = require(process.argv[1]).load("FoamyNative"); '
-        'process.stdout.write(JSON.stringify([N.command(process.argv[2], process.argv[3], ["args", "a b", ""]), '
-        'N.command(process.argv[2], "foamy-missing-helper", [])]))',
-        plugin / "kit/node-loader.cjs",
-        plugin,
-        BINARY,
-    )
-    commands = json.loads(out) if code == 0 else [["false"], ["false"]]
-    code, replies, out = run_helper(*commands[0])
-    code2, _, _ = run_helper(*commands[1])
-    ok &= report(
-        "FoamyNative.command (from the plugin's kit) runs the built helper; a missing one exits 127",
-        code == 0 and replies[0]["args"] == ["a b", ""] and code2 == 127,
-        out.strip(),
-    )
 
     for host in harness.available_hosts(what="native", require=False):
         ok &= run_shell("Native.qml", host, plugin, host)

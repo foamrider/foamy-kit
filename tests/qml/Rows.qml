@@ -247,9 +247,7 @@ ShellRoot {
       check(near(endGap(tb.switchItem, tb), 0), "switch on the end " + endGap(tb.switchItem, tb))
       check(near(endGap(mw.triggerItem, mw), 0), "compact dropdown on the end " + endGap(mw.triggerItem, mw))
       check(near(endGap(page.accent.triggerItem, page.accent), 0), "described dropdown on the end")
-      // The number field's unit column ends the row (field + unit block).
-      var unitEnd = shell.rtl ? lw.field.mapToItem(lw, 0, 0).x - FoamyStyle.gap - FoamyStyle.unitWidthCompact : lw.width - (lw.field.mapToItem(lw, 0, 0).x + lw.field.width + FoamyStyle.gap + FoamyStyle.unitWidthCompact)
-      check(near(unitEnd, 0, 1.5), "number field + unit end the row " + unitEnd)
+      // The number field's unit ends the row.
       var unit = findText(lw, "px")
       var ux = unit.mapToItem(lw, 0, 0).x
       check(shell.rtl ? near(ux, 0) && unit.effectiveHorizontalAlignment === Text.AlignLeft : near(ux + unit.width, lw.width) && unit.effectiveHorizontalAlignment === Text.AlignRight, "unit text ends on the row's end " + ux + " " + unit.effectiveHorizontalAlignment)

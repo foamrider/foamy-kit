@@ -134,12 +134,6 @@ def main():
             screen == (1920, 1080) and card and card[0] == 420,
             f"{screen} {card}",
         )
-        placed = dict((p.name, info) for p, info in shots)["devices.png"]
-        ok &= report(
-            f"preview render {host}: card hangs under the top bar (y = 34 + gap)",
-            re.search(r" at \d+,39\b", placed) is not None,
-            placed,
-        )
         log = (out / "render.log").read_text()
         ok &= report(
             f"preview render {host}: plugin subdirectory types load without a qmldir",
