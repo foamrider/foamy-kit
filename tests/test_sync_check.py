@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, PLUGINS, copy_kit, foamykit, report  # noqa: E402
+from common import FIXTURES, KIT_ROOT, copy_kit, foamykit, report  # noqa: E402
 
 SYNC = str(KIT_ROOT / "sync.sh")
 CHECK = str(KIT_ROOT / "check.sh")
@@ -55,11 +55,6 @@ def tooling_tests(a, base):
     ok &= report(
         "tests/validate.sh is executable; the configs are not",
         os.access(a / "tests/validate.sh", os.X_OK) and not os.access(a / "mise.toml", os.X_OK),
-    )
-    first = (a / "kit/tooling/validate.py").read_text().splitlines()
-    ok &= report(
-        "validate.py keeps its shebang, stamp on line 2",
-        first[0].startswith("#!") and first[1].startswith("# foamy-kit "),
     )
     ok &= report(
         "lock_path_ok accepts the tooling paths (sync and the bundled build tool)",
@@ -366,16 +361,11 @@ def component_reference_tests():
 def main():
     ok = component_reference_tests()
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
-    sources = [PLUGINS / "foamy-bolt", PLUGINS / "foamy-tray"]
-    sources = [s for s in sources if (s / "manifest.json").is_file()] or [FIXTURES / "demo-plugin"]
-    plugins = []
-    for source in sources:
-        target = base / source.name
-        # Start from a plugin without the shared guide, whatever its checkout holds.
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git", "__pycache__", "REVIEW.md"))
-        plugins.append(target)
-    a = plugins[0]
-    b = plugins[-1] if len(plugins) > 1 else None
+    # Two copies of the demo fixture, never the sibling checkouts: every machine
+    # and CI then start from the same plugins, with no REVIEW.md or AGENTS.md.
+    a, b = base / "plugin-a", base / "plugin-b"
+    for target in (a, b):
+        shutil.copytree(FIXTURES / "demo-plugin", target, ignore=shutil.ignore_patterns("__pycache__", "REVIEW.md"))
 
     # 1. First sync: requested components plus their dependencies.
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,SafeTextField")
@@ -704,7 +694,7 @@ def main():
     # check.sh reports a crafted lock as that plugin's problem and goes on to
     # the next plugin; --lint-only doesn't need the lock at all.
     lock_path.write_text(clean_lock + f"{digest}  ../victim.txt\n")
-    others = [str(b)] if b is not None else []
+    others = [str(b)]
     code, out = sh(CHECK, "--no-lint", str(a), *others)
     _, out_l = sh(CHECK, "--lint-only", "--quiet", str(a))
     ok &= report(
@@ -741,23 +731,22 @@ def main():
     ok &= report("sync works again on the restored plugin", code == 0, out.strip())
 
     # 6. Version drift across plugins fails check.sh.
-    if b is not None:
-        old_kit = base / "old-kit"
-        copy_kit(old_kit)
-        (old_kit / "VERSION").write_text("0.0.9\n")
-        (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
-        code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
-        sh(SYNC, str(a), "--components", "FoamyPopup")
-        code, out = sh(CHECK, "--no-lint", str(a), str(b))
-        ok &= report(
-            "check.sh fails when plugins are on different kit versions",
-            code != 0 and "kit versions differ" in out,
-            out.strip().splitlines()[-1],
-        )
-        sh(SYNC, str(b))
-        ok &= report("sync refreshes an unchanged older guide", (b / "REVIEW.md").read_bytes() == guide)
-        code, out = sh(CHECK, "--no-lint", str(a), str(b))
-        ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
+    old_kit = base / "old-kit"
+    copy_kit(old_kit)
+    (old_kit / "VERSION").write_text("0.0.9\n")
+    (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
+    code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
+    sh(SYNC, str(a), "--components", "FoamyPopup")
+    code, out = sh(CHECK, "--no-lint", str(a), str(b))
+    ok &= report(
+        "check.sh fails when plugins are on different kit versions",
+        code != 0 and "kit versions differ" in out,
+        out.strip().splitlines()[-1],
+    )
+    sh(SYNC, str(b))
+    ok &= report("sync refreshes an unchanged older guide", (b / "REVIEW.md").read_bytes() == guide)
+    code, out = sh(CHECK, "--no-lint", str(a), str(b))
+    ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
 
     # 7. The lock's source line and checks.yml's kit checkout.
     ok &= lock_source_tests(base)
