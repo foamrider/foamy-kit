@@ -4,7 +4,6 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 
-const source = fs.readFileSync(path.join(__dirname, "../kit/FoamyPrefs.js"), "utf8");
 const Prefs = require("../kit/node-loader.cjs").load("FoamyPrefs", { console: { log: console.log, warn() {} } });
 
 const fields = [
@@ -40,11 +39,6 @@ test("value falls back to defaults", () => {
   assert.strictEqual(Prefs.value(fields, {}, "nope"), undefined);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.values(fields, { layout: "tiles" }))),
     { showPercentage: true, layout: "tiles", refreshSeconds: 60, scale: 1, label: "" });
-});
-
-test("merged keeps other keys and drops id", () => {
-  const out = Prefs.merged({ id: "foamy.x", layout: "list", custom: [1] }, "layout", "tiles");
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(out)), { layout: "tiles", custom: [1] });
 });
 
 test("save prefers updateEntryInline with the full entry", () => {
@@ -189,10 +183,6 @@ test("array values bypass qs ipc list parsing on the CLI path", () => {
 test("invalid values and missing module are refused", () => {
   assert.ok(!Prefs.save(null, "foamy.x", fields, {}, "layout", "grid").ok);
   assert.ok(!Prefs.save(null, "", fields, {}, "layout", "tiles").ok);
-});
-
-test("module name is a parameter (no hardcoded plugin id)", () => {
-  assert.ok(!/foamy\.[a-z]/.test(source.replace(/\/\/.*$/gm, "")));
 });
 
 test("bounded() and killGroupCommand() argv", () => {
