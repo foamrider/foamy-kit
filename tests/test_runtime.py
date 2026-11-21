@@ -51,6 +51,10 @@ def run(host, lang):
     detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     ok = report(f"runtime {host} {lang}", r.ok, detail)
     ok = report(f"qs ipc call foamy.kit-demo status ({host})", ok_ipc, status or "no reply") and ok
+    # qs ipc exits 0 for a missing target, so the scene says what ended it.
+    # Without the call it would only end at the FOAMY_HOLD_MS bound.
+    ended = next((line.split("FOAMY END ", 1)[1] for line in r.log.splitlines() if "FOAMY END " in line), "nothing")
+    ok = report(f"the scene ends on the finish call ({host} {lang})", ended == "by the finish call", ended) and ok
     if not ok:
         print("\n".join("    " + line for line in (r.failures() or r.log.splitlines()[-30:])))
     else:

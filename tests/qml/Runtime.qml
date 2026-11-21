@@ -251,7 +251,7 @@ ShellRoot {
   }
 
   // The instances that stay after the unplugs.
-  property var next: null
+  property var survivor: null
   property var demander: null
 
   function stepTwo() {
@@ -283,7 +283,7 @@ ShellRoot {
   function stepThree() {
     check(members[1].popup.bodyItem === null, "closed panels never build their body")
     // Unplug the leader's monitor: the next live instance takes over.
-    next = members[1]
+    survivor = members[1]
     demander = members[2]
     monitors.remove(0)
     wait.waitFor(function () {
@@ -292,9 +292,9 @@ ShellRoot {
   }
 
   function stepFour() {
-    check(memberOf(next).isLeader, "the next live instance takes over")
+    check(memberOf(survivor).isLeader, "the next live instance takes over")
     eq(leaders(), 1, "one leader after the handover")
-    check(memberOf(next).demanded, "an open popup keeps demand across the handover")
+    check(memberOf(survivor).demanded, "an open popup keeps demand across the handover")
     var status = statusReply()
     check(status !== null && status.leader === true, "IPC follows the new leader: " + JSON.stringify(status))
     // A destroyed handler left in the registry has no target any more.
@@ -311,14 +311,14 @@ ShellRoot {
   }
 
   function stepFive() {
-    check(!memberOf(next).demanded, "demand leaves with its instance")
-    check(memberOf(next).isLeader, "the last instance leads")
+    check(!memberOf(survivor).demanded, "demand leaves with its instance")
+    check(memberOf(survivor).isLeader, "the last instance leads")
     // The settings IPC on a closed popup lands on Settings (FoamySettingsState).
-    check(!next.opened, "popup closed before openSettings()")
-    next.openSettings()
-    check(next.opened && next.editingSettings, "openSettings() on a closed popup shows Settings")
-    next.close()
-    check(!next.editingSettings, "closing the popup leaves Settings")
+    check(!survivor.opened, "popup closed before openSettings()")
+    survivor.openSettings()
+    check(survivor.opened && survivor.editingSettings, "openSettings() on a closed popup shows Settings")
+    survivor.close()
+    check(!survivor.editingSettings, "closing the popup leaves Settings")
 
     // --- a live theme switch reaches FoamyPalette ---------------------------------
     // Only ever the run's own copy (the harness puts the theme under its temp
@@ -347,10 +347,13 @@ ShellRoot {
     hold.start()
   }
   property bool finished: false
-  function finishNow() {
+  // `by` names the path that ended the run; test_runtime.py requires the
+  // finish call.
+  function finishNow(by) {
     if (finished)
       return
     finished = true
+    console.log("FOAMY END by " + by)
     console.log("FOAMY RESULT " + host + "/" + lang + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
@@ -358,12 +361,12 @@ ShellRoot {
   IpcHandler {
     target: "foamy.test-runtime"
     function finish(): void {
-      shell.finishNow()
+      shell.finishNow("the finish call")
     }
   }
   Timer {
     id: hold
     interval: Number(Quickshell.env("FOAMY_HOLD_MS") || 200)
-    onTriggered: shell.finishNow()
+    onTriggered: shell.finishNow("the hold bound")
   }
 }

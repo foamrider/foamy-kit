@@ -53,6 +53,8 @@ ShellRoot {
       check(changes === pausedChanges && clock.date.getTime() === pausedDate, "disabled clock does not tick")
       clock.enabled = true
       check(clock.running && Date.now() - clock.date.getTime() < 100, "enabling refreshes immediately")
+      // No timing needed: the armed delay itself bounds how late the first tick is.
+      check(clock.interval > 0 && clock.interval <= clock.step, "the first tick is armed within one step " + clock.interval)
       pausedChanges = changes
       // The first second tick: waited for, so a loaded machine is no failure.
       wait.waitFor(function () {

@@ -87,10 +87,21 @@ ShellRoot {
   }
   Component.onCompleted: wait.waitFor(function () {
     return monday.labelItem !== null && tuesday.labelItem !== null && win.visible
-  }, 5000, run)
+  }, 5000, activate)
 
-  function run(ready) {
+  // Keys reach the focused item only in the active window.
+  function activate(ready) {
     check(ready, "both labels load")
+    var w = monday.Window.window
+    if (!w.active)
+      w.requestActivate()
+    wait.waitFor(function () {
+      return w.active
+    }, 5000, run)
+  }
+
+  function run(active) {
+    check(active, "the window is active")
     var label = monday.labelItem
     eq(label.text, "Monday <b>1</b>", "default label shows the label")
     eq(label.textFormat, Text.PlainText, "default label is plain text")
