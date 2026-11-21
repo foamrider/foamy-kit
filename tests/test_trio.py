@@ -4,6 +4,7 @@ old KeyboardPanel fork, bare Color), the working tree the kit demo. Before
 renders from `git archive dev` (the repo is not touched) on 4.5; a clipped
 pre-kit fork, a dev tree that won't render and a missing ref are labelled."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -136,6 +137,13 @@ def main():
             "not found" in label and (base / "out-c/devices-after-4.5.png").is_file() and "| devices | — |" in lines[2],
             label,
         )
+        # render.py names its work dirs after this process; this test's own
+        # base dir does not match.
+        temp = Path(tempfile.gettempdir())
+        left = [p.name for prefix in ("trio", "dev") for p in temp.glob(f"foamy-kit-{prefix}-{os.getpid()}-*")]
+        ok &= report("the trio's temp dirs are removed", not left, ", ".join(left))
+        for name in left:
+            shutil.rmtree(temp / name, ignore_errors=True)
         alive = [
             pid
             for pid in harness.STARTED
