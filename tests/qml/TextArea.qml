@@ -12,7 +12,8 @@ import "plugin/kit"
 // (Ctrl+Enter), Tab moves the focus, editingFinished on focus loss, paste
 // through kit/clipboard.sh `multiline` and the fake wl-paste (line breaks
 // kept, NUL and oversized text refused, cut at maximumLength, a late result
-// dropped after newer typing or clear(), middle-click pastes the primary
+// dropped after newer typing, clear(), focus loss, hiding or disabling;
+// hiding clears a paste error; middle-click pastes the primary
 // selection), never Qt's own clipboard; typing at maximumLength drops the
 // key instead of the text's end; the height grows from minimumHeight to
 // maximumHeight and then scrolls to the caret; accessibility and the menu;
@@ -350,10 +351,49 @@ ShellRoot {
             return !area.pasteRunning
           }, 10000, function () {
             eq(area.text, "", "losing the focus drops a paste in flight")
-            shell.middle()
+            shell.hiding()
           }, "the focus-loss paste ends")
         }, "the cleared paste ends")
       }, "the late paste ends")
+    })
+  }
+
+  // Hiding or disabling the field drops a paste in flight, even when the
+  // field is shown, enabled and focused again before the read ends; hiding
+  // also clears a shown paste error.
+  function hiding() {
+    area.clear()
+    area.focusInput()
+    setClipboard("delayed", function () {
+      key(Qt.Key_V, Qt.ControlModifier)
+      check(area.pasteRunning, "a slow paste runs before the field is hidden")
+      area.visible = false
+      area.visible = true
+      area.focusInput()
+      wait.waitFor(function () {
+        return !area.pasteRunning
+      }, 10000, function () {
+        eq([area.text, area.pasteError], ["", ""], "hiding the field drops a paste in flight")
+        area.clear()
+        key(Qt.Key_V, Qt.ControlModifier)
+        check(area.pasteRunning, "a slow paste runs before the field is disabled")
+        area.enabled = false
+        area.enabled = true
+        area.focusInput()
+        wait.waitFor(function () {
+          return !area.pasteRunning
+        }, 10000, function () {
+          eq([area.text, area.pasteError], ["", ""], "disabling the field drops a paste in flight")
+          pasteWith("nul", "NUL before hiding", function () {
+            check(area.pasteError !== "", "a refused paste shows its error")
+            area.visible = false
+            area.visible = true
+            eq(area.pasteError, "", "hiding the field clears the paste error")
+            area.clear()
+            shell.middle()
+          })
+        }, "the disabled paste ends")
+      }, "the hidden paste ends")
     })
   }
 
