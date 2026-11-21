@@ -8,12 +8,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import harness, run_shell, synced_demo
 
-plugin = synced_demo(["FoamyWallClock"])
-try:
-    results = [
-        run_shell("WallClock.qml", host, plugin, host, env={"TZ": "Europe/Oslo"})
-        for host in harness.available_hosts(what="wall clock")
-    ]
-finally:
-    shutil.rmtree(plugin.parent)
-raise SystemExit(0 if all(results) else 1)
+
+def main():
+    harness.install_signal_cleanup()
+    plugin = synced_demo(["FoamyWallClock"])
+    try:
+        results = [
+            run_shell("WallClock.qml", host, plugin, host, env={"TZ": "Europe/Oslo"})
+            for host in harness.available_hosts(what="wall clock")
+        ]
+    finally:
+        shutil.rmtree(plugin.parent, ignore_errors=True)
+    return 0 if all(results) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
