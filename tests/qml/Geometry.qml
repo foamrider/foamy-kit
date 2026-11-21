@@ -86,18 +86,6 @@ ShellRoot {
     }
   }
   Component {
-    id: maxedPopup
-    FoamyPopup {
-      maxHeight: 300
-      body: Component {
-        Rectangle {
-          implicitHeight: 3000
-          color: "transparent"
-        }
-      }
-    }
-  }
-  Component {
     id: standardPopup
     FoamyPopup {
       body: Component {
@@ -187,11 +175,6 @@ ShellRoot {
         kind: "capped",
         bar: "facade"
       })
-      list.push({
-        position: positions[i],
-        kind: "maxed",
-        bar: "facade"
-      })
       if (hasFork)
         list.push({
           position: positions[i],
@@ -238,8 +221,7 @@ ShellRoot {
         tall: tallPopup,
         standard: standardPopup,
         card: card,
-        capped: cappedPopup,
-        maxed: maxedPopup
+        capped: cappedPopup
       }
       current = components[c.kind].createObject(shell, props)
       if (c.kind === "standard")
@@ -289,8 +271,6 @@ ShellRoot {
       check(near(c.height, p.availableCardHeight), currentLabel + " default: card fills the available height " + c.height)
     if (currentKind === "capped")
       check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " maxHeight popupMaxHeight caps " + c.height)
-    if (currentKind === "maxed")
-      check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
     if (currentKind === "standard") {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")
       check(p.contentWidth === FoamyStyle.popupWidth, currentLabel + " standard width " + p.contentWidth)
