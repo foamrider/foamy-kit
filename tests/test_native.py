@@ -588,12 +588,14 @@ def pin_problem_tests(plugin, base):
     with open(extra / "native/native.pin", "a") as stream:
         stream.write(f"{'0' * 64}  bin/riscv64/{BINARY}\n")
     code, out = sh(CHECK, "--no-lint", extra)
-    # check.sh only: the generated kit-check.sh reads just the two wanted
-    # bin/<arch> lines and passes this pin (kit gap, tools/kit-check.sh.in).
+    # The generated kit-check.sh fails this pin through its notices check
+    # (every checksum line must be in THIRD_PARTY_NOTICES.md) but does not
+    # name the extra file, so only its verdict is checked.
+    kit_code, kit_out = kit_check(extra)
     ok &= report(
-        "check.sh fails a pin that lists an unexpected file",
-        code != 0 and f"native/native.pin lists unexpected file bin/riscv64/{BINARY}" in out,
-        out.strip(),
+        "check.sh and kit-check fail a pin that lists an unexpected file",
+        code != 0 and f"native/native.pin lists unexpected file bin/riscv64/{BINARY}" in out and kit_code != 0,
+        f"check.sh: {out.strip()}; kit-check exit {kit_code}: {kit_out.strip()}",
     )
     unsynced = base / "pin-unsynced" / plugin.name
     shutil.copytree(plugin, unsynced)
@@ -693,13 +695,20 @@ def rust_tests(base):
         last(out),
     )
     # Caller settings that would change the bytes or the target dir must not
-    # reach cargo: /bin/false as the wrapper would fail the build outright.
+    # reach cargo. /bin/false as a compiler or wrapper fails the build
+    # outright, and overflow checks (a profile key release.toml leaves unset)
+    # change the bytes. RUSTFLAGS, CARGO_ENCODED_RUSTFLAGS, the opt level and
+    # CARGO_BUILD_TARGET_DIR are also overridden by the build's own flags,
+    # release.toml and CARGO_TARGET_DIR, so they check only the outcome.
     hostile = dict(
         env,
         RUSTFLAGS="-C opt-level=0",
         CARGO_ENCODED_RUSTFLAGS="-Copt-level=0",
+        RUSTC="/bin/false",
         RUSTC_WRAPPER="/bin/false",
+        RUSTC_WORKSPACE_WRAPPER="/bin/false",
         CARGO_PROFILE_RELEASE_OPT_LEVEL="0",
+        CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS="true",
         CARGO_BUILD_TARGET_DIR=str(base / "caller-target"),
     )
     code, out = sh(BUILD, plugin, "--verify", env=hostile)
