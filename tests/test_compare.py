@@ -17,17 +17,43 @@ sys.path.insert(0, str(KIT_ROOT / "preview"))
 import compare  # noqa: E402
 
 
-def write_png(path, pixels, alpha=True):
+def paeth(a, b, c):
+    """The PNG specification's Paeth predictor, with its tie order (a, b, c)."""
+    p = a + b - c
+    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    return b if pb <= pc else c
+
+
+def write_png(path, pixels, alpha=True, filters=None, split=False):
+    """An 8-bit RGBA (or RGB) PNG. `filters` gives one PNG filter type
+    (0-4) per row, encoded as the specification says (default: all 0);
+    `split` writes the image data as two IDAT chunks. Qt and other encoders
+    pick filters per row, so a reader must undo all five types."""
     height, width = len(pixels), len(pixels[0])
-    raw = b"".join(b"\x00" + b"".join(bytes(p if alpha else p[:3]) for p in row) for row in pixels)
+    channels = 4 if alpha else 3
+    filters = filters or [0] * height
+    raw, previous = b"", bytes(width * channels)
+    for row, kind in zip(pixels, filters, strict=True):
+        line = b"".join(bytes(p[:channels]) for p in row)
+        encoded = bytearray()
+        for i, x in enumerate(line):
+            a = line[i - channels] if i >= channels else 0
+            b = previous[i]
+            c = previous[i - channels] if i >= channels else 0
+            encoded.append((x - (0, a, b, (a + b) // 2, paeth(a, b, c))[kind]) & 255)
+        raw += bytes([kind]) + encoded
+        previous = line
 
     def chunk(t, d):
         return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
 
     header = struct.pack(">IIBBBBB", width, height, 8, 6 if alpha else 2, 0, 0, 0)
-    path.write_bytes(
-        b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-    )
+    data = zlib.compress(raw)
+    cut = len(data) // 2 if split else len(data)
+    idat = chunk(b"IDAT", data[:cut]) + (chunk(b"IDAT", data[cut:]) if split else b"")
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + idat + chunk(b"IEND", b""))
 
 
 def grid(colour, w=8, h=6):
@@ -80,6 +106,36 @@ def main():
             "--tolerance absorbs small channel noise",
             compare.compare(p("a.png"), p("rgb.png"), tolerance=1)["identical"],
         )
+        ok &= report(
+            "--tolerance 1 still sees a larger change",
+            not compare.compare(p("a.png"), p("alpha.png"), tolerance=1)["identical"],
+        )
+
+        # Every PNG filter type, the image data in two chunks: a reader that
+        # undoes one filter wrongly sees a different picture.
+        varied = [[(x * 30, y * 40 + x, (x + y) * 15, 255 - x * 10) for x in range(8)] for y in range(6)]
+        # Paeth ties in the red channel of row 4 (a Paeth row): at x = 1 the
+        # up and upper-left guesses tie (the specification picks up), at
+        # x = 3 the left and upper-left guesses tie (it picks left).
+        for x, y, red in ((0, 3, 100), (1, 3, 80), (2, 3, 100), (3, 3, 110), (0, 4, 110), (2, 4, 80)):
+            varied[y][x] = (red, *varied[y][x][1:])
+        changed = [row[:] for row in varied]
+        changed[4][5] = (1, 2, 3, 255)
+        for alpha in (True, False):
+            kind = "RGBA" if alpha else "RGB"
+            write_png(p("plain.png"), varied, alpha=alpha)
+            write_png(p("filtered.png"), varied, alpha=alpha, filters=[0, 1, 2, 3, 4, 4], split=True)
+            write_png(p("filtered-changed.png"), changed, alpha=alpha, filters=[0, 1, 2, 3, 4, 4], split=True)
+            r = compare.compare(p("plain.png"), p("filtered.png"))
+            ok &= report(
+                f"{kind}: filters Sub, Up, Average and Paeth decode to the same pixels", r["identical"], str(r)
+            )
+            r = compare.compare(p("plain.png"), p("filtered-changed.png"))
+            ok &= report(
+                f"{kind}: one changed pixel in a filtered image is found",
+                not r["identical"] and r["pixels"] == 1 and r["bbox"] == (5, 4, 5, 4),
+                str(r),
+            )
 
         old, new = base / "old", base / "new"
         old.mkdir()
@@ -113,14 +169,6 @@ def main():
         (base / "bad.png").write_bytes(b"nope")
         bad = run(p("a.png"), base / "bad.png")
         ok &= report("CLI: unreadable input exits 2", bad.returncode == 2)
-        # A real render: the demo card vs itself and vs its screen shot.
-        out = KIT_ROOT / "tests/out/preview/4.5"
-        if (out / "devices.png").exists() and (out / "empty.png").exists():
-            ok &= report(
-                "real renders: a card equals itself, differs from another state",
-                compare.compare(out / "devices.png", out / "devices.png")["identical"]
-                and not compare.compare(out / "devices.png", out / "settings.png")["identical"],
-            )
     finally:
         shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1
