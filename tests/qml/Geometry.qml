@@ -224,8 +224,15 @@ ShellRoot {
         capped: cappedPopup
       }
       current = components[c.kind].createObject(shell, props)
-      if (c.kind === "standard")
+      if (c.kind === "standard") {
         check(current.bodyItem === null, currentLabel + " body is lazy (not built before open)")
+        // A plugin that needs its body before the first open (to reach its
+        // items or measure them) calls ensureBody().
+        var early = standardPopup.createObject(shell, props)
+        var built = early.ensureBody()
+        check(built !== null && early.bodyItem === built && built.built === true && !early.open, currentLabel + " ensureBody() builds the body without opening")
+        early.destroy()
+      }
       current.open = true
     }
     settle.start()
