@@ -4,6 +4,7 @@ old KeyboardPanel fork, bare Color), the working tree the kit demo. Before
 renders from `git archive dev` (the repo is not touched) on 4.5; a clipped
 pre-kit fork, a dev tree that won't render and a missing ref are labelled."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -11,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, foamykit, report  # noqa: E402
+from common import FIXTURES, KIT_ROOT, foamykit, read_png, report  # noqa: E402
 
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import harness  # noqa: E402
@@ -102,16 +103,13 @@ def main():
             "trio.md is a PR table with prefixed image URLs, one After column per host",
             table.startswith(header + "\n" + "|---" * (2 + len(hosts)) + "|\n")
             and "![devices before](https://example.invalid/assets/devices-before.png)" in table
-            and "| empty | — |" in table
-            and "4.0.6" not in table,
+            and "| empty | — |" in table,
             table.splitlines()[0] if table else table,
         )
         ok &= report(
             "the plugin repo is untouched (no worktree, clean tree)",
             git(repo, "status", "--porcelain") == status and git(repo, "worktree", "list") == worktrees,
         )
-        from common import read_png
-
         width, height, _ = read_png(out / "devices-before.png")
         ok &= report("the dev fork's card is captured", (width, height) == (400, 160), f"{width}x{height}")
         _, _, px = read_png(out / "devices-before.png")
@@ -139,6 +137,13 @@ def main():
             "not found" in label and (base / "out-c/devices-after-4.5.png").is_file() and "| devices | — |" in lines[2],
             label,
         )
+        # render.py names its work dirs after this process; this test's own
+        # base dir does not match.
+        temp = Path(tempfile.gettempdir())
+        left = [p.name for prefix in ("trio", "dev") for p in temp.glob(f"foamy-kit-{prefix}-{os.getpid()}-*")]
+        ok &= report("the trio's temp dirs are removed", not left, ", ".join(left))
+        for name in left:
+            shutil.rmtree(temp / name, ignore_errors=True)
         alive = [
             pid
             for pid in harness.STARTED

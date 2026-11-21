@@ -1,12 +1,13 @@
 import QtQuick
+import QtTest
 import Quickshell
 import "harness"
 import "plugin/kit"
-import "plugin/kit/FoamySchedule.js" as Schedule
 
 // FoamyScheduleDay (kit 0.9.0, moved from foamy-train and foamy-zendesk):
-// the default and an injected label component, the switch, committing,
-// rejecting and restoring the time fields.
+// the default and an injected label component, and through real keys and a
+// pointer: the switch (Space, a click), committing on Enter and on focus
+// loss, rejecting, and restoring the time fields on Escape.
 ShellRoot {
   id: shell
   property int checks: 0
@@ -38,6 +39,7 @@ ShellRoot {
   }
 
   FloatingWindow {
+    id: win
     implicitWidth: 600
     implicitHeight: 200
     Column {
@@ -48,8 +50,10 @@ ShellRoot {
         width: parent.width
         label: "Monday <b>1</b>"
         value: "08:00-16:00"
+        // Reflects the new value at once, as a FoamyPrefsQueue-backed caller does.
         onChanged: function (range) {
           shell.changes = shell.changes.concat([range])
+          monday.value = range
         }
         onInvalid: shell.invalids++
       }
@@ -65,9 +69,15 @@ ShellRoot {
             textFormat: Text.PlainText
           }
         }
+        // Does not reflect: the row must leave its value alone.
         onChanged: function (range) {
           shell.changes = shell.changes.concat(["tue " + range])
         }
+      }
+    }
+    Item {
+      TestEvent {
+        id: ev
       }
     }
   }
@@ -76,7 +86,7 @@ ShellRoot {
     id: wait
   }
   Component.onCompleted: wait.waitFor(function () {
-    return monday.labelItem !== null && tuesday.labelItem !== null
+    return monday.labelItem !== null && tuesday.labelItem !== null && win.visible
   }, 5000, run)
 
   function run(ready) {
@@ -91,24 +101,37 @@ ShellRoot {
 
     var from = find(monday, "fromTime"), to = find(monday, "toTime")
     eq([from.text, to.text], ["08:00", "16:00"], "fields show the value")
+    from.focusInput()
     from.text = "09:00"
-    monday.saveInputs()
-    eq(changes, ["09:00-16:00"], "a valid new range is committed")
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq(changes, ["09:00-16:00"], "Enter commits a valid new range")
+    to.focusInput()
+    to.text = "17:30"
+    ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+    eq(changes, ["09:00-16:00", "09:00-17:30"], "focus-out commits; the unchanged from field commits nothing")
+    from.focusInput()
     from.text = "9:7"
-    monday.saveInputs()
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
     eq(invalids, 1, "an invalid range is rejected")
-    eq(changes.length, 1, "and not committed")
-    monday.restoreInputs(true)
-    eq(from.text, "08:00", "restore brings back the value")
+    eq(changes.length, 2, "and not committed")
+    ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
+    eq(from.text, "09:00", "Escape brings back the value")
+    to.focusInput()
+    eq(changes.length, 2, "the restored text commits nothing")
+    var mondaySwitch = find(monday, "daySwitch")
+    mondaySwitch.forceActiveFocus()
     monday.value = "10:00-12:00"
     eq([from.text, to.text], ["10:00", "12:00"], "fields follow an outside change")
 
-    find(monday, "daySwitch").toggled()
-    eq(changes[changes.length - 1], "", "the switch turns an enabled day off")
-    find(tuesday, "daySwitch").toggled()
-    eq(changes[changes.length - 1], "tue 22:00-02:00", "and a day off back on with its last range")
+    var before = changes.length
+    ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
+    eq(changes.slice(before), [""], "Space on the switch turns an enabled day off, once")
+    before = changes.length
+    var tuesdaySwitch = find(tuesday, "daySwitch")
+    ev.mouseClick(tuesdaySwitch, tuesdaySwitch.width / 2, tuesdaySwitch.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["tue 22:00-02:00"], "a click turns a day off back on with its last range")
     check(!find(tuesday, "fromTime").enabled, "a day off has its fields disabled")
-    check(Schedule.validRange(monday.value), "the row never assigns its value")
+    eq(tuesday.value, "", "the row never assigns its value")
 
     console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
