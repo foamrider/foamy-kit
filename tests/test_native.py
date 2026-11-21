@@ -273,19 +273,20 @@ def helper_tests(plugin, arch, base):
         if lock_file.exists():
             break
         time.sleep(0.02)
-    time.sleep(0.5)
+    held = holds_flock(lock_file)
     code, replies, out = run_helper(binary, "lock", "0", env=env)
     holder_out = holder.communicate(timeout=30)[0]
     code2, replies2, _ = run_helper(binary, "lock", "0", env=env)
     ok &= report(
         f"runtime lock: BUSY while held, free afterwards, dir 0700 {tag}",
-        code == 1
+        held
+        and code == 1
         and replies
         and replies[0]["code"] == "BUSY"
         and '"ok":true' in holder_out
         and code2 == 0
         and (lock_file.parent.stat().st_mode & 0o777) == 0o700,
-        out.strip(),
+        out.strip() if held else f"no flock on {lock_file} in /proc/locks",
     )
     start = time.monotonic()
     code, replies, out = run_helper(binary, "run", "300", "100000", "sh", "-c", "echo started; sleep 20")
@@ -334,6 +335,27 @@ def helper_tests(plugin, arch, base):
     ok &= favicon_tests(binary, tag, base / f"favicon-{arch}")
     ok &= sandbox_tests(binary, arch, tag)
     return ok
+
+
+def holds_flock(path, timeout=10):
+    """Whether a process takes a flock(2) lock on `path` within `timeout` s.
+    The helper creates the lock file before it locks it, so the file alone
+    does not mean the lock is held. qemu-user passes flock to the host
+    kernel, so /proc/locks shows it on both arches. /proc/locks names the
+    file as MAJ:MIN:INODE; only the inode is compared, because its device
+    numbers need not match stat's (btrfs subvolumes)."""
+    try:
+        inode = path.stat().st_ino
+    except FileNotFoundError:
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for line in Path("/proc/locks").read_text().splitlines():
+            fields = line.split()
+            if "FLOCK" in fields and any(f.count(":") == 2 and f.rsplit(":", 1)[1] == str(inode) for f in fields):
+                return True
+        time.sleep(0.02)
+    return False
 
 
 def png(size, length):
@@ -558,6 +580,41 @@ def tamper_tests(plugin, base):
     return ok
 
 
+def pin_problem_tests(plugin, base):
+    """Pin problems that the bash kit-check and check.sh must both report."""
+    ok = True
+    extra = base / "pin-extra" / plugin.name
+    shutil.copytree(plugin, extra)
+    with open(extra / "native/native.pin", "a") as stream:
+        stream.write(f"{'0' * 64}  bin/riscv64/{BINARY}\n")
+    code, out = sh(CHECK, "--no-lint", extra)
+    # check.sh only: the generated kit-check.sh reads just the two wanted
+    # bin/<arch> lines and passes this pin (kit gap, tools/kit-check.sh.in).
+    ok &= report(
+        "check.sh fails a pin that lists an unexpected file",
+        code != 0 and f"native/native.pin lists unexpected file bin/riscv64/{BINARY}" in out,
+        out.strip(),
+    )
+    unsynced = base / "pin-unsynced" / plugin.name
+    shutil.copytree(plugin, unsynced)
+    sh(SYNC, unsynced, "--components", "FoamyPrefs")
+    code, out = kit_check(unsynced)
+    code2, out2 = sh(CHECK, "--no-lint", unsynced)
+    fragment = "native/native.pin exists but FoamyNative is not synced"
+    ok &= report(
+        "kit-check and check.sh fail a native.pin without FoamyNative synced",
+        (unsynced / "native/native.pin").is_file()
+        and code != 0
+        and fragment in out
+        and code2 != 0
+        and fragment in out2,
+        (out + out2).strip(),
+    )
+    shutil.rmtree(extra.parent)
+    shutil.rmtree(unsynced.parent)
+    return ok
+
+
 def rust_tests(base):
     ok = True
     cache = base / "cache"
@@ -571,12 +628,12 @@ def rust_tests(base):
         ["cargo", "clippy", "--locked", "--all-targets", "--features", "sandbox", "--", "-D", "warnings"],
         ["cargo", "clippy", "--locked", "--all-targets", "--features", "tls", "--", "-D", "warnings"],
         ["cargo", "clippy", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"],
-        ["cargo", "test", "--locked", "--all-features"],
     ):
         code, out = sh(*step, env=crate_env, cwd=crate)
         tail = [line for line in out.splitlines() if "test result" in line or "error" in line.lower()][:4]
         features = next((s for s in step if s in ("favicon", "sandbox", "tls", "--all-features")), "default features")
         ok &= report(f"foamy-helper: {' '.join(step[:2])} ({features})", code == 0, "; ".join(tail) if tail else "")
+    ok &= crate_tests(crate, crate_env)
     ok &= report("the kit's cargo commands write nothing into kit/", not (crate / "target").exists())
 
     plugin = fresh(base, "foamy-native-demo")
@@ -602,6 +659,8 @@ def rust_tests(base):
     sizes = {arch: (plugin / "bin" / arch / BINARY).stat().st_size for arch in foamykit.native.ARCHES}
     modes = {arch: (plugin / "bin" / arch / BINARY).stat().st_mode & 0o777 for arch in foamykit.native.ARCHES}
     print(f"    binary sizes: x86_64 {sizes['x86_64']} bytes, aarch64 {sizes['aarch64']} bytes")
+    # No requirement names a size; 2 MB is the check that kit/rust/release.toml
+    # (opt-level "s", strip, lto) is applied: a debug build verifies too.
     ok &= report(
         "binaries are mode 0755 and under 2 MB",
         all(m == 0o755 for m in modes.values()) and max(sizes.values()) < 2 << 20,
@@ -633,10 +692,21 @@ def rust_tests(base):
         code == 0 and "up to date" in out and first == {rel: (plugin / rel).stat().st_mtime_ns for rel in added},
         last(out),
     )
-    code, out = sh(BUILD, plugin, "--verify", env=env)
+    # Caller settings that would change the bytes or the target dir must not
+    # reach cargo: /bin/false as the wrapper would fail the build outright.
+    hostile = dict(
+        env,
+        RUSTFLAGS="-C opt-level=0",
+        CARGO_ENCODED_RUSTFLAGS="-Copt-level=0",
+        RUSTC_WRAPPER="/bin/false",
+        CARGO_PROFILE_RELEASE_OPT_LEVEL="0",
+        CARGO_BUILD_TARGET_DIR=str(base / "caller-target"),
+    )
+    code, out = sh(BUILD, plugin, "--verify", env=hostile)
     ok &= report(
-        "--verify: a clean rebuild is byte-identical for both arches",
-        code == 0 and out.count("byte-identical") == 2 and "verify OK" in out,
+        "--verify: a clean rebuild is byte-identical for both arches, "
+        "whatever RUSTFLAGS, RUSTC_WRAPPER and CARGO_* the caller sets",
+        code == 0 and out.count("byte-identical") == 2 and "verify OK" in out and not (base / "caller-target").exists(),
         last(out),
     )
     leftover = sorted(p.name for p in cache.iterdir() if "verify" in p.name)
@@ -698,11 +768,14 @@ def rust_tests(base):
     shutil.rmtree(alone.parent)
     shutil.rmtree(out_dir)
     shutil.rmtree(linked_out)
+    untested = snapshot(plugin)
     code, out = sh(BUILD, plugin, "--test", env=env)
+    tested = snapshot(plugin)
+    written = sorted(rel for rel in set(untested) | set(tested) if untested.get(rel) != tested.get(rel))
     ok &= report(
-        "build-native.sh --test runs fmt, clippy and the crate's tests",
-        code == 0 and "fmt, clippy and tests OK" in out,
-        last(out),
+        "build-native.sh --test runs fmt, clippy and the crate's tests and writes nothing into the plugin",
+        code == 0 and "fmt, clippy and tests OK" in out and not written,
+        f"changed: {written[:5]}" if written else last(out),
     )
 
     binfmt = Path("/proc/sys/fs/binfmt_misc/qemu-aarch64").exists()
@@ -716,6 +789,7 @@ def rust_tests(base):
         ok &= run_shell("Native.qml", host, plugin, host)
 
     ok &= tamper_tests(plugin, base)
+    ok &= pin_problem_tests(plugin, base)
     ok &= racing_edit_test(plugin, base, env)
     ok &= two_helpers_test(base, env)
     ok &= symlinked_bin_test(plugin, base, env)
@@ -813,6 +887,18 @@ def rust_tests(base):
         (out + out2 + out3).strip().splitlines()[-1],
     )
     return ok
+
+
+def crate_tests(crate, crate_env):
+    """foamy-helper's unit tests. A test that needs a missing tool (sqlite3,
+    bwrap, Landlock, git, ionice) passes after printing "SKIP ...": those
+    lines are shown, so a missing tool is a stated gap, not a silent pass."""
+    code, out = sh("cargo", "test", "--locked", "--all-features", "--", "--show-output", env=crate_env, cwd=crate)
+    for line in out.splitlines():
+        if line.startswith("SKIP "):
+            print(f"SKIP rust: {line[5:]}")
+    tail = [line for line in out.splitlines() if "test result" in line or "error" in line.lower()][:4]
+    return report("foamy-helper: cargo test (--all-features)", code == 0, "; ".join(tail) if tail else "")
 
 
 def notices_tests(plugin, base, env):
