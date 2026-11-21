@@ -45,8 +45,8 @@ def row(png, y):
     channels = {6: 4, 2: 3}[colour]
     stride = width * channels
     previous = bytearray(stride)
-    for row in range(y + 1):
-        start = row * (stride + 1)
+    for index in range(y + 1):
+        start = index * (stride + 1)
         kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
         for i in range(stride):
             left = line[i - channels] if i >= channels else 0
@@ -252,8 +252,15 @@ def publish_tests():
     """publish-screenshots.sh on a throwaway repo with PNGs of its own. Its
     origin is a GitHub URL (the script builds the raw URLs from it), but the
     push URL is a local bare repository, so a push could not leave the machine."""
-    ok = True
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-publish-"))
+    try:
+        return publish_cases(base)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def publish_cases(base):
+    ok = True
     env = git_env(base)
     repo = base / "foamy-example"
     repo.mkdir()
@@ -264,10 +271,19 @@ def publish_tests():
         tiny_png(pngs / name)
     script = KIT_ROOT / "preview/publish-screenshots.sh"
 
-    def git(*a, cwd=repo):
+    def git(*a, cwd=repo, check=True):
+        """stdout of git. A setup step stops the file at once; a query that a
+        check reads (check=False) gives "" on failure, so one broken publish
+        fails its own checks and the render and language checks still run."""
         return subprocess.run(
-            ["git", "-C", str(cwd), *a], capture_output=True, text=True, check=True, env=env, timeout=60
+            ["git", "-C", str(cwd), *a], capture_output=True, text=True, check=check, env=env, timeout=60
         ).stdout
+
+    def query(*a, cwd=repo):
+        return git(*a, cwd=cwd, check=False)
+
+    def pr_assets():
+        return query("rev-parse", "--verify", "-q", "refs/heads/pr-assets").strip()
 
     def publish(png_dir, subdir):
         return subprocess.run(
@@ -286,18 +302,17 @@ def publish_tests():
 
     # Refused before anything is written: a subdir that could leave the
     # worktree (mkdir -p and cp would follow "..") or is not a plain path.
+    # Each case compares pr-assets with its own start, so a subdir that gets
+    # through fails only its own check.
     for subdir in ("/abs", "a/../../x", "a b", "$(id)", ""):
-        before = tree(base)
+        before, branch = tree(base), pr_assets()
         result = publish(pngs, subdir)
-        branch = subprocess.run(
-            ["git", "-C", str(repo), "show-ref", "--verify", "--quiet", "refs/heads/pr-assets"], env=env, timeout=60
-        )
         ok &= report(
             f"publish-screenshots refuses the subdir {subdir!r} and writes nothing",
             result.returncode == 2
             and "subdir must be a relative path" in result.stderr
-            and branch.returncode != 0
-            and git("worktree", "list").count("\n") == 1
+            and pr_assets() == branch
+            and query("worktree", "list").count("\n") == 1
             and tree(base) == before,
             f"exit {result.returncode}: {result.stderr.strip()}",
         )
@@ -314,23 +329,24 @@ def publish_tests():
     ok &= report(
         "publish-screenshots commits to an orphan pr-assets branch",
         result.returncode == 0
-        and git("rev-list", "--count", "pr-assets").strip() == "1"
-        and "fix-omarchy-45/demo/devices.png" in git("ls-tree", "-r", "--name-only", "pr-assets"),
+        and query("rev-list", "--count", "pr-assets").strip() == "1"
+        and "fix-omarchy-45/demo/devices.png" in query("ls-tree", "-r", "--name-only", "pr-assets"),
         result.stderr.strip(),
     )
     ok &= report(
         "publish-screenshots leaves the working tree and branch alone",
-        git("status", "--porcelain") == status_before
-        and git("branch", "--show-current").strip() == "dev"
-        and "README.md" not in git("ls-tree", "-r", "--name-only", "pr-assets"),
+        query("status", "--porcelain") == status_before
+        and query("branch", "--show-current").strip() == "dev"
+        and "README.md" not in query("ls-tree", "-r", "--name-only", "pr-assets"),
     )
     ok &= report(
         "publish-screenshots prints raw URLs and the push command, without pushing",
         "https://raw.githubusercontent.com/foamrider/foamy-example/pr-assets/fix-omarchy-45/demo/devices.png"
         in result.stdout
         and f"git -C {repo} push origin pr-assets" in result.stdout
+        # Strict: an unreadable remote must not look like an empty one.
         and git("for-each-ref", cwd=remote) == ""
-        and not git("worktree", "list").count("\n") > 1,
+        and not query("worktree", "list").count("\n") > 1,
         result.stdout.strip()[-300:],
     )
     again = publish(pngs, "fix-omarchy-45/demo")
@@ -338,9 +354,8 @@ def publish_tests():
         "publish-screenshots is idempotent",
         again.returncode == 0
         and "already up to date" in again.stdout
-        and git("rev-list", "--count", "pr-assets").strip() == "1",
+        and query("rev-list", "--count", "pr-assets").strip() == "1",
     )
-    shutil.rmtree(base, ignore_errors=True)
     return ok
 
 

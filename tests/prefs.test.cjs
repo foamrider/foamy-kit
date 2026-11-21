@@ -230,17 +230,27 @@ function liveInGroup(pgid) {
   const live = [];
   for (const entry of fs.readdirSync("/proc")) {
     if (!/^\d+$/.test(entry)) continue;
-    let stat, cmd;
+    // A process that ended while we read is gone. One we may not read
+    // (another user's, under hidepid) is not in this test's group.
+    const skip = (error) => ["ENOENT", "ESRCH", "EACCES", "EPERM"].includes(error.code);
+    let stat;
     try {
       stat = fs.readFileSync(`/proc/${entry}/stat`, "utf8");
-      cmd = fs.readFileSync(`/proc/${entry}/cmdline`, "utf8").split("\0")[0];
     } catch (error) {
-      if (error.code === "ENOENT" || error.code === "ESRCH") continue;   // it ended while we read
+      if (skip(error)) continue;
       throw error;
     }
     // Fields after the command name, which may contain spaces and ")": state, ppid, pgrp.
     const [state, , pgrp] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    if (state !== "Z" && Number(pgrp) === pgid) live.push({ pid: Number(entry), cmd });
+    if (state === "Z" || Number(pgrp) !== pgid) continue;
+    let cmd;
+    try {
+      cmd = fs.readFileSync(`/proc/${entry}/cmdline`, "utf8").split("\0")[0];
+    } catch (error) {
+      if (error.code === "ENOENT" || error.code === "ESRCH") continue;
+      throw error;
+    }
+    live.push({ pid: Number(entry), cmd });
   }
   return live;
 }

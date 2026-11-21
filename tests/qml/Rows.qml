@@ -360,7 +360,7 @@ ShellRoot {
     lfs.infoNote.open()
     wait.waitFor(function () {
       return lfs.infoNote.note.visible && lfs.infoNote.note.height > 0
-    }, 3000, noteCheck)
+    }, 3000, noteCheck, "the open note shows with a height")
   }
   function noteCheck() {
     var lfs = formPopup.bodyItem.lfs
