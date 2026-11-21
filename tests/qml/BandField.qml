@@ -14,8 +14,9 @@ import "plugin/kit"
 // field starts on the action and ends between the side paddings in the
 // title row's slot; the title row and buttons fade out and take no pointer,
 // cursor or menu while it is open. A band with a hero keeps its hero; a
-// hidden origin grows from the row's trailing end; reduced motion is
-// instant; the compact form and the centred variant have no field mode.
+// hidden origin, or one moved into the ⋯ menu, grows from the row's
+// trailing end; reduced motion is instant; the compact form and the
+// centred variant have no field mode.
 // Closing, the field drops the focus and a click on it reaches nothing, so
 // no key edits the hidden text. FOAMY_RTL=1 mirrors. Shots go to FOAMY_OUT.
 ShellRoot {
@@ -302,13 +303,14 @@ ShellRoot {
     console.log("FOAMY BANDFIELD " + JSON.stringify({
       band: rectOf(b, popup.cardItem)
     }))
-    wait.after(100, function () {
-      check(sameRect(rectOf(body.addAction, b), origin), "the \"+\" action is back in its place")
+    wait.waitFor(function () {
+      return sameRect(rectOf(body.addAction, b), origin)
+    }, 2000, function () {
       popup.cardItem.grabToImage(function (result) {
         check(result.saveToFile(Quickshell.env("FOAMY_OUT") + "/field-open.png"), "saved field-open")
         shell.closing()
       })
-    })
+    }, tag + " the \"+\" action is back in its place")
   }
   property FoamyMenuItem menuEntry: FoamyMenuItem {
     text: "Entry"
@@ -371,19 +373,29 @@ ShellRoot {
     hb.fieldOpen = false
     check(hb.fieldProgress === 0 && !hb.fieldShown && hb.titleRow.opacity === 1, "reduced motion: closed at once")
     Style.reduceMotion = false
+    // While closed, the field lies on the rectangle it grows from.
     // No origin in the row: grow from its trailing end.
     var b = body.band
-    b.fieldOrigin = body.hiddenAction
-    var from = b._fieldFrom
     var end = b.width - FoamyStyle.padding
-    check(shell.rtl ? near(from.x, FoamyStyle.padding) : near(from.x + from.width, end), "a hidden origin grows from the row's trailing end " + [from.x, from.width])
+    b.fieldOrigin = body.hiddenAction
+    var from = rectOf(body.input, b)
+    check(shell.rtl ? near(from[0], FoamyStyle.padding) : near(from[0] + from[2], end), "a hidden origin grows from the row's trailing end " + from)
     b.fieldOrigin = body.searchAction
-    var search = rectOf(body.searchAction, b)
-    from = b._fieldFrom
-    check(sameRect([from.x, from.y, from.width, from.height], search), "Search as the origin")
-    var compact = body.compactBand
-    check(!compact.fieldShown && compact.buttonsActive, "the compact form has no field mode")
-    shell.centeredIgnores()
+    from = rectOf(body.input, b)
+    check(sameRect(from, rectOf(body.searchAction, b)), "Search as the origin " + from)
+    // An origin moved into the ⋯ menu is not in the row either.
+    b.maxButtons = 2
+    wait.waitFor(function () {
+      return b.shownTrailing.indexOf(body.searchAction) < 0
+    }, 2000, function () {
+      from = rectOf(body.input, b)
+      check(shell.rtl ? near(from[0], FoamyStyle.padding) : near(from[0] + from[2], end), "an origin in the ⋯ menu grows from the row's trailing end " + from)
+      b.maxButtons = 3
+      b.fieldOrigin = body.addAction
+      var compact = body.compactBand
+      check(!compact.fieldShown && compact.buttonsActive, "the compact form has no field mode")
+      shell.centeredIgnores()
+    }, tag + " Search moved into the ⋯ menu")
   }
 
   // The centred variant has no title row to cover (its title is under the
