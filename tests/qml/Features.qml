@@ -12,7 +12,8 @@ import "plugin/kit/FoamyIpcResolver.js" as Resolver
 // kit 0.2.0 features on every host: icons, textKey arity,
 // SafeTextField.maximumLength, FoamyPrefsQueue (inline and CLI),
 // FoamyIpcResolver.prefer/others/call, FoamyIpcPreference, FoamyPeerIpc and
-// FoamySettingsState.holdOnClose.
+// FoamySettingsState.holdOnClose, the pending-value expiry and peer-call
+// failures.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -20,7 +21,7 @@ ShellRoot {
   property int checks: 0
   property int failures: 0
   // The checks that end later; the run reports only after all of them ran.
-  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers"]
+  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers", "expiry"]
   property var finished: []
   function done(name) {
     finished = finished.concat([name])
@@ -444,6 +445,10 @@ ShellRoot {
   FoamyPeerIpc {
     id: peer
   }
+  FoamyPeerIpc {
+    id: narrow
+    limit: 1
+  }
   // foamy-lock's scenario: the rival arrives after the preference settled.
   FoamyIpc {
     id: guarded
@@ -491,6 +496,28 @@ ShellRoot {
         id: "foamy.sync",
         a: "",
         b: ""
+      })
+  }
+  // A host that takes inline saves but never reflects them.
+  QtObject {
+    id: expiringBar
+    property var saved: []
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) {
+        expiringBar.saved = expiringBar.saved.concat([JSON.parse(JSON.stringify(settings))])
+        return true
+      }
+    }
+  }
+  FoamyPrefsQueue {
+    id: expiringQueue
+    bar: expiringBar
+    moduleName: "foamy.expiring"
+    fields: shell.fields
+    reflectTimeoutMs: 300
+    settings: ({
+        id: "foamy.expiring",
+        a: "stored"
       })
   }
   property var retryCommits: []
@@ -698,6 +725,17 @@ ShellRoot {
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
     eq(inlineBar.saved.length, 2, "an invalid value writes nothing")
     eq(shell.inlineFailures, ["That value isn't allowed."], "failed() reports it")
+
+    // --- FoamyPrefsQueue: a value the host never reflects expires ----------------------
+    check(expiringQueue.save("a", "x") && expiringBar.saved.length === 1, "a save the host never reflects is written")
+    eq(expiringQueue.value("a"), "x", "and shows while it is pending")
+    // The expiry timer ticks every 1000 ms.
+    wait.waitFor(function () {
+      return Object.keys(expiringQueue.pending).length === 0
+    }, 3000, function () {
+      shell.eq(expiringQueue.value("a"), "stored", "the host's value wins after reflectTimeoutMs")
+      shell.done("expiry")
+    }, "an unreflected pending value expires")
 
     // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
     eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
@@ -927,6 +965,30 @@ ShellRoot {
         output: output
       }
     })
+    // The fake omarchy-shell answers foamy.gone as the real one does for a
+    // missing target: an error line and exit 0.
+    peer.call("foamy.gone", "status", [], function (ok, output) {
+      shell.peerGone = {
+        ok: ok,
+        output: output
+      }
+    })
+    // limit: 1. The second call finds the one process slot taken.
+    inNarrowCall = true
+    narrow.call("foamy.slow", "status", [], function (ok, output) {
+      shell.slowFirst = {
+        ok: ok,
+        output: output
+      }
+    })
+    narrow.call("foamy.slow", "status", [], function (ok, output) {
+      shell.slowSecond = {
+        ok: ok,
+        output: output,
+        insideCall: shell.inNarrowCall
+      }
+    })
+    inNarrowCall = false
 
     // --- FoamySettingsState ---------------------------------------------------------------
     settingsState.holdOnClose = true
@@ -936,7 +998,7 @@ ShellRoot {
 
     // The preferences re-claim every 300 ms; the peer calls answer later.
     wait.waitFor(function () {
-      return shell.peerResult !== null && shell.peerFallback !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
+      return shell.peerResult !== null && shell.peerFallback !== null && shell.peerGone !== null && shell.slowFirst !== null && shell.slowSecond !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
     }, 3000, function () {
       shell.stepFour()
     }, "peer calls answer and the preferences re-claim")
@@ -945,6 +1007,10 @@ ShellRoot {
   property var late: null
   property var peerResult: null
   property var peerFallback: null
+  property var peerGone: null
+  property var slowFirst: null
+  property var slowSecond: null
+  property bool inNarrowCall: false
 
   function stepFour() {
     eq(shell.peerResult, {
@@ -958,6 +1024,22 @@ ShellRoot {
       ok: true,
       output: "cli: foamy.absent status [1]"
     }, "unknown in-process target uses the CLI")
+    eq(shell.peerGone, {
+      ok: false,
+      output: "Target not found: foamy.gone"
+    }, "a missing target fails although omarchy-shell exits 0")
+    eq(shell.slowSecond, {
+      ok: false,
+      output: "",
+      insideCall: false
+    }, "a call over the process limit fails, and later, not inside call()")
+    eq(shell.slowFirst, {
+      ok: true,
+      output: "cli: foamy.slow status"
+    }, "the call within the limit runs")
+    eq(callLog.lines().filter(function (line) {
+      return line.indexOf("omarchy-shell foamy.slow") === 0
+    }), ["omarchy-shell foamy.slow status"], "the limit starts one process")
     var unfinished = function () {
       return shell.laterChecks.filter(function (name) {
         return shell.finished.indexOf(name) === -1

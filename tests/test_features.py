@@ -2,8 +2,9 @@
 """kit 0.2.0 features on 4.5 (tests/qml/Features.qml): icons, textKey
 arity, SafeTextField.maximumLength, FoamyPrefsQueue inline and CLI (fake
 omarchy / omarchy-shell on PATH, never the real ones), IPC
-prefer/others/call, FoamyIpcPreference, FoamyPeerIpc and
-FoamySettingsState."""
+prefer/others/call, FoamyIpcPreference, FoamyPeerIpc (with its failures:
+a missing target, the process limit) and FoamySettingsState, plus the
+expiry of a pending value the host never reflects."""
 
 import shutil
 import sys
@@ -18,6 +19,10 @@ sleep 0.3
 exit 0
 """
 FAKE_OMARCHY_SHELL = """#!/bin/bash
+case "${1:-}" in
+  foamy.gone) echo "Target not found: $1"; exit 0 ;;
+  foamy.slow) printf '%s\\n' "omarchy-shell $*" >> "$FOAMY_CALLS" ;;
+esac
 echo "cli: $*"
 """
 PROBE = """import QtQuick
