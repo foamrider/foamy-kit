@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """tests/validate.sh (kit/tooling/validate.py) on a synced copy of the demo
 plugin: QML-loaded JavaScript is linted, not skipped; baselines fail only on
-new findings (and on grown complexity); kit-owned files are never linted or
-reformatted; a missing pinned tool, an unreasoned exclusion or a missing
-suite hook fails; --ci skips the host checks with a reason.
+new findings (and on grown complexity); kit-owned files (kit/ and the root
+files foamy-kit.lock lists) are never linted or reformatted; a missing
+pinned tool, an unreasoned exclusion or a missing suite hook fails; --ci
+skips the host checks with a reason.
 
 Needs the tools mise.toml pins (`mise install`); Qt 6 qmllint and the Omarchy
 shell for the qmllint part (SKIP without them)."""
@@ -113,7 +114,6 @@ def main():
         code != 0 and "grew:" in out and "now 19, baseline 17" in out,
         summary(out),
     )
-    (plugin / "tool.py").write_text("def pick(x):\n    return x\n")
     (plugin / "tool.py").unlink()
     (plugin / "kit/stray.py").write_text("import os\nx=( 1,\n2 )\n")
     code, out = validate(plugin, "--only", "ruff-format,vulture")
@@ -146,12 +146,25 @@ def main():
     code, out = validate(plugin, "--only", "shellcheck,shfmt")
     ok &= report(
         "shellcheck and shfmt check repository scripts",
-        code != 0 and "SC2086" in out and "FAIL  shfmt" in out and "kit-check.sh" not in out,
+        code != 0 and "SC2086" in out and "FAIL  shfmt" in out,
         summary(out),
     )
     (plugin / "run.sh").write_text('#!/bin/bash\nif [ -n "$1" ]; then\n  echo "$1"\nfi\n')
     code, out = validate(plugin, "--only", "shellcheck,shfmt")
     ok &= report("a clean script passes", code == 0, summary(out))
+    # A root script that foamy-kit.lock lists (not under kit/) is the kit's:
+    # the same findings in it fail nothing. run.sh stays, so the checks run.
+    kit_check = plugin / "tests/kit-check.sh"
+    synced = kit_check.read_bytes()
+    with kit_check.open("a") as script:
+        script.write('if [ -n "$1" ]; then\n    echo $1\nfi\n')
+    code, out = validate(plugin, "--only", "shellcheck,shfmt")
+    ok &= report(
+        "lock-listed root scripts are neither linted nor formatted",
+        code == 0 and "PASS  shellcheck" in out and "PASS  shfmt" in out,
+        summary(out),
+    )
+    kit_check.write_bytes(synced)
     (plugin / "run.sh").unlink()
 
     # Exclusions need a reason and a known check.
