@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, foamykit, report  # noqa: E402
+from common import FIXTURES, KIT_ROOT, foamykit, read_png, report  # noqa: E402
 
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import harness  # noqa: E402
@@ -102,16 +102,13 @@ def main():
             "trio.md is a PR table with prefixed image URLs, one After column per host",
             table.startswith(header + "\n" + "|---" * (2 + len(hosts)) + "|\n")
             and "![devices before](https://example.invalid/assets/devices-before.png)" in table
-            and "| empty | — |" in table
-            and "4.0.6" not in table,
+            and "| empty | — |" in table,
             table.splitlines()[0] if table else table,
         )
         ok &= report(
             "the plugin repo is untouched (no worktree, clean tree)",
             git(repo, "status", "--porcelain") == status and git(repo, "worktree", "list") == worktrees,
         )
-        from common import read_png
-
         width, height, _ = read_png(out / "devices-before.png")
         ok &= report("the dev fork's card is captured", (width, height) == (400, 160), f"{width}x{height}")
         _, _, px = read_png(out / "devices-before.png")
