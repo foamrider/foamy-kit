@@ -259,8 +259,9 @@ ShellRoot {
       next()
       return
     case 14:
+      // The stand-in empties the pid file before it writes its pid.
       var pid = readFile(state + ".pid")
-      if (pid === shell.cancelledPid)
+      if (pid === "" || pid === shell.cancelledPid)
         return
       shell.cancelledPid = pid
       clipboard.cancel()
@@ -304,13 +305,15 @@ ShellRoot {
       // separate 2 s watchdog must still end the read, producer included.
       if (!fixture.done)
         return
+      // The normal read above wrote its pid last; wait for this read's own.
+      shell.cancelledPid = readFile(state + ".pid")
       shell.spare = spareReader.createObject(shell)
       check(shell.spare.start(false), "a second reader starts a read")
       next()
       return
     case 20:
       var spawned = readFile(state + ".pid")
-      if (spawned === shell.cancelledPid)
+      if (spawned === "" || spawned === shell.cancelledPid)
         return
       shell.cancelledPid = spawned
       shell.spare.destroy()

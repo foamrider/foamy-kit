@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """FoamyHeroBand field mode (tests/qml/BandField.qml) on 4.5, LTR and RTL
-(dark theme only: no check depends on the theme): the field grows from the "+" action across the title row
-and back while the band keeps its height and the content under it stays,
-the buttons are inert while it is open, a hero band keeps its hero, reduced
-motion is instant. Shots: tests/out/band-field/."""
+(dark theme only: no check depends on the theme): the field grows from the
+"+" action across the title row and back while the band keeps its height
+and the content under it stays, the buttons are inert while it is open, a
+hero band keeps its hero, reduced motion is instant.
+Shots: tests/out/band-field/."""
 
 import shutil
 import sys

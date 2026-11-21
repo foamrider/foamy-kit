@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """kit/clipboard.sh through hostenv.clipboard_fakes(), the stand-ins plugin
 clipboard tests share: the paste's bounds (size, NUL, single line or
-`multiline` with its line breaks kept, the 2 s
-deadline, a producer that ignores SIGTERM), the exit codes FoamyClipboard
-maps to its messages, that a stopped read ends whole, and that a paste
-which works still works when the machine is slow. Shell only: no Quickshell or Omarchy
-host, so tests/suite.sh --ci runs it too."""
+`multiline` with its line breaks kept, the 2 s deadline, a producer that
+ignores SIGTERM), the exit codes FoamyClipboard maps to its messages, that
+a stopped read ends whole, and that a paste which works still works when
+the machine is slow. Shell only: no Quickshell or Omarchy host, so
+tests/suite.sh --ci runs it too."""
 
 import json
 import os
@@ -63,9 +63,9 @@ def catches_term(pid):
 
 
 def signalled(env, signum):
-    """(exit code, stdout, stderr, producer pid, producer stopped within 1 s)
-    for a `loaded` paste whose clipboard.sh gets `signum` once its trap is
-    set. The stand-in timeout gives `loaded` 60 s and its producer runs
+    """(exit code or the reason no signal was sent, stdout, stderr, producer
+    pid, producer stopped within 1 s) for a `loaded` paste whose
+    clipboard.sh gets `signum` once its trap is set. The stand-in timeout gives `loaded` 60 s and its producer runs
     2.5 s, so only the trap's kill of the whole read ends it within 1 s."""
     state = Path(env["TEST_CLIPBOARD_STATE"])
     state.write_text("loaded")
@@ -75,13 +75,18 @@ def signalled(env, signum):
     out, err = Path(f"{state}.out"), Path(f"{state}.err")
     with out.open("wb") as stdout, err.open("wb") as stderr:
         proc = subprocess.Popen(["bash", str(HELPER), "clipboard"], env=env, stdout=stdout, stderr=stderr)
+    pid_file = Path(f"{state}.pid")
     try:
         deadline = time.monotonic() + 5
-        while not (Path(f"{state}.pid").exists() and catches_term(proc.pid)):
-            if time.monotonic() > deadline or proc.poll() is not None:
-                return proc.poll(), b"", b"", None, False
+        # The stand-in empties the pid file before it writes its pid.
+        producer = ""
+        while not (producer and catches_term(proc.pid)):
+            if proc.poll() is not None:
+                return f"clipboard.sh exited first with {proc.returncode}", b"", b"", producer or None, False
+            if time.monotonic() > deadline:
+                return "the trap and the producer pid not seen within 5 s", b"", b"", producer or None, False
             time.sleep(0.01)
-        producer = Path(f"{state}.pid").read_text()
+            producer = pid_file.read_text().strip() if pid_file.exists() else ""
         os.kill(proc.pid, signum)
         try:
             code = proc.wait(timeout=2)
