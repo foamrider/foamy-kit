@@ -13,7 +13,6 @@ import foamykit  # noqa: E402
 import harness  # noqa: E402
 
 FIXTURES = KIT_ROOT / "tests/fixtures"
-PLUGINS = KIT_ROOT.parent
 
 
 def copy_kit(target):

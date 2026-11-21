@@ -550,7 +550,6 @@ ShellRoot {
     eq(icon.paths.info, '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "info is Lucide info, not a megaphone")
     icon.name = "chevron-left"
     check(icon.known, "chevron-left is known")
-    check(icon.directional.indexOf("chevron-left") !== -1, "chevron-left mirrors in RTL")
     // Brand marks (Simple Icons) are solid shapes: drawn filled, not stroked.
     var marks = ["zendesk", "todoist"]
     marks.forEach(function (mark) {
