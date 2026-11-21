@@ -91,17 +91,19 @@ test("output is bounded for any input", () => {
   assert.strictEqual(Text.cap(many, 3, 10), "a\na\na" + E);
 });
 
-test("tooltip() uses the documented defaults", () => {
+// The host bar tooltip shows at most 6 lines of 100 characters; plain
+// numbers here, so a changed constant fails instead of passing along.
+test("tooltip() keeps to the host tooltip's 6 lines of 100 characters", () => {
   const out = Text.tooltip(("y".repeat(500) + "\n").repeat(20));
   const lines = out.split("\n");
-  assert.strictEqual(lines.length, Text.TOOLTIP_LINES);
-  assert.ok(lines.every((line) => codePoints(line) === Text.TOOLTIP_CHARS && line.endsWith(E)));
+  assert.strictEqual(lines.length, 6);
+  assert.ok(lines.every((line) => codePoints(line) === 100 && line.endsWith(E)));
 });
 
-test("bad limits fall back to the tooltip defaults", () => {
+test("bad limits fall back to the tooltip's 100 characters", () => {
   const long = "z".repeat(500);
-  assert.strictEqual(codePoints(Text.cap(long, 0, -3)), Text.TOOLTIP_CHARS);
-  assert.strictEqual(codePoints(Text.cap(long, "x", NaN)), Text.TOOLTIP_CHARS);
+  assert.strictEqual(codePoints(Text.cap(long, 0, -3)), 100);
+  assert.strictEqual(codePoints(Text.cap(long, "x", NaN)), 100);
 });
 
 console.log(`PASS FoamyText: ${passed} tests`);
