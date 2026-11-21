@@ -428,9 +428,100 @@ def component_reference_tests():
     return report("components name only kit types their deps sync", not missing, "; ".join(missing))
 
 
+def workflow_job_blocks(lines):
+    """Job name -> its lines, for the jobs: block of a workflow."""
+    jobs, name = {}, None
+    for line in lines[lines.index("jobs:") + 1 :]:
+        match = re.fullmatch(r"  ([A-Za-z0-9_-]+):", line)
+        if match:
+            name = match.group(1)
+            jobs[name] = []
+        elif name is not None:
+            jobs[name].append(line)
+    return jobs
+
+
+def workflow_permission_tests():
+    """The workflows every plugin carries (the files are the thing checked):
+    actions pinned to a full commit, read-only by default, and only
+    verify-native.yml's attest job may sign, never on a pull request and
+    never after building anything itself."""
+    ok = True
+    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml"):
+        lines = (KIT_ROOT / rel).read_text().splitlines()
+        problems = []
+        uses = [line.split("#")[0].strip() for line in lines if re.match(r"\s*(- )?uses:", line)]
+        problems += [f"not pinned to a commit: {u}" for u in uses if not re.fullmatch(r".*@[0-9a-f]{40}", u)]
+        top = lines.index("permissions:")
+        default = []
+        for line in lines[top + 1 :]:
+            if line and not line.startswith(" "):
+                break
+            if line.strip() and not line.strip().startswith("#"):
+                default.append(line.strip())
+        if default != ["contents: read"]:
+            problems.append(f"default permissions are {default}")
+        jobs = workflow_job_blocks(lines)
+        attest = jobs.get("attest")
+        for grant in ("id-token: write", "attestations: write"):
+            outside = sum(grant in line for line in lines) - sum(grant in line for line in attest or [])
+            if outside:
+                problems.append(f"{grant} outside the attest job")
+        if rel.endswith("verify-native.yml"):
+            if attest is None:
+                problems.append("no attest job")
+            else:
+                if "if: github.event_name != 'pull_request'" not in [line.strip() for line in attest]:
+                    problems.append("the attest job also runs on pull requests")
+                problems += [
+                    f"the attest job runs {word}"
+                    for word in ("cargo", "build-native", "native.py")
+                    if any(word in line for line in attest)
+                ]
+        ok &= report(
+            f"{rel}: actions pinned, read-only default, only the attest job signs",
+            bool(uses) and not problems,
+            "; ".join(problems),
+        )
+    return ok
+
+
+def update_icons_tests(base):
+    """tools/update-icons.py on a copy of the kit (it rewrites the
+    kit/FoamyIcon.qml next to itself): refreshing an icon from its unchanged
+    SVG reproduces the formatted table byte for byte, and a missing SVG stops
+    the run before it writes anything."""
+    kit = copy_kit(base / "icons-kit")
+    tool = str(kit / "tools/update-icons.py")
+    table = kit / "kit/FoamyIcon.qml"
+    svg = base / "svg"
+    svg.mkdir()
+    (svg / "info.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" />'
+        '<path d="M12 16v-4" /><path d="M12 8h.01" /></svg>\n'
+    )
+    (svg / "dot.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="1" /></svg>\n')
+    code, out = sh("python3", "-I", tool, str(svg), "info")
+    ok = report(
+        "update-icons.py rewrites the formatted icon table byte for byte",
+        code == 0 and table.read_bytes() == (KIT_ROOT / "kit/FoamyIcon.qml").read_bytes(),
+        out.strip(),
+    )
+    before = table.read_bytes()
+    code, out = sh("python3", "-I", tool, str(svg), "dot", "nope")
+    ok &= report(
+        "update-icons.py stops on a missing SVG and leaves the table alone",
+        code != 0 and "missing" in out and table.read_bytes() == before,
+        out.strip(),
+    )
+    return ok
+
+
 def main():
     ok = component_reference_tests()
+    ok &= workflow_permission_tests()
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
+    ok &= update_icons_tests(base)
     # Two copies of the demo fixture, never the sibling checkouts: every machine
     # and CI then start from the same plugins, with no REVIEW.md or AGENTS.md.
     a, b = base / "plugin-a", base / "plugin-b"
