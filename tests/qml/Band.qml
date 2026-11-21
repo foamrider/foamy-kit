@@ -26,6 +26,21 @@ ShellRoot {
   function near(a, b) {
     return Math.abs(a - b) <= 1
   }
+  function findByName(item, name) {
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = findByName(item.children[i], name)
+      if (found)
+        return found
+    }
+    return null
+  }
+  FoamyWait {
+    id: wait
+  }
 
   FloatingWindow {
     implicitWidth: 1920
@@ -173,13 +188,21 @@ ShellRoot {
       bandOnly.cardItem.grabToImage(function (r2) {
         r2.saveToFile(Quickshell.env("FOAMY_OUT") + "/band-only.png")
       })
-      card.grabToImage(function (result) {
-        if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png"))
-          console.log("FOAMY FAIL save")
-        console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-        console.log("FOAMY DONE")
-        Qt.quit()
-      })
+      // The band's Canvas loads its artwork asynchronously; test_band.py
+      // reads the artwork's pixels from the shot.
+      var picture = popup.bodyItem.pictureBand
+      wait.waitFor(function () {
+        return shell.findByName(picture, "foamyHeroBandSurface").isImageLoaded(picture.imageSource)
+      }, 5000, shell.grabCard, "the picture band's artwork is loaded")
     }
+  }
+  function grabCard() {
+    popup.cardItem.grabToImage(function (result) {
+      if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png"))
+        console.log("FOAMY FAIL save")
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
+    })
   }
 }

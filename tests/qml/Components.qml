@@ -419,7 +419,7 @@ ShellRoot {
       page.primary.forceActiveFocus()
       ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
       check(shell.applies === 1, "Enter activates the focused button " + shell.applies)
-      // A busy button takes no key; it stays busy until the pointer check.
+      // A busy button takes no key. The pointer check makes it busy again.
       shell.verifying = true
       page.secondary.forceActiveFocus()
       ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
@@ -463,6 +463,8 @@ ShellRoot {
       // FoamyPopupCard's height follows the screen.
       check(tallCard.availableCardHeight > FoamyStyle.popupMaxHeight, "screen allows more than 640 " + tallCard.availableCardHeight)
       check(tallCard.cardItem.height > FoamyStyle.popupMaxHeight && tallCard.cardItem.height <= tallCard.availableCardHeight + 2, "FoamyPopupCard follows the screen " + tallCard.cardItem.height + " of " + tallCard.availableCardHeight)
+      // The form shot shows the Verify button at rest.
+      shell.verifying = false
       capture.start()
     }
   }
@@ -492,7 +494,7 @@ ShellRoot {
         weatherPopup.open = false
         formPopup.open = false
         tallCard.open = false
-        clockPointer.start()
+        shell.whenAlone(clockPopup, [weatherPopup, formPopup, tallCard], shell.clockPointer, "clock")
         return
       }
       var item = queue.shift()
@@ -507,54 +509,52 @@ ShellRoot {
     ev.mouseClick(item, item.width / 2, item.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
   }
 
-  Timer {
-    id: clockPointer
-    interval: 600
-    onTriggered: {
-      clickCentre(clockPopup.bodyItem.footer.refreshButton)
-      check(shell.refreshes === 1, "a click on refresh emits refreshClicked " + shell.refreshes)
-      clockPopup.open = false
-      weatherPopup.open = true
-      weatherPointer.start()
-    }
+  // A click reaches a card once it has faded in and the closed popups'
+  // windows are gone (KeyboardPanel stays visible while its card fades out).
+  function whenAlone(popup, closed, then, name) {
+    wait.waitFor(function () {
+      return popup.visible && popup.cardItem.opacity === 1 && closed.every(function (other) {
+        return !other.visible
+      })
+    }, 3000, then, tag + " the " + name + " card alone on top")
   }
 
-  Timer {
-    id: weatherPointer
-    interval: 600
-    onTriggered: {
-      var refresh = weatherPopup.bodyItem.footer.refreshButton
-      clickCentre(refresh)
-      check(refresh.spinning && shell.weatherRefreshes === 0, "refreshing: the spinning refresh button ignores a click " + shell.weatherRefreshes)
-      shell.weatherRefreshing = false
-      clickCentre(refresh)
-      check(shell.weatherRefreshes === 1, "done refreshing, the same click refreshes " + shell.weatherRefreshes)
-      weatherPopup.open = false
-      formPopup.open = true
-      pointerStep.start()
-    }
+  function clockPointer() {
+    clickCentre(clockPopup.bodyItem.footer.refreshButton)
+    check(shell.refreshes === 1, "a click on refresh emits refreshClicked " + shell.refreshes)
+    clockPopup.open = false
+    weatherPopup.open = true
+    whenAlone(weatherPopup, [clockPopup], shell.weatherPointer, "weather")
   }
 
-  Timer {
-    id: pointerStep
-    interval: 600
-    onTriggered: {
-      var page = formPopup.bodyItem
-      var ta = page.toggleA
-      var fill = findByName(ta, "foamyToggleFill")
-      // Hover first, before any click lands on the row: it lights up under
-      // the pointer (the colour animates).
+  function weatherPointer() {
+    var refresh = weatherPopup.bodyItem.footer.refreshButton
+    clickCentre(refresh)
+    check(refresh.spinning && shell.weatherRefreshes === 0, "refreshing: the spinning refresh button ignores a click " + shell.weatherRefreshes)
+    shell.weatherRefreshing = false
+    clickCentre(refresh)
+    check(shell.weatherRefreshes === 1, "done refreshing, the same click refreshes " + shell.weatherRefreshes)
+    weatherPopup.open = false
+    formPopup.open = true
+    whenAlone(formPopup, [weatherPopup], shell.pointerStep, "form")
+  }
+
+  function pointerStep() {
+    var page = formPopup.bodyItem
+    var ta = page.toggleA
+    var fill = findByName(ta, "foamyToggleFill")
+    // Hover first, before any click lands on the row: it lights up under
+    // the pointer (the colour animates).
+    wait.waitFor(function () {
+      return fill.color.a === 0
+    }, 1000, function () {
+      ev.mouseMove(ta, ta.width / 2, ta.height / 2, -1, Qt.NoButton, Qt.NoModifier)
       wait.waitFor(function () {
-        return fill.color.a === 0
+        return fill.color.a > 0
       }, 1000, function () {
-        ev.mouseMove(ta, ta.width / 2, ta.height / 2, -1, Qt.NoButton, Qt.NoModifier)
-        wait.waitFor(function () {
-          return fill.color.a > 0
-        }, 1000, function () {
-          shell.clicks()
-        }, tag + " hover lights the row")
-      }, tag + " the row is unlit before the pointer reaches it")
-    }
+        shell.clicks()
+      }, tag + " hover lights the row")
+    }, tag + " the row is unlit before the pointer reaches it")
   }
 
   function clicks() {
@@ -562,6 +562,7 @@ ShellRoot {
     var ta = page.toggleA
     ev.mouseClick(ta, ta.width / 2, ta.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
     check(shell.toggleClicks === 1 && !ta.checked, "click emits clicked, never flips checked " + shell.toggleClicks)
+    shell.verifying = true
     clickCentre(page.secondary)
     check(shell.verifies === 0, "a busy button ignores a click " + shell.verifies)
     shell.verifying = false
