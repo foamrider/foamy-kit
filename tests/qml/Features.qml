@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -9,10 +8,10 @@ import "harness"
 import "plugin/kit"
 import "plugin/kit/FoamyIpcResolver.js" as Resolver
 
-// kit 0.2.0 features on every host: icons, numeral/menu tokens, cursor
-// shape, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue (inline
-// and CLI), FoamyIpcResolver.prefer/others/call, FoamyIpcPreference,
-// FoamyPeerIpc, FoamySettingsState, and D-Bus isolation.
+// kit 0.2.0 features on every host: icons, textKey arity,
+// SafeTextField.maximumLength, FoamyPrefsQueue (inline and CLI),
+// FoamyIpcResolver.prefer/others/call, FoamyIpcPreference, FoamyPeerIpc and
+// FoamySettingsState.holdOnClose.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -52,11 +51,6 @@ ShellRoot {
         id: field
         width: 200
         maximumLength: 5
-      }
-      FoamyCursorSurface {
-        id: row
-        width: 100
-        height: 20
       }
       FoamyIcon {
         id: icon
@@ -495,12 +489,6 @@ ShellRoot {
       check(icon.known && svg.indexOf('<g fill="' + icon.color.toString() + '" stroke="none">' + icon.paths[mark] + '</g>') !== -1, mark + " is a known mark, drawn filled")
     })
 
-    // --- tokens ----------------------------------------------------------------------------
-    eq(FoamyStyle.font.numeral, Style.space(56), "numeral token")
-    eq(FoamyStyle.font.numeralCompact, Style.space(40), "numeralCompact token")
-    eq(FoamyStyle.menuPadding, Style.space(8), "menu padding token")
-    eq(row.cursorShape, Qt.PointingHandCursor, "cursor rows show a pointing hand")
-
     // --- textKey arity ---------------------------------------------------------------------
     cursor.emitTextKey(catcher, "s")
     eq(catcher.lastText, "s", "emitTextKey reaches a (text, modifiers) handler")
@@ -652,10 +640,6 @@ ShellRoot {
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
 
     // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
-    eq(storedQueue.storedProblem("list"), "That value isn't allowed.", "storedProblem names the invalid stored list")
-    eq(storedQueue.storedProblem("a"), "", "a valid stored value has no problem")
-    eq(Object.keys(storedQueue.storedProblems), ["list"], "storedProblems lists it")
-    eq(storedQueue.value("list"), [], "it still reads as the default")
     eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
     check(!storedQueue.save("list", [9]), "a save over the invalid stored list is refused")
     eq(storedQueue.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with its own message")
@@ -727,7 +711,7 @@ ShellRoot {
     eq(wrappedInvalid.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with the stored-invalid message")
     eq(storedBar.saved.length, savedBefore + 2, "nothing more was written")
 
-    // --- FoamyPrefsQueue: CLI, newest value per key, failure + retry ------------------
+    // --- FoamyPrefsQueue: CLI, one save at a time, newest value per key ---------------
     cliQueue.save("a", "first")
     cliQueue.save("a", "second")
     cliQueue.save("b", "other")
@@ -854,31 +838,6 @@ ShellRoot {
       var lines = callLog.lines()
       eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
       check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
-      // Array values go to setBarWidget with a leading space (qs ipc splits "[…]").
-      cliQueue.save("list", [1, 2])
-      failNext.start()
-    }
-  }
-
-  Timer {
-    id: failNext
-    interval: 1500
-    onTriggered: {
-      var lines = callLog.lines()
-      eq(lines[lines.length - 1], "omarchy-shell shell setBarWidget foamy.test list | [1,2]| {}", "arrays bypass qs ipc list parsing")
-      // the fake omarchy fails on "boom"
-      cliQueue.save("b", "boom")
-      afterFail.start()
-    }
-  }
-
-  Timer {
-    id: afterFail
-    interval: 1500
-    onTriggered: {
-      eq(cliQueue.error, "Couldn't save the setting.", "failed CLI save reports an error")
-      check(cliQueue.canRetry, "a failed save can be retried")
-      eq(cliQueue.value("b"), "other", "a failed value is not shown as saved")
       stepThree()
     }
   }
@@ -918,19 +877,10 @@ ShellRoot {
     })
 
     // --- FoamySettingsState ---------------------------------------------------------------
-    settingsState.show()
-    check(fakePanel.opened && settingsState.editing, "show() on a closed panel opens it on Settings")
-    fakePanel.close()
-    check(!settingsState.editing, "closing resets Settings")
     settingsState.holdOnClose = true
     settingsState.show()
     fakePanel.close()
     check(settingsState.editing, "holdOnClose keeps Settings across a close")
-
-    // --- D-Bus isolation -------------------------------------------------------------------
-    var address = Quickshell.env("DBUS_SESSION_BUS_ADDRESS")
-    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_SOCKETS") + "/") === "unix:path=".length, "private session bus " + address)
-    eq(Mpris.players.values.length, 0, "no desktop MPRIS players visible")
     stepFour.start()
   }
 

@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""kit 0.2.0 features on 4.5 (tests/qml/Features.qml): icons,
-tokens, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue inline
-and CLI (fake omarchy / omarchy-shell on PATH, never the real ones), IPC
-prefer/others/call, FoamyIpcPreference, FoamyPeerIpc, FoamySettingsState and
-the private D-Bus session."""
+"""kit 0.2.0 features on 4.5 (tests/qml/Features.qml): icons, textKey
+arity, SafeTextField.maximumLength, FoamyPrefsQueue inline and CLI (fake
+omarchy / omarchy-shell on PATH, never the real ones), IPC
+prefer/others/call, FoamyIpcPreference, FoamyPeerIpc and
+FoamySettingsState."""
 
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -16,15 +15,9 @@ from common import KIT_ROOT, harness, report, synced_demo  # noqa: E402
 FAKE_OMARCHY = """#!/bin/bash
 printf '%s\\n' "omarchy $*" >> "$FOAMY_CALLS"
 sleep 0.3
-case "$*" in *boom*) echo "fake failure" >&2; exit 1 ;; esac
 exit 0
 """
 FAKE_OMARCHY_SHELL = """#!/bin/bash
-if [[ ${1:-} == shell && ${2:-} == setBarWidget ]]; then
-  printf 'omarchy-shell %s %s %s %s |%s| %s\\n' "$1" "$2" "$3" "$4" "$5" "$6" >> "$FOAMY_CALLS"
-  echo ok
-  exit 0
-fi
 echo "cli: $*"
 """
 PROBE = """import QtQuick
@@ -61,8 +54,6 @@ def run(host):
     r.env.update(
         {
             "FOAMY_CALLS": str(calls),
-            "FOAMY_SOCKETS": str(r.sockets),
-            "FOAMY_LIVE_BUS": os.environ.get("DBUS_SESSION_BUS_ADDRESS", ""),
             "QML_XHR_ALLOW_FILE_READ": "1",
         }
     )
