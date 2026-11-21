@@ -494,6 +494,9 @@ ShellRoot {
     var plainRight = plain.editorItem.positionToRectangle(12).x
     check(shell.rtl ? near(plainRight, right, 1.5) : near(plainLeft, left, 1.5), "aligned like a normal field " + [plainLeft, plainRight, left, right])
     eq(plain.editorItem.Accessible.name, "Plain label", "a normal field keeps its label")
+    // The editor is the field's tab stop: an accessibility check needs a role on it.
+    check(plain.editorItem.Accessible.role === Accessible.EditableText, "a normal field's editor is an editable text")
+    check(secret.editorItem.Accessible.role === Accessible.EditableText && secret.editorItem.Accessible.passwordEdit, "a masked field's editor is an editable password text")
     secret.select(3, 8)
     shell.shot("masked-selection", function () {
       secret.cursorPosition = 5
@@ -526,7 +529,6 @@ ShellRoot {
       secret.select(start === end ? position : (position === start ? end : start), position)
       card.grabToImage(function (result) {
         check(result.saveToFile(Quickshell.env("FOAMY_OUT") + "/" + name + ".png"), "saved " + name)
-        console.log("FOAMY PNGCHECK " + name + ".png")
         then()
       })
     })
