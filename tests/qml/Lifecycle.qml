@@ -119,6 +119,26 @@ ShellRoot {
         done(code)
     }
   }
+  // A killed group's members are reaped asynchronously, and kill -0 also
+  // succeeds on a zombie: rerun `alive` every 50 ms while one is left and
+  // time remains, then check the last answer once and go on.
+  Timer {
+    id: aliveAgain
+    interval: 50
+    onTriggered: alive.running = true
+  }
+  function whenNoneAlive(text, ms, then) {
+    var until = Date.now() + ms
+    alive.done = function (code) {
+      if (code === 1 && Date.now() < until) {
+        aliveAgain.start()
+        return
+      }
+      shell.eq(code, 0, text)
+      then()
+    }
+    alive.running = true
+  }
 
   // --- a small step runner --------------------------------------------------------
   property var steps: []
@@ -303,18 +323,14 @@ ShellRoot {
         }, 5000)
       }, function () {
         eq(events, [["failed", "list", ["slowlist"], 0], ["saved", "list", ["next"]]], "the stuck array save fails, the next one saves")
-        eq(writes(), [' ["next"]'], "only the next save wrote")
         eq(q.value("list"), ["next"], "and shows")
-        waitFor("time for a surviving child to write", function () {
-          return since() > 3500
-        }, 5000)
-      }, function () {
-        eq(writes(), [' ["next"]'], "the timed-out save's child never writes late over the next save")
-        alive.done = function (code) {
-          shell.eq(code, 0, "no process of a timed-out save is left")
+        // The next save starts only once the old group is gone, so nothing
+        // of the stuck save may be left now (well before its child's 3 s).
+        whenNoneAlive("no process of a timed-out save is left", 2000, function () {
+          // With no writer left, this is the final log.
+          shell.eq(shell.writes(), [' ["next"]'], "the timed-out save's child never writes late over the next save")
           shell.next()
-        }
-        alive.running = true
+        })
       }, function () {
         // --- a queue destroyed mid-save (its panel closed) kills the whole save ---------
         doomed = doomedQueue.createObject(shell)
@@ -326,19 +342,15 @@ ShellRoot {
       }, function () {
         doomed.destroy()
         doomed = null
-        waitFor("time for a surviving child to write", function () {
-          return since() > 3500
-        }, 5000)
-      }, function () {
-        check(!ran("never"), "a destroyed queue runs nothing more")
-        check(writes().every(function (line) {
-          return line.indexOf("doomedlist") < 0
-        }), "a destroyed queue's save child never writes")
-        alive.done = function (code) {
-          shell.eq(code, 0, "destroying the queue killed its save's processes")
+        // The kill is a detached reaper, so it lands a little later; the
+        // child would write after 3 s.
+        whenNoneAlive("destroying the queue killed its save's processes", 2000, function () {
+          shell.check(!shell.ran("never"), "a destroyed queue runs nothing more")
+          shell.check(shell.writes().every(function (line) {
+            return line.indexOf("doomedlist") < 0
+          }), "a destroyed queue's save child never writes")
           shell.next()
-        }
-        alive.running = true
+        })
       }]
     Qt.callLater(next)
   }

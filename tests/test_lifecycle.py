@@ -28,11 +28,13 @@ exit 0
 
 # setBarWidget (the array path): appends the value to writes.log and says ok.
 # The "slowlist"/"doomedlist" values first wait 3 s ignoring SIGTERM, as a
-# stuck shell would; their pid goes to hang.pids.
+# stuck shell would. Their pid goes to hang.pids before the call is logged,
+# so once Lifecycle.qml sees the call, the pid it checks is known.
 FAKE_OMARCHY_SHELL = """#!/bin/bash
 [[ ${1:-} == shell && ${2:-} == setBarWidget ]] || exit 1
+case "$5" in *slowlist*|*doomedlist*) echo $$ >> "$FOAMY_BASE/hang.pids" ;; esac
 printf 'omarchy-shell %s\\n' "$*" >> "$FOAMY_CALLS"
-case "$5" in *slowlist*|*doomedlist*) trap '' TERM; echo $$ >> "$FOAMY_BASE/hang.pids"; sleep 3 ;; esac
+case "$5" in *slowlist*|*doomedlist*) trap '' TERM; sleep 3 ;; esac
 printf '%s\\n' "$5" >> "$FOAMY_BASE/writes.log"
 echo ok
 """
