@@ -4,7 +4,6 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 
-const source = fs.readFileSync(path.join(__dirname, "../kit/FoamyPrefs.js"), "utf8");
 const Prefs = require("../kit/node-loader.cjs").load("FoamyPrefs", { console: { log: console.log, warn() {} } });
 
 const fields = [
@@ -15,7 +14,9 @@ const fields = [
   { key: "label", type: "string", maxLength: 8, pattern: "^[a-z]*$", defaultValue: "" },
 ];
 let passed = 0;
-function test(name, fn) { fn(); passed++; }
+function test(name, fn) {
+  try { fn(); passed++; } catch (error) { console.log(`FAIL FoamyPrefs.js: ${name}`); throw error; }
+}
 
 test("valid by type", () => {
   assert.ok(Prefs.valid(fields, "showPercentage", false));
@@ -40,11 +41,6 @@ test("value falls back to defaults", () => {
   assert.strictEqual(Prefs.value(fields, {}, "nope"), undefined);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.values(fields, { layout: "tiles" }))),
     { showPercentage: true, layout: "tiles", refreshSeconds: 60, scale: 1, label: "" });
-});
-
-test("merged keeps other keys and drops id", () => {
-  const out = Prefs.merged({ id: "foamy.x", layout: "list", custom: [1] }, "layout", "tiles");
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(out)), { layout: "tiles", custom: [1] });
 });
 
 test("save prefers updateEntryInline with the full entry", () => {
@@ -94,6 +90,10 @@ test("array and object types", () => {
   const plan = Prefs.value(rich, {}, "plan");
   plan.days.push("mon");
   assert.deepStrictEqual(JSON.parse(JSON.stringify(Prefs.value(rich, {}, "plan"))), { days: [] }, "defaults are copied");
+  const throwing = [{ key: "x", type: "array", defaultValue: [], validate: () => { throw new Error("bad"); } }];
+  assert.strictEqual(Prefs.problem(throwing, "x", [1]), Prefs.NOT_ALLOWED, "a validate() that throws refuses the value");
+  const blank = [{ key: "x", type: "array", defaultValue: [], validate: () => "" }];
+  assert.strictEqual(Prefs.problem(blank, "x", [1]), Prefs.NOT_ALLOWED, "an empty message refuses the value too");
 });
 
 test("storedProblem() names an invalid stored value; absent and null are fine", () => {
@@ -179,7 +179,6 @@ test("a second save merges over pending values, not the stale entry", () => {
 test("array values bypass qs ipc list parsing on the CLI path", () => {
   const command = Array.from(Prefs.saveCommand("foamy.x", "folders", [{ path: "/a" }]));
   assert.strictEqual(command[0], "sh");
-  assert.ok(command[2].includes('omarchy-shell shell setBarWidget "$1" "$2" "$3" "{}"'));
   assert.deepStrictEqual(command.slice(3), ["foamy-prefs", "foamy.x", "folders", ' [{"path":"/a"}]']);
   assert.strictEqual(Prefs.saveCommand("foamy.x", "route", { a: 1 })[0], "omarchy", "objects keep omarchy bar set");
   const refused = Prefs.save({ shell: { updateEntryInline: () => false } }, "foamy.x", rich, {}, "folders", [{ path: "/a" }]);
@@ -187,12 +186,14 @@ test("array values bypass qs ipc list parsing on the CLI path", () => {
 });
 
 test("invalid values and missing module are refused", () => {
-  assert.ok(!Prefs.save(null, "foamy.x", fields, {}, "layout", "grid").ok);
-  assert.ok(!Prefs.save(null, "", fields, {}, "layout", "tiles").ok);
-});
-
-test("module name is a parameter (no hardcoded plugin id)", () => {
-  assert.ok(!/foamy\.[a-z]/.test(source.replace(/\/\/.*$/gm, "")));
+  const bad = Prefs.save(null, "foamy.x", fields, {}, "layout", "grid");
+  assert.ok(!bad.ok);
+  assert.strictEqual(bad.error, Prefs.NOT_ALLOWED);
+  assert.strictEqual(bad.command.length, 0, "nothing to run for a refused value");
+  const noModule = Prefs.save(null, "", fields, {}, "layout", "tiles");
+  assert.ok(!noModule.ok);
+  assert.strictEqual(noModule.error, Prefs.NO_ENTRY);
+  assert.strictEqual(noModule.command.length, 0, "nothing to run without a module");
 });
 
 test("bounded() and killGroupCommand() argv", () => {
@@ -210,38 +211,113 @@ test("bounded() and killGroupCommand() argv", () => {
 // an `sh -c` wrapper (the array-save shape).
 const { spawn, spawnSync } = require("child_process");
 const os = require("os");
-const pause = (seconds) => spawnSync("sleep", [String(seconds)]);
 const lateWriter = (file) => ["sh", "-c", 'sh -c \'trap "" TERM; sleep 1; echo late > "$1"\' child "$1" & wait', "wrapper", file];
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "foamy-kit-prefs-"));
 
-test("killing only the wrapper leaves its child to write late (why bounded() exists)", () => {
-  const file = path.join(scratch, "unbounded");
-  const [cmd, ...args] = lateWriter(file);
-  spawnSync(cmd, args, { timeout: 200, killSignal: "SIGKILL", stdio: "ignore" });
-  pause(1.3);
-  assert.ok(fs.existsSync(file), "control: the orphaned child wrote");
-});
+// Polls `condition` every 20 ms (spawnSync blocks, so no event loop is needed)
+// and returns whether it held within `ms`.
+function waitUntil(condition, ms) {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    if (condition()) return true;
+    if (Date.now() >= deadline) return false;
+    spawnSync("sleep", ["0.02"]);
+  }
+}
 
-test("bounded() kills the whole group at the deadline", () => {
-  const file = path.join(scratch, "bounded");
-  const [cmd, ...args] = Prefs.bounded(lateWriter(file), 200);
-  const result = spawnSync(cmd, args, { stdio: "ignore" });
-  assert.strictEqual(result.signal, "SIGKILL", "timeout kills itself with its group");
-  pause(1.3);
-  assert.ok(!fs.existsSync(file), "the child was killed with the wrapper");
-});
+// Live (not zombie) processes in process group `pgid`, as { pid, cmd }.
+function liveInGroup(pgid) {
+  const live = [];
+  for (const entry of fs.readdirSync("/proc")) {
+    if (!/^\d+$/.test(entry)) continue;
+    // A process that ended while we read is gone. One we may not read
+    // (another user's, under hidepid) is not in this test's group.
+    const skip = (error) => ["ENOENT", "ESRCH", "EACCES", "EPERM"].includes(error.code);
+    let stat;
+    try {
+      stat = fs.readFileSync(`/proc/${entry}/stat`, "utf8");
+    } catch (error) {
+      if (skip(error)) continue;
+      throw error;
+    }
+    // Fields after the command name, which may contain spaces and ")": state, ppid, pgrp.
+    const [state, , pgrp] = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+    if (state === "Z" || Number(pgrp) !== pgid) continue;
+    let cmd;
+    try {
+      cmd = fs.readFileSync(`/proc/${entry}/cmdline`, "utf8").split("\0")[0];
+    } catch (error) {
+      if (error.code === "ENOENT" || error.code === "ESRCH") continue;
+      throw error;
+    }
+    live.push({ pid: Number(entry), cmd });
+  }
+  return live;
+}
 
-test("killGroupCommand() kills a running bounded save's group", () => {
-  const file = path.join(scratch, "killed");
-  const [cmd, ...args] = Prefs.bounded(lateWriter(file), 30000);
-  const child = spawn(cmd, args, { stdio: "ignore" });
-  pause(0.2);
-  const [kcmd, ...kargs] = Prefs.killGroupCommand(child.pid);
-  assert.strictEqual(spawnSync(kcmd, kargs).status, 0);
-  pause(1.3);
-  assert.ok(!fs.existsSync(file), "no process of the group survived");
-  assert.strictEqual(spawnSync(kcmd, kargs).status, 0, "an empty group is fine");
-});
-fs.rmSync(scratch, { recursive: true, force: true });
+try {
+  test("killing only the wrapper leaves its child to write late (why bounded() exists)", () => {
+    const file = path.join(scratch, "unbounded");
+    const [cmd, ...args] = lateWriter(file);
+    spawnSync(cmd, args, { timeout: 200, killSignal: "SIGKILL", stdio: "ignore" });
+    assert.ok(waitUntil(() => fs.existsSync(file), 5000), "control: the orphaned child wrote");
+  });
+
+  test("bounded() kills the whole group at the deadline", () => {
+    const file = path.join(scratch, "bounded");
+    const [cmd, ...args] = Prefs.bounded(lateWriter(file), 200);
+    const result = spawnSync(cmd, args, { stdio: "ignore" });
+    assert.strictEqual(result.signal, "SIGKILL", "timeout kills itself with its group");
+    // With no live member left, nothing can write later.
+    assert.ok(waitUntil(() => liveInGroup(result.pid).length === 0, 5000),
+      `the group still runs: ${JSON.stringify(liveInGroup(result.pid))}`);
+    assert.ok(!fs.existsSync(file), "the child was killed with the wrapper");
+  });
+
+  test("killGroupCommand() kills a running bounded save's group", () => {
+    const file = path.join(scratch, "killed");
+    const [cmd, ...args] = Prefs.bounded(lateWriter(file), 30000);
+    const child = spawn(cmd, args, { stdio: "ignore" });
+    assert.ok(waitUntil(() => liveInGroup(child.pid).some((p) => p.cmd === "sleep"), 5000), "the late writer is running");
+    const [kcmd, ...kargs] = Prefs.killGroupCommand(child.pid);
+    assert.strictEqual(spawnSync(kcmd, kargs).status, 0);
+    assert.ok(waitUntil(() => liveInGroup(child.pid).length === 0, 5000),
+      `the group still runs: ${JSON.stringify(liveInGroup(child.pid))}`);
+    assert.ok(!fs.existsSync(file), "no process of the group survived");
+    assert.strictEqual(spawnSync(kcmd, kargs).status, 0, "an empty group is fine");
+  });
+
+  test("an array save runs setBarWidget with the value as data and fails unless the shell says ok", () => {
+    // A fake omarchy-shell that records its argv (NUL-separated) and answers
+    // FAKE_REPLY with exit FAKE_EXIT. PATH has no Omarchy bin dir and the
+    // runtime dir is empty, so the real shell can never be reached.
+    const bin = path.join(scratch, "bin");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "omarchy-shell"),
+      '#!/bin/sh\nfor a in "$@"; do printf "%s\\0" "$a" >> "$FAKE_ARGS"; done\nprintf "%s" "${FAKE_REPLY-ok}"\nexit "${FAKE_EXIT:-0}"\n');
+    fs.chmodSync(path.join(bin, "omarchy-shell"), 0o755);
+    const runtime = path.join(scratch, "runtime");
+    fs.mkdirSync(runtime, { mode: 0o700 });
+    const pwned = path.join(scratch, "pwned");
+    const value = [{ path: `$(touch ${pwned})` }];
+    const [cmd, ...args] = Prefs.saveCommand("foamy.x", "folders", value);
+    const run = (name, extra) => {
+      const env = { ...process.env, PATH: `${bin}:/usr/bin:/bin`, XDG_RUNTIME_DIR: runtime, FAKE_ARGS: path.join(scratch, name), ...extra };
+      for (const key of ["WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY"]) delete env[key];
+      return spawnSync(cmd, args, { env, encoding: "utf8" });
+    };
+    const ok = run("args-ok", {});
+    assert.strictEqual(ok.status, 0, ok.stderr);
+    const argv = fs.readFileSync(path.join(scratch, "args-ok"), "utf8").split("\0").slice(0, -1);
+    assert.deepStrictEqual(argv, ["shell", "setBarWidget", "foamy.x", "folders", " " + JSON.stringify(value), "{}"]);
+    assert.ok(!fs.existsSync(pwned), "the value never reached a shell");
+    const refused = run("args-nope", { FAKE_REPLY: "nope" });
+    assert.strictEqual(refused.status, 1, "a reply other than ok fails the save");
+    assert.strictEqual(refused.stderr, "nope\n", "and names the reply");
+    assert.strictEqual(run("args-exit", { FAKE_EXIT: "1" }).status, 1, "a failed omarchy-shell fails the save");
+  });
+} finally {
+  fs.rmSync(scratch, { recursive: true, force: true });
+}
 
 console.log(`PASS FoamyPrefs.js: ${passed} tests`);

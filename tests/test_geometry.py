@@ -16,19 +16,16 @@ FORK = KIT_ROOT / "tests/fixtures/old-fork/BoltPopup.qml"
 
 def run(host, out_dir):
     plugin = synced_demo()
-    extra = {}
-    has_fork = FORK.is_file()
-    if has_fork:
-        # The fork predates Commons qualification; qualify it so only its
-        # geometry is under test.
-        fork = harness.transform_keyboard_panel(FORK.read_text())
-        fork = re.sub(r"(?<![\w.])Color\.", "Commons.Color.", fork).replace(
-            "import qs.Commons\n", "import qs.Commons\nimport qs.Commons as Commons\n", 1
-        )
-        extra["fork/ForkedPopup.qml"] = fork
+    # The fork predates Commons qualification; qualify it so only its
+    # geometry is under test. A missing fixture fails the run: it is the
+    # only proof that the placement checks can fail.
+    fork = harness.transform_keyboard_panel(FORK.read_text())
+    fork = re.sub(r"(?<![\w.])Color\.", "Commons.Color.", fork).replace(
+        "import qs.Commons\n", "import qs.Commons\nimport qs.Commons as Commons\n", 1
+    )
+    extra = {"fork/ForkedPopup.qml": fork}
     shell = (KIT_ROOT / "tests/qml/Geometry.qml").read_text()
     r = harness.Run(host, shell, plugin=plugin, extra=extra, prefix=f"foamy-kit-geometry-{host}-")
-    r.env["FOAMY_FORK"] = "1" if has_fork else "0"
     r.run(timeout=90)
     for png in r.out.glob("*.png"):
         shutil.copyfile(png, out_dir / png.name)

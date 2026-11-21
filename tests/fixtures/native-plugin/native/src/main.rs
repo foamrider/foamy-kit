@@ -22,7 +22,6 @@
 //!   seccomp filter; `exec-only <program> <arg>…` → runs it with Landlock
 //!   allowing only `<program>` (and its interpreter) to execute; both reply
 //!   `{"ok":…,"code":…,"stderr":…}`, `UNSUPPORTED` without the kernel feature
-//! - `bwrap-argv` → `{"ok":true,"argv":[…]}`, github_status's namespace
 //! - non-UTF-8 arguments → `INVALID_ARGUMENT`, exit 2
 //! - anything else → `INVALID_ARGUMENT`, exit 2
 //!
@@ -38,7 +37,7 @@ use std::thread;
 use std::time::Duration;
 
 use foamy_helper::child::{Bounded, Output};
-use foamy_helper::sandbox::{BpfFilter, Bwrap, ExecOnly};
+use foamy_helper::sandbox::{BpfFilter, ExecOnly};
 use foamy_helper::{Failure, fs, io as bounded, json, lock, process};
 use serde_json::{Value, json};
 
@@ -176,14 +175,6 @@ fn main_json(args: &[String]) -> Result<Value, Failure> {
                 .run()
                 .map_err(unsupported)?;
             Ok(sandboxed(output))
-        }
-        Some("bwrap-argv") => {
-            let argv = Bwrap::new("/usr/bin/bwrap")
-                .readonly_host()
-                .end_of_options()
-                .argv(["git", "status"]);
-            let argv: Vec<_> = argv.iter().map(|arg| arg.to_string_lossy()).collect();
-            Ok(json!({"ok": true, "argv": argv}))
         }
         Some("fail") => Err(Failure::coded("DEMO_FAILURE", "failed on purpose").with_exit_code(3)),
         Some("panic") => panic!("panicked on purpose"),

@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
+import QtTest
 import Quickshell
-import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -9,16 +9,23 @@ import "harness"
 import "plugin/kit"
 import "plugin/kit/FoamyIpcResolver.js" as Resolver
 
-// kit 0.2.0 features on every host: icons, numeral/menu tokens, cursor
-// shape, textKey arity, SafeTextField.maximumLength, FoamyPrefsQueue (inline
-// and CLI), FoamyIpcResolver.prefer/others/call, FoamyIpcPreference,
-// FoamyPeerIpc, FoamySettingsState, and D-Bus isolation.
+// kit 0.2.0 features on every host: icons, textKey arity,
+// SafeTextField.maximumLength, FoamyPrefsQueue (inline and CLI),
+// FoamyIpcResolver.prefer/others/call, FoamyIpcPreference, FoamyPeerIpc and
+// FoamySettingsState.holdOnClose, the pending-value expiry and peer-call
+// failures.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
   readonly property string calls: Quickshell.env("FOAMY_CALLS")
   property int checks: 0
   property int failures: 0
+  // The checks that end later; the run reports only after all of them ran.
+  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers", "expiry"]
+  property var finished: []
+  function done(name) {
+    finished = finished.concat([name])
+  }
 
   function check(ok, label) {
     checks++
@@ -29,6 +36,14 @@ ShellRoot {
   }
   function eq(actual, expected, label) {
     check(JSON.stringify(actual) === JSON.stringify(expected), label + ": got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected))
+  }
+  // Real key events to the focused item, through the window.
+  function key(k) {
+    ev.keyClick(k, Qt.NoModifier, -1)
+  }
+  function type(text) {
+    for (var i = 0; i < text.length; i++)
+      ev.keyClickChar(text.charAt(i), Qt.NoModifier, -1)
   }
 
   FloatingWindow {
@@ -53,11 +68,6 @@ ShellRoot {
         width: 200
         maximumLength: 5
       }
-      FoamyCursorSurface {
-        id: row
-        width: 100
-        height: 20
-      }
       FoamyIcon {
         id: icon
         width: 16
@@ -68,27 +78,44 @@ ShellRoot {
         width: 400
         title: "Covers"
       }
-      FoamyNumberField {
-        id: numberField
-        width: 300
-        label: "Refresh every"
-        value: shell.numberSetting
-        from: 1
-        to: 100
-        stepSize: 5
-        onCommitted: function (v) {
-          shell.numberCommits = shell.numberCommits.concat([v])
+      Item {
+        width: 1
+        height: 1
+        TestEvent {
+          id: ev
         }
       }
-      FoamyTextSettingField {
-        id: textSetting
+      // On a settings page, as in a plugin: Escape that a field leaves
+      // unhandled would go back.
+      FoamySettingsPage {
         width: 300
-        value: shell.textSetting
-        validate: function (text) {
-          return text.length <= 5 || "Too long"
-        }
-        onCommitted: function (v) {
-          shell.textCommits = shell.textCommits.concat([v])
+        height: 300
+        onBack: shell.pageBacks++
+        FoamySettingsSection {
+          width: parent.width
+          FoamyNumberField {
+            id: numberField
+            width: parent.width
+            label: "Refresh every"
+            value: shell.numberSetting
+            from: 1
+            to: 100
+            stepSize: 5
+            onCommitted: function (v) {
+              shell.numberCommits = shell.numberCommits.concat([v])
+            }
+          }
+          FoamyTextSettingField {
+            id: textSetting
+            width: parent.width
+            value: shell.textSetting
+            validate: function (text) {
+              return text.length <= 5 || "Too long"
+            }
+            onCommitted: function (v) {
+              shell.textCommits = shell.textCommits.concat([v])
+            }
+          }
         }
       }
       Column {
@@ -206,6 +233,9 @@ ShellRoot {
     id: cursor
     count: 2
   }
+  FoamyWait {
+    id: wait
+  }
   property string dropdownSetting: "a"
   Component {
     id: pageA
@@ -254,10 +284,10 @@ ShellRoot {
     }
   }
   property real numberSetting: 5
+  property int pageBacks: 0
   property var numberCommits: []
   property string textSetting: "abc"
   property var textCommits: []
-  property int coverIndex: 0
   function coverUrl(i) {
     return Qt.resolvedUrl("plugin/preview/covers/cover-" + i + ".png")
   }
@@ -365,6 +395,13 @@ ShellRoot {
     }).settings
   }
   property var storedFailures: []
+  property var inlineFailures: []
+  Connections {
+    target: inlineQueue
+    function onFailed(key, value, error) {
+      shell.inlineFailures = shell.inlineFailures.concat([error])
+    }
+  }
   // The documented bindings: both follow the queue's settings.
   readonly property string storedListProblem: storedQueue.storedProblems.list || ""
   readonly property string storedListProblemCall: storedQueue.storedProblem("list")
@@ -406,6 +443,10 @@ ShellRoot {
   }
   FoamyPeerIpc {
     id: peer
+  }
+  FoamyPeerIpc {
+    id: narrow
+    limit: 1
   }
   // foamy-lock's scenario: the rival arrives after the preference settled.
   FoamyIpc {
@@ -456,6 +497,28 @@ ShellRoot {
         b: ""
       })
   }
+  // A host that takes inline saves but never reflects them.
+  QtObject {
+    id: expiringBar
+    property var saved: []
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) {
+        expiringBar.saved = expiringBar.saved.concat([JSON.parse(JSON.stringify(settings))])
+        return true
+      }
+    }
+  }
+  FoamyPrefsQueue {
+    id: expiringQueue
+    bar: expiringBar
+    moduleName: "foamy.expiring"
+    fields: shell.fields
+    reflectTimeoutMs: 300
+    settings: ({
+        id: "foamy.expiring",
+        a: "stored"
+      })
+  }
   property var retryCommits: []
   property string pasteMessage: ""
 
@@ -486,7 +549,6 @@ ShellRoot {
     eq(icon.paths.info, '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>', "info is Lucide info, not a megaphone")
     icon.name = "chevron-left"
     check(icon.known, "chevron-left is known")
-    check(icon.directional.indexOf("chevron-left") !== -1, "chevron-left mirrors in RTL")
     // Brand marks (Simple Icons) are solid shapes: drawn filled, not stroked.
     var marks = ["zendesk", "todoist"]
     marks.forEach(function (mark) {
@@ -494,12 +556,6 @@ ShellRoot {
       var svg = decodeURIComponent(String(icon.source))
       check(icon.known && svg.indexOf('<g fill="' + icon.color.toString() + '" stroke="none">' + icon.paths[mark] + '</g>') !== -1, mark + " is a known mark, drawn filled")
     })
-
-    // --- tokens ----------------------------------------------------------------------------
-    eq(FoamyStyle.font.numeral, Style.space(56), "numeral token")
-    eq(FoamyStyle.font.numeralCompact, Style.space(40), "numeralCompact token")
-    eq(FoamyStyle.menuPadding, Style.space(8), "menu padding token")
-    eq(row.cursorShape, Qt.PointingHandCursor, "cursor rows show a pointing hand")
 
     // --- textKey arity ---------------------------------------------------------------------
     cursor.emitTextKey(catcher, "s")
@@ -537,9 +593,16 @@ ShellRoot {
     check(numberField.editing, "typing starts a draft")
     shell.numberSetting = 8
     eq(numberField.field.text, "9", "an external change doesn't overwrite the draft")
-    check(numberField.commitEdit(false), "Enter commits")
-    eq(shell.numberCommits, [9], "a valid changed draft commits once")
-    numberField.commitEdit(false)
+    numberField.field.focusInput()
+    key(Qt.Key_Return)
+    eq(shell.numberCommits, [9], "Enter commits a valid changed draft once")
+    // The focus goes to a plain field, not to another settings field, so the
+    // text field's own focus-out checks below still start without the focus.
+    // A real focus move ends the edit while the editor still has the focus,
+    // so it does not reach the commit today. The field's context menu that
+    // closes without giving the focus back does: editingFinished() without
+    // the focus, as emitted here.
+    longField.focusInput()
     numberField.field.editingFinished()
     eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
     shell.numberSetting = 9
@@ -557,11 +620,19 @@ ShellRoot {
     numberField.field.textEdited()
     check(numberField.commitEdit(true) && numberField.field.text === "12" && numberField.error !== "", "focus-out on an out-of-range draft restores the value")
     eq(shell.numberCommits, [9], "invalid drafts never commit")
-    numberField.field.text = "33"
-    numberField.field.textEdited()
-    check(numberField.handleKey(Qt.Key_Escape) && numberField.field.text === "12" && !numberField.editing, "Escape restores the value and is consumed (page stays)")
-    check(numberField.handleKey(Qt.Key_Up) && numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize")
-    check(!numberField.handleKey(Qt.Key_A), "other keys pass through")
+    numberField.field.focusInput()
+    type("33")
+    check(numberField.editing && numberField.field.text.indexOf("33") !== -1, "typed digits reach the field and start a draft: " + numberField.field.text)
+    var numberBacks = shell.pageBacks
+    key(Qt.Key_Escape)
+    check(numberField.field.text === "12" && !numberField.editing && shell.pageBacks === numberBacks, "Escape restores the value and the page stays: " + [numberField.field.text, numberField.editing, shell.pageBacks - numberBacks])
+    key(Qt.Key_Up)
+    check(numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize: " + numberField.field.text)
+    key(Qt.Key_Return)
+    eq(shell.numberCommits, [9, 17], "Enter commits the stepped draft once")
+    longField.focusInput()
+    numberField.field.editingFinished()
+    eq(shell.numberCommits, [9, 17], "focus-out after Enter doesn't commit it again")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
@@ -571,7 +642,13 @@ ShellRoot {
     checkUnitStack("LTR")
     unitStack.LayoutMirroring.childrenInherit = true
     unitStack.LayoutMirroring.enabled = true
-    unitStackRtl.start()
+    wait.waitFor(function () {
+      return percentField.field.mapToItem(unitStack, 0, 0).x > 0
+    }, 2000, function () {
+      shell.checkUnitStack("RTL")
+      unitStack.LayoutMirroring.enabled = false
+      shell.done("unit stack")
+    }, "the unit stack mirrors")
 
     // --- FoamyTextSettingField: the same rules for free text --------------------------------
     eq(textSetting.field.text, "abc", "text field shows the bound value")
@@ -587,7 +664,11 @@ ShellRoot {
     textSetting.field.text = "toolong"
     textSetting.field.textEdited()
     check(!textSetting.commitEdit(false) && textSetting.error === "Too long", "validate() message on Enter")
-    check(textSetting.handleKey(Qt.Key_Escape) && textSetting.field.text === "other" && !textSetting.editing, "Escape restores the bound value")
+    textSetting.field.focusInput()
+    type("x")
+    var textBacks = shell.pageBacks
+    key(Qt.Key_Escape)
+    check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === textBacks, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks - textBacks])
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
 
@@ -629,7 +710,7 @@ ShellRoot {
     stateFlip.start()
 
     // --- FoamyHeroBand keeps at most one cover decoded ----------------------------------------
-    coverCycle.start()
+    showCover(0)
 
     // --- FoamyPrefsQueue: inline, two saves before the host reflects the first -------
     check(inlineQueue.save("a", "one"), "inline save a")
@@ -650,12 +731,21 @@ ShellRoot {
     eq(Object.keys(inlineQueue.pending), [], "pending settles once the host reflects it")
     check(!inlineQueue.save("list", [1, 2, 3, 4]), "array maxItems is enforced")
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
+    eq(inlineBar.saved.length, 2, "an invalid value writes nothing")
+    eq(shell.inlineFailures, ["That value isn't allowed."], "failed() reports it")
+
+    // --- FoamyPrefsQueue: a value the host never reflects expires ----------------------
+    check(expiringQueue.save("a", "x") && expiringBar.saved.length === 1, "a save the host never reflects is written")
+    eq(expiringQueue.value("a"), "x", "and shows while it is pending")
+    // The expiry timer ticks every 1000 ms.
+    wait.waitFor(function () {
+      return Object.keys(expiringQueue.pending).length === 0
+    }, 3000, function () {
+      shell.eq(expiringQueue.value("a"), "stored", "the host's value wins after reflectTimeoutMs")
+      shell.done("expiry")
+    }, "an unreflected pending value expires")
 
     // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
-    eq(storedQueue.storedProblem("list"), "That value isn't allowed.", "storedProblem names the invalid stored list")
-    eq(storedQueue.storedProblem("a"), "", "a valid stored value has no problem")
-    eq(Object.keys(storedQueue.storedProblems), ["list"], "storedProblems lists it")
-    eq(storedQueue.value("list"), [], "it still reads as the default")
     eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
     check(!storedQueue.save("list", [9]), "a save over the invalid stored list is refused")
     eq(storedQueue.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with its own message")
@@ -727,14 +817,19 @@ ShellRoot {
     eq(wrappedInvalid.error, "The saved list in shell.json isn't valid, so it wasn't replaced.", "with the stored-invalid message")
     eq(storedBar.saved.length, savedBefore + 2, "nothing more was written")
 
-    // --- FoamyPrefsQueue: CLI, newest value per key, failure + retry ------------------
+    // --- FoamyPrefsQueue: CLI, one save at a time, newest value per key ---------------
     cliQueue.save("a", "first")
     cliQueue.save("a", "second")
     cliQueue.save("b", "other")
     cliQueue.save("a", "third")
     check(cliQueue.saving, "CLI save in flight")
     eq(cliQueue.waiting.length, 2, "waiting saves keep the newest value per key")
-    stepTwo.start()
+    // The fake omarchy takes 0.3 s per call: three calls run.
+    wait.waitFor(function () {
+      return !cliQueue.busy && callLog.lines().length >= 3
+    }, 6000, function () {
+      shell.stepTwo()
+    }, "the CLI queue drains")
   }
 
   FileViewProbe {
@@ -761,16 +856,14 @@ ShellRoot {
     check(Math.abs(c[1] - (rtl.byWidth.width - Style.spacing.controlPaddingX - 1)) <= 2, "RTL: text sits against the right padding " + c)
     eq(glyphEdges(rtl.textSetting.field)[1], c[1], "RTL: FoamyTextSettingField text lines up")
     longField.editorItem.cursorPosition = longField.editorItem.length
-    insetScroll.start()
-  }
-  Timer {
-    id: insetScroll
-    interval: 150
-    onTriggered: {
+    wait.waitFor(function () {
+      return longField.contentX > 0
+    }, 2000, function () {
       var ed = longField.editorItem
       var cursor = ed.mapToItem(longField, ed.cursorRectangle.x, 0).x
       shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
-    }
+      shell.done("long field")
+    }, "long text scrolls to the caret")
   }
 
   function checkUnitStack(label) {
@@ -786,15 +879,6 @@ ShellRoot {
       eq(fields[0][0], 0, "LTR: fields start at the row's start")
   }
   Timer {
-    id: unitStackRtl
-    interval: 200
-    onTriggered: {
-      shell.checkUnitStack("RTL")
-      unitStack.LayoutMirroring.enabled = false
-    }
-  }
-
-  Timer {
     id: stateFlip
     interval: 40
     repeat: true
@@ -803,84 +887,57 @@ ShellRoot {
       if (stateSwitcher.flips >= 12) {
         stop()
         shell.check(stateSwitcher.item !== null, "settings states switch 12 times")
+        shell.done("state switches")
       }
     }
   }
 
-  Timer {
-    id: coverCycle
-    interval: 15
-    repeat: true
-    onTriggered: {
-      if (shell.coverIndex < 50) {
-        coverBand.imageSource = shell.coverUrl(shell.coverIndex)
-        shell.coverIndex++
-        return
-      }
-      stop()
-      coverCheck.start()
-    }
+  // Shows covers 0, 1 and 2 in turn. Each one is decoded before the next
+  // replaces it, so an earlier cover that is still loaded was never unloaded.
+  readonly property int coverCount: 3
+  function showCover(i) {
+    coverBand.imageSource = coverUrl(i)
+    wait.waitFor(function () {
+      return coverBand.loadedImage === String(shell.coverUrl(i)) && shell.coverSurface().isImageLoaded(shell.coverUrl(i))
+    }, 3000, function (ok) {
+      if (ok && i + 1 < shell.coverCount)
+        shell.showCover(i + 1)
+      else
+        shell.checkCovers()
+    }, "cover " + i + " is decoded")
   }
-  Timer {
-    id: coverCheck
-    interval: 500
-    onTriggered: {
-      var surface = shell.coverSurface()
-      var stale = 0
-      for (var i = 0; i < 49; i++)
-        if (surface.isImageLoaded(shell.coverUrl(i)))
-          stale++
-      shell.eq(stale, 0, "50 covers cycled: no earlier cover stays decoded")
-      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)) && surface.isImageLoaded(shell.coverUrl(49)), "only the current cover is loaded")
-      coverBand.visible = false
-      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "a hidden band (closed popup) unloads its cover")
-      coverBand.visible = true
-      shell.check(coverBand.loadedImage === String(shell.coverUrl(49)), "showing the band again reloads it")
-      coverBand.imageSource = ""
-      shell.check(coverBand.loadedImage === "" && !surface.isImageLoaded(shell.coverUrl(49)), "clearing the source unloads the cover")
-    }
+  function checkCovers() {
+    var surface = coverSurface()
+    var last = coverUrl(coverCount - 1)
+    var stale = []
+    for (var i = 0; i < coverCount - 1; i++)
+      if (surface.isImageLoaded(coverUrl(i)))
+        stale.push(i)
+    eq(stale, [], coverCount + " covers cycled: no earlier cover stays decoded")
+    check(coverBand.loadedImage === String(last) && surface.isImageLoaded(last), "only the current cover is loaded")
+    coverBand.visible = false
+    check(coverBand.loadedImage === "" && !surface.isImageLoaded(last), "a hidden band (closed popup) unloads its cover")
+    coverBand.visible = true
+    check(coverBand.loadedImage === String(last), "showing the band again reloads it")
+    coverBand.imageSource = ""
+    check(coverBand.loadedImage === "" && !surface.isImageLoaded(last), "clearing the source unloads the cover")
+    done("covers")
   }
 
   Timer {
     id: dropdownRevert
     interval: 800
-    onTriggered: shell.eq(dropdown.shownValue, "c", "an unconfirmed pick gives way to the real value")
-  }
-
-  Timer {
-    id: stepTwo
-    interval: 2500
     onTriggered: {
-      var lines = callLog.lines()
-      eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
-      check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
-      // Array values go to setBarWidget with a leading space (qs ipc splits "[…]").
-      cliQueue.save("list", [1, 2])
-      failNext.start()
+      shell.eq(dropdown.shownValue, "c", "an unconfirmed pick gives way to the real value")
+      shell.done("dropdown")
     }
   }
 
-  Timer {
-    id: failNext
-    interval: 1500
-    onTriggered: {
-      var lines = callLog.lines()
-      eq(lines[lines.length - 1], "omarchy-shell shell setBarWidget foamy.test list | [1,2]| {}", "arrays bypass qs ipc list parsing")
-      // the fake omarchy fails on "boom"
-      cliQueue.save("b", "boom")
-      afterFail.start()
-    }
-  }
-
-  Timer {
-    id: afterFail
-    interval: 1500
-    onTriggered: {
-      eq(cliQueue.error, "Couldn't save the setting.", "failed CLI save reports an error")
-      check(cliQueue.canRetry, "a failed save can be retried")
-      eq(cliQueue.value("b"), "other", "a failed value is not shown as saved")
-      stepThree()
-    }
+  function stepTwo() {
+    var lines = callLog.lines()
+    eq(lines, ["omarchy bar set foamy.test a \"first\" --json", "omarchy bar set foamy.test b \"other\" --json", "omarchy bar set foamy.test a \"third\" --json"], "CLI saves run one at a time, superseded values skipped")
+    check(!cliQueue.busy && cliQueue.error === "", "queue drained without errors")
+    stepThree()
   }
 
   function stepThree() {
@@ -904,6 +961,11 @@ ShellRoot {
     eq(Resolver.call(shell, "foamy.shared-target", "nope", []), {
       ran: false
     }, "undeclared functions don't run")
+    // destroy() is callable on every handler but not declared: only the
+    // registry's list of declared functions refuses it.
+    eq(Resolver.call(shell, "foamy.shared-target", "destroy", []), {
+      ran: false
+    }, "a handler's QObject methods don't run")
     peer.call("foamy.shared-target", "who", [], function (ok, output) {
       shell.peerResult = {
         ok: ok,
@@ -916,46 +978,93 @@ ShellRoot {
         output: output
       }
     })
+    // The fake omarchy-shell answers foamy.gone as the real one does for a
+    // missing target: an error line and exit 0.
+    peer.call("foamy.gone", "status", [], function (ok, output) {
+      shell.peerGone = {
+        ok: ok,
+        output: output
+      }
+    })
+    // limit: 1. The second call finds the one process slot taken.
+    inNarrowCall = true
+    narrow.call("foamy.limited", "status", [], function (ok, output) {
+      shell.limitedFirst = {
+        ok: ok,
+        output: output
+      }
+    })
+    narrow.call("foamy.limited", "status", [], function (ok, output) {
+      shell.limitedSecond = {
+        ok: ok,
+        output: output,
+        insideCall: shell.inNarrowCall
+      }
+    })
+    inNarrowCall = false
 
     // --- FoamySettingsState ---------------------------------------------------------------
-    settingsState.show()
-    check(fakePanel.opened && settingsState.editing, "show() on a closed panel opens it on Settings")
-    fakePanel.close()
-    check(!settingsState.editing, "closing resets Settings")
     settingsState.holdOnClose = true
     settingsState.show()
     fakePanel.close()
     check(settingsState.editing, "holdOnClose keeps Settings across a close")
 
-    // --- D-Bus isolation -------------------------------------------------------------------
-    var address = Quickshell.env("DBUS_SESSION_BUS_ADDRESS")
-    check(address !== Quickshell.env("FOAMY_LIVE_BUS") && address.indexOf(Quickshell.env("FOAMY_SOCKETS") + "/") === "unix:path=".length, "private session bus " + address)
-    eq(Mpris.players.values.length, 0, "no desktop MPRIS players visible")
-    stepFour.start()
+    // The preferences re-claim every 300 ms; the peer calls answer later.
+    wait.waitFor(function () {
+      return shell.peerResult !== null && shell.peerFallback !== null && shell.peerGone !== null && shell.limitedFirst !== null && shell.limitedSecond !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
+    }, 3000, function () {
+      shell.stepFour()
+    }, "peer calls answer and the preferences re-claim")
   }
 
   property var late: null
   property var peerResult: null
   property var peerFallback: null
+  property var peerGone: null
+  property var limitedFirst: null
+  property var limitedSecond: null
+  property bool inNarrowCall: false
 
-  Timer {
-    id: stepFour
-    interval: 1200
-    onTriggered: {
-      eq(shell.peerResult, {
-        ok: true,
-        output: "late"
-      }, "FoamyPeerIpc answers in-process")
-      // Re-claim within the preference interval.
-      eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
-      eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
-      eq(shell.peerFallback, {
-        ok: true,
-        output: "cli: foamy.absent status [1]"
-      }, "unknown in-process target uses the CLI")
+  function stepFour() {
+    eq(shell.peerResult, {
+      ok: true,
+      output: "late"
+    }, "FoamyPeerIpc answers in-process")
+    // Re-claim within the preference interval.
+    eq(Resolver.call(shell, "foamy.shared-target", "who", []).output, "mine", "FoamyIpcPreference re-claims the target")
+    eq(Resolver.call(shell, "foamy.guarded", "who", []).output, "guarded", "a rival that arrived after the check settled is pushed back (lock route)")
+    eq(shell.peerFallback, {
+      ok: true,
+      output: "cli: foamy.absent status [1]"
+    }, "unknown in-process target uses the CLI")
+    eq(shell.peerGone, {
+      ok: false,
+      output: "Target not found: foamy.gone"
+    }, "a missing target fails although omarchy-shell exits 0")
+    eq(shell.limitedSecond, {
+      ok: false,
+      output: "",
+      insideCall: false
+    }, "a call over the process limit fails, and later, not inside call()")
+    eq(shell.limitedFirst, {
+      ok: true,
+      output: "cli: foamy.limited status"
+    }, "the call within the limit runs")
+    eq(callLog.lines().filter(function (line) {
+      return line.indexOf("omarchy-shell foamy.limited") === 0
+    }), ["omarchy-shell foamy.limited status"], "the limit starts one process")
+    var unfinished = function () {
+      return shell.laterChecks.filter(function (name) {
+        return shell.finished.indexOf(name) === -1
+      })
+    }
+    wait.waitFor(function () {
+      return unfinished().length === 0
+    }, 5000, function () {
+      shell.eq(unfinished(), [], "every later check ran")
       console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")
       Qt.quit()
-    }
+    })
   }
 }

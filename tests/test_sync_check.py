@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import FIXTURES, KIT_ROOT, PLUGINS, copy_kit, foamykit, report  # noqa: E402
+from common import FIXTURES, KIT_ROOT, copy_kit, foamykit, report  # noqa: E402
 
 SYNC = str(KIT_ROOT / "sync.sh")
 CHECK = str(KIT_ROOT / "check.sh")
@@ -56,11 +56,6 @@ def tooling_tests(a, base):
         "tests/validate.sh is executable; the configs are not",
         os.access(a / "tests/validate.sh", os.X_OK) and not os.access(a / "mise.toml", os.X_OK),
     )
-    first = (a / "kit/tooling/validate.py").read_text().splitlines()
-    ok &= report(
-        "validate.py keeps its shebang, stamp on line 2",
-        first[0].startswith("#!") and first[1].startswith("# foamy-kit "),
-    )
     ok &= report(
         "lock_path_ok accepts the tooling paths (sync and the bundled build tool)",
         all(foamykit.lock_path_ok(rel) and foamykit.native.lock_path_ok(rel) for rel in tooling),
@@ -99,6 +94,76 @@ def tooling_tests(a, base):
         out.strip()[-200:],
     )
     return ok
+
+
+def kit_dir_tests(a, base):
+    """kit/ belongs to foamy-kit: an unknown file is refused until --force
+    discards it, and a symlink (inside kit/ or kit/ itself) is refused even
+    with --force, so sync never writes through it."""
+    ok = True
+    stray = a / "kit/Mine.qml"
+    stray.write_text("import QtQuick\nItem {}\n")
+    code, out = sh(SYNC, str(a))
+    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
+    ok &= report(
+        "a plugin file inside kit/ is refused",
+        code != 0 and "not a foamy-kit file" in out and code2 != 0 and "not part of foamy-kit" in out2,
+    )
+    code, out = sh(SYNC, str(a), "--force")
+    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
+    ok &= report(
+        "--force discards a plugin file inside kit/",
+        code == 0 and not stray.exists() and code2 == 0,
+        (out + out2).strip()[-300:],
+    )
+    style = a / "kit/FoamyStyle.qml"
+    style_bytes = style.read_bytes()
+    link = a / "kit/Link.qml"
+    link.symlink_to(style)
+    code, out = sh(SYNC, str(a))
+    ok &= report("a symlink inside kit/ is refused", code != 0 and "symlink" in out)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report(
+        "a symlink inside kit/ is refused even with --force",
+        code != 0 and "Link.qml is a symlink" in out and link.is_symlink() and style.read_bytes() == style_bytes,
+        out.strip()[-300:],
+    )
+    link.unlink()
+    elsewhere = base / "kit-elsewhere"
+    shutil.move(a / "kit", elsewhere)
+    (a / "kit").symlink_to(elsewhere)
+    before = snapshot(elsewhere)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report(
+        "a symlinked kit/ is refused even with --force, its target untouched",
+        code != 0 and "kit/ is a symlink" in out and snapshot(elsewhere) == before,
+        out.strip()[-300:],
+    )
+    (a / "kit").unlink()
+    shutil.move(elsewhere, a / "kit")
+    return ok
+
+
+def root_files_tests(base):
+    """The generated kit-check accepts every root file a component syncs: a
+    plugin with FoamyNative locks rust-toolchain.toml and verify-native.yml."""
+    native = base / "native-roots"
+    shutil.copytree(FIXTURES / "demo-plugin", native)
+    code, out = sh(SYNC, str(native), "--add", "FoamyNative")
+    roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
+    locked = foamykit.read_lock(native)["files"] if code == 0 else {}
+    code_c, out_c = sh("env", "-i", "PATH=/usr/bin:/bin", "bash", str(native / "tests/kit-check.sh"))
+    # Without a built helper the only expected problem is the missing native.pin.
+    problems = [line for line in out_c.splitlines() if line.startswith("kit-check: ") and "problem(s)" not in line]
+    return report(
+        "kit-check accepts every component root file a sync locks",
+        code == 0
+        and all(dest in locked for dest in roots)
+        and "not a path foamy-kit owns" not in out_c
+        and len(problems) == 1
+        and "native.pin" in problems[0],
+        (out + out_c).strip()[-300:],
+    )
 
 
 def git(repo, *args):
@@ -363,19 +428,105 @@ def component_reference_tests():
     return report("components name only kit types their deps sync", not missing, "; ".join(missing))
 
 
+def workflow_job_blocks(lines):
+    """Job name -> its lines, for the jobs: block of a workflow."""
+    jobs, name = {}, None
+    for line in lines[lines.index("jobs:") + 1 :]:
+        match = re.fullmatch(r"  ([A-Za-z0-9_-]+):", line)
+        if match:
+            name = match.group(1)
+            jobs[name] = []
+        elif name is not None:
+            jobs[name].append(line)
+    return jobs
+
+
+def workflow_permission_tests():
+    """The workflows every plugin carries (the files are the thing checked):
+    actions pinned to a full commit, read-only by default, and only
+    verify-native.yml's attest job may sign, never on a pull request and
+    never after building anything itself."""
+    ok = True
+    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml"):
+        lines = (KIT_ROOT / rel).read_text().splitlines()
+        problems = []
+        uses = [line.split("#")[0].strip() for line in lines if re.match(r"\s*(- )?uses:", line)]
+        problems += [f"not pinned to a commit: {u}" for u in uses if not re.fullmatch(r".*@[0-9a-f]{40}", u)]
+        top = lines.index("permissions:")
+        default = []
+        for line in lines[top + 1 :]:
+            if line and not line.startswith(" "):
+                break
+            if line.strip() and not line.strip().startswith("#"):
+                default.append(line.strip())
+        if default != ["contents: read"]:
+            problems.append(f"default permissions are {default}")
+        jobs = workflow_job_blocks(lines)
+        attest = jobs.get("attest")
+        for grant in ("id-token: write", "attestations: write"):
+            outside = sum(grant in line for line in lines) - sum(grant in line for line in attest or [])
+            if outside:
+                problems.append(f"{grant} outside the attest job")
+        if rel.endswith("verify-native.yml"):
+            if attest is None:
+                problems.append("no attest job")
+            else:
+                if "if: github.event_name != 'pull_request'" not in [line.strip() for line in attest]:
+                    problems.append("the attest job also runs on pull requests")
+                problems += [
+                    f"the attest job runs {word}"
+                    for word in ("cargo", "build-native", "native.py")
+                    if any(word in line for line in attest)
+                ]
+        ok &= report(
+            f"{rel}: actions pinned, read-only default, only the attest job signs",
+            bool(uses) and not problems,
+            "; ".join(problems),
+        )
+    return ok
+
+
+def update_icons_tests(base):
+    """tools/update-icons.py on a copy of the kit (it rewrites the
+    kit/FoamyIcon.qml next to itself): refreshing an icon from its unchanged
+    SVG reproduces the formatted table byte for byte, and a missing SVG stops
+    the run before it writes anything."""
+    kit = copy_kit(base / "icons-kit")
+    tool = str(kit / "tools/update-icons.py")
+    table = kit / "kit/FoamyIcon.qml"
+    svg = base / "svg"
+    svg.mkdir()
+    (svg / "info.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" />'
+        '<path d="M12 16v-4" /><path d="M12 8h.01" /></svg>\n'
+    )
+    (svg / "dot.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="1" /></svg>\n')
+    code, out = sh("python3", "-I", tool, str(svg), "info")
+    ok = report(
+        "update-icons.py rewrites the formatted icon table byte for byte",
+        code == 0 and table.read_bytes() == (KIT_ROOT / "kit/FoamyIcon.qml").read_bytes(),
+        out.strip(),
+    )
+    before = table.read_bytes()
+    code, out = sh("python3", "-I", tool, str(svg), "dot", "nope")
+    ok &= report(
+        "update-icons.py stops on a missing SVG and leaves the table alone",
+        code != 0 and "missing" in out and table.read_bytes() == before,
+        out.strip(),
+    )
+    return ok
+
+
 def main():
     ok = component_reference_tests()
+    ok &= workflow_permission_tests()
     base = Path(tempfile.mkdtemp(prefix="foamy-kit-sync-"))
-    sources = [PLUGINS / "foamy-bolt", PLUGINS / "foamy-tray"]
-    sources = [s for s in sources if (s / "manifest.json").is_file()] or [FIXTURES / "demo-plugin"]
-    plugins = []
-    for source in sources:
-        target = base / source.name
-        # Start from a plugin without the shared guide, whatever its checkout holds.
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns(".git", "__pycache__", "REVIEW.md"))
-        plugins.append(target)
-    a = plugins[0]
-    b = plugins[-1] if len(plugins) > 1 else None
+    ok &= update_icons_tests(base)
+    # Two copies of the demo fixture, never the sibling checkouts: every machine
+    # and CI then start from the same plugins, with no REVIEW.md or AGENTS.md.
+    a, b = base / "plugin-a", base / "plugin-b"
+    for target in (a, b):
+        shutil.copytree(FIXTURES / "demo-plugin", target, ignore=shutil.ignore_patterns("__pycache__", "REVIEW.md"))
 
     # 1. First sync: requested components plus their dependencies.
     code, out = sh(SYNC, str(a), "--components", "FoamyPopup,SafeTextField")
@@ -642,20 +793,7 @@ def main():
     ok &= report("--force restores the kit copy", code == 0 and "wide: false" in edited.read_text())
 
     # 4. Unknown files and symlinks in kit/ are refused.
-    stray = a / "kit/Mine.qml"
-    stray.write_text("import QtQuick\nItem {}\n")
-    code, out = sh(SYNC, str(a))
-    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
-    ok &= report(
-        "a plugin file inside kit/ is refused",
-        code != 0 and "not a foamy-kit file" in out and code2 != 0 and "not part of foamy-kit" in out2,
-    )
-    stray.unlink()
-    link = a / "kit/Link.qml"
-    link.symlink_to(a / "kit/FoamyStyle.qml")
-    code, out = sh(SYNC, str(a))
-    ok &= report("a symlink inside kit/ is refused", code != 0 and "symlink" in out)
-    link.unlink()
+    ok &= kit_dir_tests(a, base)
 
     # 5. Changing the component set removes files no longer needed.
     code, out = sh(SYNC, str(a), "--components", "FoamyI18n")
@@ -686,7 +824,14 @@ def main():
     lock_path = a / foamykit.LOCK_NAME
     clean_lock = lock_path.read_text()
     digest = foamykit.sha256(victim.read_bytes())
-    for bad in ("../victim.txt", str(victim), "kit/../../victim.txt", "manifest.json"):
+    for bad in (
+        "../victim.txt",
+        str(victim),
+        "kit/../../victim.txt",
+        "manifest.json",
+        "kit/..\\..\\victim.txt",
+        "kit/./FoamyStyle.qml",
+    ):
         lock_path.write_text(clean_lock + f"{digest}  {bad}\n")
         code, out = sh(SYNC, str(a))
         code_f, out_f = sh(SYNC, str(a), "--force")
@@ -697,6 +842,7 @@ def main():
             and code_f != 0
             and "not a path foamy-kit owns" in out + out_f
             and code_c != 0
+            and "not a path foamy-kit owns" in out_c
             and victim.read_text() == "keep me\n"
             and (a / "manifest.json").exists(),
             (out + out_f + out_c).strip()[-300:],
@@ -704,7 +850,7 @@ def main():
     # check.sh reports a crafted lock as that plugin's problem and goes on to
     # the next plugin; --lint-only doesn't need the lock at all.
     lock_path.write_text(clean_lock + f"{digest}  ../victim.txt\n")
-    others = [str(b)] if b is not None else []
+    others = [str(b)]
     code, out = sh(CHECK, "--no-lint", str(a), *others)
     _, out_l = sh(CHECK, "--lint-only", "--quiet", str(a))
     ok &= report(
@@ -718,13 +864,7 @@ def main():
         (out + out_l).strip()[-300:],
     )
     lock_path.write_text(clean_lock)
-    template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
-    roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
-    ok &= report(
-        "kit-check.sh.in allows every component root file",
-        all(f"$rel != {dest}" in template for dest in roots),
-        f"{roots}",
-    )
+    ok &= root_files_tests(base)
     tests_dir = a / "tests"
     moved = base / "tests-elsewhere"
     shutil.move(tests_dir, moved)
@@ -741,23 +881,22 @@ def main():
     ok &= report("sync works again on the restored plugin", code == 0, out.strip())
 
     # 6. Version drift across plugins fails check.sh.
-    if b is not None:
-        old_kit = base / "old-kit"
-        copy_kit(old_kit)
-        (old_kit / "VERSION").write_text("0.0.9\n")
-        (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
-        code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
-        sh(SYNC, str(a), "--components", "FoamyPopup")
-        code, out = sh(CHECK, "--no-lint", str(a), str(b))
-        ok &= report(
-            "check.sh fails when plugins are on different kit versions",
-            code != 0 and "kit versions differ" in out,
-            out.strip().splitlines()[-1],
-        )
-        sh(SYNC, str(b))
-        ok &= report("sync refreshes an unchanged older guide", (b / "REVIEW.md").read_bytes() == guide)
-        code, out = sh(CHECK, "--no-lint", str(a), str(b))
-        ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
+    old_kit = base / "old-kit"
+    copy_kit(old_kit)
+    (old_kit / "VERSION").write_text("0.0.9\n")
+    (old_kit / "REVIEW.md").write_bytes(guide + b"\nPrevious shared guide.\n")
+    code, out = sh(str(old_kit / "sync.sh"), str(b), "--components", "FoamyPopupCard")
+    sh(SYNC, str(a), "--components", "FoamyPopup")
+    code, out = sh(CHECK, "--no-lint", str(a), str(b))
+    ok &= report(
+        "check.sh fails when plugins are on different kit versions",
+        code != 0 and "kit versions differ" in out,
+        out.strip().splitlines()[-1],
+    )
+    sh(SYNC, str(b))
+    ok &= report("sync refreshes an unchanged older guide", (b / "REVIEW.md").read_bytes() == guide)
+    code, out = sh(CHECK, "--no-lint", str(a), str(b))
+    ok &= report("check.sh passes once every plugin is on one version", code == 0, out.strip())
 
     # 7. The lock's source line and checks.yml's kit checkout.
     ok &= lock_source_tests(base)

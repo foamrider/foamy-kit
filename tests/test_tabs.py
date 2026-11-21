@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """FoamyTabs (tests/qml/Tabs.qml) on 4.5 under a FoamyPopup's hero band:
 LTR and RTL, the standard and the wide popup (a full-width row, 420 and 560
-at scale 1.0), scale 1.0 and 1.25 in the dark theme, and both widths in the
-light theme. Content-width tabs from the reading start, the first icon
-on the rows' content inset, the underline and the hairline, icons, counts
+at scale 1.0), scale 1.0 and 1.25, pairwise (every pair of direction, width
+and scale values in the dark theme), and the light theme in both
+directions. Content-width tabs from the reading start, the first icon on
+the rows' content inset, the underline and the hairline, icons, counts
 and the urgent colour, labels eliding from the last tab, a press, hover and
 ←/→ + Enter/Space through PanelKeyCatcher, accessibility. Card screenshots:
 tests/out/tabs/ (FOAMY_TABS_OUT overrides)."""
@@ -16,9 +17,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import KIT_ROOT, harness, run_shell, synced_demo  # noqa: E402
 
-# (theme, rtl, wide, scale)
-CASES = [("dark", rtl, wide, scale) for rtl in (False, True) for wide in (False, True) for scale in (1.0, 1.25)]
-CASES += [("light", rtl, wide, 1.0) for rtl in (False, True) for wide in (False, True)]
+# (theme, rtl, wide, scale): every pair of rtl, wide and scale values in the
+# dark theme, and the light theme in both directions and both widths.
+CASES = [
+    ("dark", False, False, 1.0),
+    ("dark", True, False, 1.25),
+    ("dark", False, True, 1.25),
+    ("dark", True, True, 1.0),
+    ("light", False, True, 1.0),
+    ("light", True, False, 1.25),
+]
 
 
 def main():

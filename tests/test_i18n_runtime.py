@@ -3,7 +3,8 @@
 plugins' tests/i18n-runtime.py copies: the demo plugin passes (da, ar with
 its own catalog, en), a FoamyI18n that ignores the language fails, a plugin
 with only English checks English, and an English plural fallback under a
-language without the entry."""
+language without the entry. A plugin without en.json, or a catalog that is
+not a JSON object, is refused."""
 
 import json
 import shutil
@@ -59,6 +60,33 @@ def main():
             json.dumps(steps, ensure_ascii=False),
         )
         ok &= report("and passes live", i18n_runtime.run(english))
+
+        # Catalogs the check can't work from stop it, naming the plugin or file.
+        def refusal(plugin_dir):
+            try:
+                i18n_runtime.catalogs(plugin_dir)
+            except SystemExit as error:
+                return str(error)
+            return None
+
+        no_english = plugin.parent / "no-english" / plugin.name
+        shutil.copytree(plugin, no_english)
+        (no_english / "i18n/en.json").unlink()
+        message = refusal(no_english)
+        ok &= report(
+            "a plugin without i18n/en.json is refused",
+            message is not None and str(no_english) in message and "en.json" in message,
+            str(message),
+        )
+        not_object = plugin.parent / "not-object" / plugin.name
+        shutil.copytree(plugin, not_object)
+        (not_object / "i18n/da.json").write_text("[]")
+        message = refusal(not_object)
+        ok &= report(
+            "a catalog that is not a JSON object is refused",
+            message is not None and str(not_object / "i18n/da.json") in message,
+            str(message),
+        )
     finally:
         shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if ok else 1

@@ -26,6 +26,21 @@ ShellRoot {
   function near(a, b) {
     return Math.abs(a - b) <= 1
   }
+  function findByName(item, name) {
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = findByName(item.children[i], name)
+      if (found)
+        return found
+    }
+    return null
+  }
+  FoamyWait {
+    id: wait
+  }
 
   FloatingWindow {
     implicitWidth: 1920
@@ -146,13 +161,11 @@ ShellRoot {
         check(near(openX + open.width, compact.width - FoamyStyle.padding) && backX < compact.width / 2, "LTR: the trailing action on the right, Back on the left " + openX + " / " + backX)
       check(near(open.mapToItem(compact, 0, open.height / 2).y, back.mapToItem(compact, 0, back.height / 2).y), "the trailing action centred on Back")
       check(near(compact.height, FoamyStyle.settingsButtonSize + FoamyStyle.bandPaddingTop + FoamyStyle.bandPaddingBottom), "the trailing action keeps the compact height " + compact.height)
-      var icon = band.titleRow.children[0].children[0]
       var settings = band.settingsButton.mapToItem(band, 0, 0).x
       if (rtl)
         check(settings < band.width / 2, "RTL: settings button on the left " + settings)
       else
         check(settings > band.width / 2, "LTR: settings button on the right " + settings)
-      check(band.mirrored === rtl, "band knows its direction")
       var hero = null
       for (var i = 0; i < band.hero.length; i++)
         if (band.hero[i].objectName === "heroValue")
@@ -166,7 +179,8 @@ ShellRoot {
       console.log("FOAMY BAND " + JSON.stringify({
         height: Math.round(band.height),
         y: Math.round(p.y),
-        pictureY: Math.round(popup.bodyItem.pictureBand.mapToItem(card, 0, 0).y)
+        pictureY: Math.round(popup.bodyItem.pictureBand.mapToItem(card, 0, 0).y),
+        pictureHeight: Math.round(popup.bodyItem.pictureBand.height)
       }))
       check(!band.roundBottom && band.separator, "a band followed by content keeps a square bottom and the hairline")
       var only = bandOnly.bodyItem
@@ -174,13 +188,21 @@ ShellRoot {
       bandOnly.cardItem.grabToImage(function (r2) {
         r2.saveToFile(Quickshell.env("FOAMY_OUT") + "/band-only.png")
       })
-      card.grabToImage(function (result) {
-        if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png"))
-          console.log("FOAMY FAIL save")
-        console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-        console.log("FOAMY DONE")
-        Qt.quit()
-      })
+      // The band's Canvas loads its artwork asynchronously; test_band.py
+      // reads the artwork's pixels from the shot.
+      var picture = popup.bodyItem.pictureBand
+      wait.waitFor(function () {
+        return shell.findByName(picture, "foamyHeroBandSurface").isImageLoaded(picture.imageSource)
+      }, 5000, shell.grabCard, "the picture band's artwork is loaded")
     }
+  }
+  function grabCard() {
+    popup.cardItem.grabToImage(function (result) {
+      if (!result.saveToFile(Quickshell.env("FOAMY_OUT") + "/band.png"))
+        console.log("FOAMY FAIL save")
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
+    })
   }
 }

@@ -12,7 +12,6 @@ ShellRoot {
   id: shell
   readonly property string out: Quickshell.env("FOAMY_OUT")
   readonly property string host: Quickshell.env("FOAMY_HOST")
-  readonly property bool hasFork: Quickshell.env("FOAMY_FORK") === "1"
   readonly property int stripThickness: 34
   readonly property int screenW: 1920
   readonly property int screenH: 1080
@@ -86,18 +85,6 @@ ShellRoot {
     }
   }
   Component {
-    id: maxedPopup
-    FoamyPopup {
-      maxHeight: 300
-      body: Component {
-        Rectangle {
-          implicitHeight: 3000
-          color: "transparent"
-        }
-      }
-    }
-  }
-  Component {
     id: standardPopup
     FoamyPopup {
       body: Component {
@@ -126,7 +113,8 @@ ShellRoot {
       contentHeight: fittedContentHeight(bodyImplicitHeight)
     }
   }
-  readonly property Component forkComponent: hasFork ? Qt.createComponent(Qt.resolvedUrl("fork/ForkedPopup.qml")) : null
+  // The negative control: the old forked 4.0 popup, which must misplace.
+  readonly property Component forkComponent: Qt.createComponent(Qt.resolvedUrl("fork/ForkedPopup.qml"))
 
   // Expected bar strip thickness for `bar`.
   function thicknessFor(bar) {
@@ -158,6 +146,7 @@ ShellRoot {
   property string currentKind: ""
 
   Component.onCompleted: {
+    check(forkComponent.status === Component.Ready, "negative control loaded: " + forkComponent.errorString())
     Style.cornerRadius = 6
     var positions = ["top", "bottom", "left", "right"]
     var list = []
@@ -189,15 +178,9 @@ ShellRoot {
       })
       list.push({
         position: positions[i],
-        kind: "maxed",
+        kind: "fork",
         bar: "facade"
       })
-      if (hasFork)
-        list.push({
-          position: positions[i],
-          kind: "fork",
-          bar: "facade"
-        })
     }
     cases = list
     runner.start()
@@ -238,12 +221,18 @@ ShellRoot {
         tall: tallPopup,
         standard: standardPopup,
         card: card,
-        capped: cappedPopup,
-        maxed: maxedPopup
+        capped: cappedPopup
       }
       current = components[c.kind].createObject(shell, props)
-      if (c.kind === "standard")
+      if (c.kind === "standard") {
         check(current.bodyItem === null, currentLabel + " body is lazy (not built before open)")
+        // A plugin that needs its body before the first open (to reach its
+        // items or measure them) calls ensureBody().
+        var early = standardPopup.createObject(shell, props)
+        var built = early.ensureBody()
+        check(built !== null && early.bodyItem === built && built.built === true && !early.open, currentLabel + " ensureBody() builds the body without opening")
+        early.destroy()
+      }
       current.open = true
     }
     settle.start()
@@ -289,8 +278,6 @@ ShellRoot {
       check(near(c.height, p.availableCardHeight), currentLabel + " default: card fills the available height " + c.height)
     if (currentKind === "capped")
       check(near(c.height, Math.min(FoamyStyle.popupMaxHeight, p.availableCardHeight)), currentLabel + " maxHeight popupMaxHeight caps " + c.height)
-    if (currentKind === "maxed")
-      check(near(c.height, 300), currentLabel + " maxHeight 300 " + c.height)
     if (currentKind === "standard") {
       check(p.bodyItem !== null && p.bodyItem.built === true, currentLabel + " body built on open")
       check(p.contentWidth === FoamyStyle.popupWidth, currentLabel + " standard width " + p.contentWidth)

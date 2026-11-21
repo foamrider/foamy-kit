@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """tests/validate.sh (kit/tooling/validate.py) on a synced copy of the demo
 plugin: QML-loaded JavaScript is linted, not skipped; baselines fail only on
-new findings (and on grown complexity); kit-owned files are never linted or
-reformatted; a missing pinned tool, an unreasoned exclusion or a missing
-suite hook fails; --ci skips the host checks with a reason.
+new findings (and on grown complexity); kit-owned files (kit/ and the root
+files foamy-kit.lock lists) are never linted or reformatted; a missing or
+mismatched pinned tool, an unreasoned exclusion, a local lint config that
+does not extend the kit's, a misspelt check name or a missing suite hook
+fails; --ci skips the host checks with a reason; --fast reaches the suite.
 
 Needs the tools mise.toml pins (`mise install`); Qt 6 qmllint and the Omarchy
 shell for the qmllint part (SKIP without them)."""
@@ -113,7 +115,6 @@ def main():
         code != 0 and "grew:" in out and "now 19, baseline 17" in out,
         summary(out),
     )
-    (plugin / "tool.py").write_text("def pick(x):\n    return x\n")
     (plugin / "tool.py").unlink()
     (plugin / "kit/stray.py").write_text("import os\nx=( 1,\n2 )\n")
     code, out = validate(plugin, "--only", "ruff-format,vulture")
@@ -146,12 +147,25 @@ def main():
     code, out = validate(plugin, "--only", "shellcheck,shfmt")
     ok &= report(
         "shellcheck and shfmt check repository scripts",
-        code != 0 and "SC2086" in out and "FAIL  shfmt" in out and "kit-check.sh" not in out,
+        code != 0 and "SC2086" in out and "FAIL  shfmt" in out,
         summary(out),
     )
     (plugin / "run.sh").write_text('#!/bin/bash\nif [ -n "$1" ]; then\n  echo "$1"\nfi\n')
     code, out = validate(plugin, "--only", "shellcheck,shfmt")
     ok &= report("a clean script passes", code == 0, summary(out))
+    # A root script that foamy-kit.lock lists (not under kit/) is the kit's:
+    # the same findings in it fail nothing. run.sh stays, so the checks run.
+    kit_check = plugin / "tests/kit-check.sh"
+    synced = kit_check.read_bytes()
+    with kit_check.open("a") as script:
+        script.write('if [ -n "$1" ]; then\n    echo $1\nfi\n')
+    code, out = validate(plugin, "--only", "shellcheck,shfmt")
+    ok &= report(
+        "lock-listed root scripts are neither linted nor formatted",
+        code == 0 and "PASS  shellcheck" in out and "PASS  shfmt" in out,
+        summary(out),
+    )
+    kit_check.write_bytes(synced)
     (plugin / "run.sh").unlink()
 
     # Exclusions need a reason and a known check.
@@ -163,6 +177,26 @@ def main():
     ok &= report("an exclusion naming an unknown check fails", code != 0 and "unknown check" in out, summary(out))
     (lint / "exclude.txt").unlink()
 
+    # A local lint config may add to the kit's, never replace it.
+    (plugin / ".ruff.toml").write_text("line-length = 200\n")
+    (plugin / "tool.py").write_text("x = 1\n")
+    code, out = validate(plugin, "--only", "ruff")
+    ok &= report(
+        "a .ruff.toml that does not extend the kit's config fails",
+        code != 0 and "must extend the kit's config" in out,
+        summary(out),
+    )
+    (plugin / ".ruff.toml").unlink()
+    (plugin / "tool.py").unlink()
+    (lint / "oxlintrc.json").write_text('{"rules": {}}\n')
+    code, out = validate(plugin, "--only", "oxlint")
+    ok &= report(
+        "a tests/lint/oxlintrc.json that does not extend the kit's config fails",
+        code != 0 and "must extend the kit's config" in out,
+        summary(out),
+    )
+    (lint / "oxlintrc.json").unlink()
+
     # A missing pinned tool is a failure that says what to do.
     empty = Path(tempfile.mkdtemp(prefix="foamy-kit-nomise-"))
     for tool in ("bash", "python3", "git", "dirname", "readlink"):
@@ -171,6 +205,15 @@ def main():
     code, out = validate(plugin, "--only", "oxlint", env=env)
     ok &= report(
         "a missing pinned tool fails and says to run mise install", code != 0 and "mise install" in out, summary(out)
+    )
+    # A tool on PATH at another version (a system package) is no stand-in.
+    (empty / "oxlint").write_text('#!/bin/sh\necho "Version: 0.0.1"\n')
+    (empty / "oxlint").chmod(0o755)
+    code, out = validate(plugin, "--only", "oxlint", env=env)
+    ok &= report(
+        "a pinned tool at another version fails and says to run mise install",
+        code != 0 and "mise.toml pins oxlint" in out and "run `mise install`" in out,
+        summary(out),
     )
     shutil.rmtree(empty, ignore_errors=True)
 
@@ -192,6 +235,16 @@ def main():
         summary(out),
     )
     ok &= report("--ci with FOAMY_KIT runs the design lint", "PASS  design-lint" in out, summary(out))
+    code, out = validate(plugin, "--only", "oxlnt")
+    ok &= report(
+        "a misspelt check name fails instead of running nothing",
+        code != 0 and "unknown check(s): oxlnt" in out,
+        summary(out),
+    )
+    code, out = validate(plugin, "--fast", "--only", "suite")
+    ok &= report(
+        "--fast reaches the suite", code == 0 and "suite args: --fast; FOAMY_VALIDATE=fast" in out, summary(out)
+    )
     code, out = validate(plugin, "--ci", "--only", "design-lint", kit=None)
     ok &= report(
         "--ci without FOAMY_KIT skips the design lint and says why",

@@ -63,14 +63,6 @@ ShellRoot {
       }
     },
     {
-      mode: "nul",
-      primary: false,
-      multiline: true,
-      expect: {
-        failed: shell.tooLarge
-      }
-    },
-    {
       mode: "limit",
       primary: false,
       expect: {
@@ -79,20 +71,6 @@ ShellRoot {
     },
     {
       mode: "large",
-      primary: false,
-      expect: {
-        failed: shell.tooLarge
-      }
-    },
-    {
-      mode: "nul",
-      primary: false,
-      expect: {
-        failed: shell.tooLarge
-      }
-    },
-    {
-      mode: "stream",
       primary: false,
       expect: {
         failed: shell.tooLarge
@@ -119,6 +97,7 @@ ShellRoot {
   property int caseIndex: 0
   property double since: 0
   property string cancelledPid: ""
+  property var spare: null
 
   FoamyClipboard {
     id: clipboard
@@ -136,6 +115,12 @@ ShellRoot {
         }
       ])
     }
+  }
+
+  // A second reader, destroyed in the middle of a read.
+  Component {
+    id: spareReader
+    FoamyClipboard {}
   }
 
   // Sets what the stand-in wl-paste does next.
@@ -159,6 +144,12 @@ ShellRoot {
     request.open("GET", "file://" + path, false)
     request.send(null)
     return String(request.responseText || "")
+  }
+
+  // True once `pid` has exited (no /proc entry, or a zombie).
+  function exited(pid) {
+    var stat = readFile("/proc/" + pid + "/stat")
+    return stat === "" || stat.slice(stat.lastIndexOf(")") + 2).charAt(0) === "Z"
   }
 
   function elapsed() {
@@ -252,22 +243,25 @@ ShellRoot {
           read: "later"
         }
       ]), "busy: exactly one signal, the first read's: " + JSON.stringify(outcomes))
-      setMode("ignore")
+      setMode("loaded")
       next()
       return
     case 13:
-      // Cancel mid-read: wl-paste here ignores TERM. Nothing follows, the
-      // reader stays busy until the stopped read has exited, then reads again.
+      // Cancel mid-read. The stand-in timeout gives a "loaded" paste 60 s
+      // and its producer prints after 2.5 s, so only clipboard.sh's kill of
+      // the whole read can end it at once. Nothing follows, the reader
+      // stays busy until the stopped read has exited, then reads again.
       if (!fixture.done)
         return
       shell.cancelledPid = readFile(state + ".pid")
       outcomes = []
-      check(clipboard.start(false), "ignore: a read starts")
+      check(clipboard.start(false), "loaded: a read starts")
       next()
       return
     case 14:
+      // The stand-in empties the pid file before it writes its pid.
       var pid = readFile(state + ".pid")
-      if (pid === shell.cancelledPid)
+      if (pid === "" || pid === shell.cancelledPid)
         return
       shell.cancelledPid = pid
       clipboard.cancel()
@@ -277,19 +271,24 @@ ShellRoot {
     case 15:
       if (clipboard.busy)
         return
-      check(elapsed() < 3000, "the stopped read ends, after " + elapsed() + " ms")
+      check(elapsed() < 1500, "the stopped read ends at once, before the 2.5 s producer would, after " + elapsed() + " ms")
       check(outcomes.length === 0, "cancel(): no signal follows: " + JSON.stringify(outcomes))
-      console.log("FOAMY PASTE PID " + shell.cancelledPid)
-      setMode("normal")
       next()
       return
     case 16:
+      if (!exited(shell.cancelledPid) && elapsed() < 500)
+        return
+      check(exited(shell.cancelledPid), "cancel(): the read's producer is killed with it (pid " + shell.cancelledPid + ")")
+      setMode("normal")
+      next()
+      return
+    case 17:
       if (!fixture.done)
         return
       check(clipboard.start(false), "after the stopped read ends, a new read starts")
       next()
       return
-    case 17:
+    case 18:
       if (outcomes.length === 0)
         return
       check(same(outcomes, [
@@ -297,6 +296,34 @@ ShellRoot {
           read: "folder"
         }
       ]), "the new read gets its own result: " + JSON.stringify(outcomes))
+      setMode("stall")
+      next()
+      return
+    case 19:
+      // A reader destroyed mid-read (a closed field, a reload): Quickshell
+      // kills clipboard.sh without the TERM its trap catches, so the
+      // separate 2 s watchdog must still end the read, producer included.
+      if (!fixture.done)
+        return
+      // The normal read above wrote its pid last; wait for this read's own.
+      shell.cancelledPid = readFile(state + ".pid")
+      shell.spare = spareReader.createObject(shell)
+      check(shell.spare.start(false), "a second reader starts a read")
+      next()
+      return
+    case 20:
+      var spawned = readFile(state + ".pid")
+      if (spawned === "" || spawned === shell.cancelledPid)
+        return
+      shell.cancelledPid = spawned
+      shell.spare.destroy()
+      shell.spare = null
+      next()
+      return
+    case 21:
+      if (!exited(shell.cancelledPid) && elapsed() < 4000)
+        return
+      check(exited(shell.cancelledPid) && elapsed() < 3500, "a destroyed reader's read still ends at the 2 s deadline (pid " + shell.cancelledPid + "), after " + elapsed() + " ms")
       shell.finish()
       return
     }

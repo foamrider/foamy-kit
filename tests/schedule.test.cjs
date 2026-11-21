@@ -40,6 +40,10 @@ test("overnight ranges carry into the next day; off means always within", () => 
   assert.strictEqual(Schedule.withinWeek(new Date(2026, 10, 3, 2), false, week), true);
   assert.strictEqual(Schedule.withinWeek(new Date(2026, 8, 29, 1), false, []), true);
   assert.strictEqual(Schedule.withinWeek(new Date(2026, 10, 4, 12), true, ["", "", "00:00-24:00", "", "", "", ""]), true);
+  // Sunday night carries over the week's end into Monday morning.
+  const sunday = ["", "", "", "", "", "", "22:00-02:00"];
+  assert.strictEqual(Schedule.withinWeek(new Date(2026, 10, 9, 1), true, sunday), true);
+  assert.strictEqual(Schedule.withinWeek(new Date(2026, 10, 9, 2), true, sunday), false);
 });
 
 test("snoozing and resuming override the schedule until the next day", () => {

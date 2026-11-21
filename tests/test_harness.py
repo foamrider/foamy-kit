@@ -55,11 +55,18 @@ def ipc_reachable(run):
     return instance if shown.returncode == 0 else None
 
 
-def long_tmpdir():
-    ok = True
-    parent = Path(tempfile.mkdtemp(prefix="foamy-kit-long-tmp-"))
+def make_long_tmp():
+    """(parent, dir) for a temp dir longer than the socket limit. The parent
+    is in /tmp, whatever the caller's TMPDIR, so the padding is never empty."""
+    parent = Path(tempfile.mkdtemp(prefix="foamy-kit-long-tmp-", dir="/tmp"))
     long_tmp = parent / ("t" * (harness.SOCKET_PATH_MAX - len(str(parent))))
     long_tmp.mkdir()
+    return parent, long_tmp
+
+
+def long_tmpdir():
+    ok = True
+    parent, long_tmp = make_long_tmp()
     saved = tempfile.tempdir
     tempfile.tempdir = str(long_tmp)
     try:
@@ -100,25 +107,6 @@ def long_tmpdir():
     )
     run.cleanup()
 
-    # A socket limit no temp dir can meet: Run() stops with the reason and
-    # leaves nothing behind.
-    before = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
-    limit = harness.SOCKET_PATH_MAX
-    harness.SOCKET_PATH_MAX = 40
-    try:
-        harness.Run("4.5", HANG, prefix="foamy-kit-no-socket-dir-")
-        message = "constructed"
-    except SystemExit as error:
-        message = str(error)
-    finally:
-        harness.SOCKET_PATH_MAX = limit
-    after = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
-    ok &= report(
-        "Run() stops with the reason when no socket dir fits, creating nothing",
-        "past the unix limit of 40" in message and after == before,
-        f"{message}; new: {sorted(map(str, after - before))}",
-    )
-
     # qs's own report of an unbindable socket fails a run.
     marker = harness.Run(
         "4.5",
@@ -147,50 +135,84 @@ def main():
     started = time.time()
     run.run(timeout=3)
     elapsed = time.time() - started
-    ok &= report("a timed-out run returns on time", elapsed < 12 and "FOAMY UP" in run.log, f"{elapsed:.1f}s")
+    # A run without "FOAMY DONE" is never ok, however it ended.
+    ok &= report(
+        "a timed-out run returns on time and fails",
+        elapsed < 12 and "FOAMY UP" in run.log and not run.ok,
+        f"{elapsed:.1f}s ok={run.ok}",
+    )
     ok &= report("a timed-out run leaves no qs or dbus-daemon", gone(base), str(harness.processes_under(base)))
     run.cleanup()
     ok &= report("cleanup removes the temp dir", not base.exists())
 
     # 2. The Python parent is SIGKILLed mid-run (no finally, no atexit).
-    child = subprocess.Popen([sys.executable, "-I", "-c", CHILD], stdout=subprocess.PIPE, text=True)
-    base = Path(child.stdout.readline().strip())
-    sockets = child.stdout.readline().strip()
-    time.sleep(1.5)
-    alive_before = bool(harness.processes_under(base))
-    child.send_signal(signal.SIGKILL)
-    child.wait()
-    ok &= report(
-        "a killed parent takes qs and its bus with it",
-        alive_before and gone(base),
-        f"before={alive_before} after={harness.processes_under(base)}",
-    )
-    shutil.rmtree(base, ignore_errors=True)
-    # Only a socket dir the child named: an empty line must not become ".".
-    if Path(sockets).name.startswith("foamy-kit-s-"):
-        shutil.rmtree(sockets, ignore_errors=True)
+    # Its TMPDIR is long, so _socket_dir() puts the socket dir in /tmp and
+    # gc's look at /tmp runs whatever TMPDIR this test has.
+    long_parent, long_tmp = make_long_tmp()
+    saved = tempfile.tempdir
+    sockets = ""
+    try:
+        child = subprocess.Popen(
+            [sys.executable, "-I", "-c", CHILD],
+            stdout=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "TMPDIR": str(long_tmp)},
+        )
+        base = Path(child.stdout.readline().strip())
+        sockets = child.stdout.readline().strip()
+        log = base / "qs.log"
+        up = bool(harness.wait_for(lambda: log.exists() and "FOAMY UP" in log.read_text(errors="replace"), 30))
+        alive_before = bool(harness.processes_under(base))
+        child.send_signal(signal.SIGKILL)
+        child.wait()
+        ok &= report(
+            "a killed parent takes qs and its bus with it",
+            up and alive_before and gone(base),
+            f"qs up={up} before={alive_before} after={harness.processes_under(base)}",
+        )
+        # gc recognises the dirs such a run left by their real names: the
+        # run's dir in the temp dir and its socket dir in /tmp. Dry run:
+        # other runs' dirs on this machine stay untouched.
+        tempfile.tempdir = str(long_tmp)
+        left = {base, Path(sockets)}
+        found = harness.wait_for(lambda: left <= set(harness.gc(dry_run=True)), 5)
+        missed = sorted(map(str, left - set(harness.gc(dry_run=True))))
+        ok &= report(
+            "gc finds a dead run's own dirs, its socket dir in /tmp too",
+            bool(found) and Path(sockets).parent == Path("/tmp"),
+            f"not found: {missed}" if missed else f"socket dir {sockets}",
+        )
+    finally:
+        tempfile.tempdir = saved
+        shutil.rmtree(long_parent, ignore_errors=True)
+        # Only a socket dir the child named: an empty line must not become ".".
+        if Path(sockets).name.startswith("foamy-kit-s-"):
+            shutil.rmtree(sockets, ignore_errors=True)
 
     # 3. Context manager.
     with harness.Run("4.5", HANG, prefix="foamy-kit-ctx-") as ctx:
         ctx.start()
         base = ctx.base
-        time.sleep(1)
+        started = ctx.wait_for_log("FOAMY UP", 30) and bool(harness.processes_under(ctx.base))
     ok &= report(
         "Run as a context manager stops and removes everything",
-        gone(base) and not base.exists() and not ctx.sockets.exists(),
+        started and gone(base) and not base.exists() and not ctx.sockets.exists(),
+        f"started={started}",
     )
-    # 4. Temp-dir hygiene: own dir per run, PID-tagged, 0700; gc removes only dead runs' dirs.
+    # 4. Temp-dir hygiene: other users can't reach a run's files or sockets;
+    # gc removes only dead runs' dirs.
     run = harness.Run("4.5", HANG, prefix="foamy-kit-hygiene-")
     mode = run.base.stat().st_mode & 0o777
     socket_mode = run.sockets.stat().st_mode & 0o777
     ok &= report(
-        "each run owns a PID-tagged 0700 dir and socket dir",
-        f"-{os.getpid()}-" in run.base.name
-        and mode == 0o700
-        and run.sockets.name.startswith(f"foamy-kit-s-{os.getpid()}-")
-        and socket_mode == 0o700,
+        "each run's dir and socket dir are 0700",
+        mode == 0o700 and socket_mode == 0o700,
         f"{run.base.name} {oct(mode)} {run.sockets.name} {oct(socket_mode)}",
     )
+    # gc tells a live run from a dead one by the owner pid in each dir's
+    # name: another process's --gc must not delete a running test's sockets.
+    listed = sorted(map(str, {run.base, run.sockets} & set(harness.gc(dry_run=True))))
+    ok &= report("gc leaves a live run's own dirs alone", not listed, f"listed: {listed}" if listed else "")
     run.cleanup()
     tmp = Path(tempfile.mkdtemp(prefix="foamy-kit-gc-test-"))
     dead = subprocess.Popen(["true"])
@@ -213,13 +235,6 @@ def main():
         str(removed),
     )
     shutil.rmtree(tmp, ignore_errors=True)
-    # A long temp dir's runs keep their sockets in /tmp: gc looks there too.
-    stale_sockets = Path(tempfile.mkdtemp(prefix=f"foamy-kit-s-{dead.pid}-", dir="/tmp"))
-    try:
-        found = harness.gc(dry_run=True)
-    finally:
-        shutil.rmtree(stale_sockets, ignore_errors=True)
-    ok &= report("gc finds a dead run's socket dir in /tmp", stale_sockets in found, str(found))
 
     # 5. A long TMPDIR (an agent sandbox's) must not push qs's IPC socket
     # past the unix socket limit: qs then only logs "Failed to start IPC
@@ -267,20 +282,29 @@ def main():
         and f"SKIP on 4.0: {retired}" in both.stdout,
         both.stdout.strip().replace("\n", "; "),
     )
-    shutil.rmtree(fake, ignore_errors=True)
-    demo = KIT_ROOT / "tests/fixtures/demo-plugin"
-    rendered = subprocess.run(
-        [sys.executable, "-I", str(KIT_ROOT / "preview/render.py"), str(demo), "--host", "4.0"],
+    # No usable host is an error: a plugin suite on a machine without the
+    # shell must fail, not pass on SKIP lines.
+    (fake / "empty").mkdir()
+    none = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import harness; harness.available_hosts(('4.5',))",
+            str(KIT_ROOT / "preview"),
+        ],
         capture_output=True,
         text=True,
-        timeout=60,
-        env=env,
+        env={**env, "FOAMY_HOST_45": str(fake / "empty")},
     )
     ok &= report(
-        "render.py --host 4.0 fails with the retirement message (no render)",
-        rendered.returncode != 0 and retired in rendered.stderr and "Traceback" not in rendered.stderr,
-        rendered.stderr.strip()[-200:],
+        "no usable host fails the run after its SKIP line",
+        none.returncode != 0
+        and "no usable host among 4.5" in none.stderr
+        and "SKIP on 4.5: host 4.5 not found" in none.stdout,
+        f"exit {none.returncode}; {none.stdout.strip()}; {none.stderr.strip()[-200:]}",
     )
+    shutil.rmtree(fake, ignore_errors=True)
     return 0 if ok else 1
 
 

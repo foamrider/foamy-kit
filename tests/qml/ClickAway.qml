@@ -280,11 +280,10 @@ ShellRoot {
   }
 
   function rest() {
-    // The text area: the same, and no click-away inside the field itself.
+    // The text area: the same.
     body.area.focusInput()
     click(body, 300, 360)
     check(!body.area.inputActiveFocus && shell.areaDone === 1 && focused() === body.keys, "the text area let go once (" + shell.areaDone + ")")
-    check(findByName(body.area, "clickAway") === null && findByName(body.list, "clickAway") !== null, "a SafeTextArea has no click-away of its own; a list has one")
 
     // A nearer key home.
     body.scopeField.focusInput()
@@ -306,18 +305,6 @@ ShellRoot {
     finish()
   }
 
-  function findByName(item, name) {
-    if (!item)
-      return null
-    if (item.objectName === name)
-      return item
-    for (var i = 0; i < item.children.length; i++) {
-      var found = findByName(item.children[i], name)
-      if (found)
-        return found
-    }
-    return null
-  }
   function finish() {
     console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")

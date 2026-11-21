@@ -2,7 +2,7 @@
 """FoamyHeroBand on 4.5, dark and light themes, LTR and RTL:
 geometry inside a real FoamyPopup card, and pixels of the captured card
 (rounded transparent corners, tinted band vs body, hairline edge, glow on the
-trailing side, clipped picture)."""
+trailing side, the picture drawn across the band)."""
 
 import json
 import shutil
@@ -59,20 +59,29 @@ def run(host, theme, rtl, plugin, out_dir):
     width, height, px = read_png(png)
     band_mid = px(width // 2, info["height"] // 2)
     body = px(width // 2, info["height"] + 60)
+    # The artwork fixture is a horizontal gradient (red 40 at the left edge,
+    # 230 at the right; not mirrored in RTL). Under the band's scrim and glow
+    # its two ends still differ when it is drawn across the full width.
+    picture_y = info["pictureY"] + info["pictureHeight"] // 2
+    picture_left, picture_right = px(6, picture_y), px(width - 7, picture_y)
     checks = [
         ("top corners are rounded (transparent outside the radius)", px(1, 1)[3] < 40 and px(width - 2, 1)[3] < 40),
         ("band is tinted against the body", distance(band_mid, body) >= 6),
-        (
-            "dark theme: band lighter than the body" if theme == "dark" else "light theme: band tinted, not lighter",
-            luminance(band_mid) > luminance(body) if theme == "dark" else distance(band_mid, body) >= 6,
-        ),
         ("hairline edge into the body", distance(px(width // 2, info["height"]), body) >= 3),
         (
             "glow on the trailing top side (more tint there)",
             (distance(px(width - 30, 6), body) > distance(px(30, 6), body)) != rtl,
         ),
-        ("picture band is clipped to the card too", px(width // 2, info["pictureY"] + 20)[3] == 255),
     ]
+    if theme == "dark":
+        checks.append(("dark theme: band lighter than the body", luminance(band_mid) > luminance(body)))
+    picture = f"red {picture_left[0]} at the left, {picture_right[0]} at the right"
+    checks.append(
+        (
+            f"picture band: the artwork is drawn across the full width ({picture})",
+            picture_right[0] - picture_left[0] >= 40,
+        )
+    )
     ok = report(f"band {tag}", True, detail)
     for label, passed in checks + only_checks:
         ok &= report(f"band {tag}: {label}", passed)

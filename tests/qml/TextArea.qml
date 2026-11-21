@@ -3,7 +3,6 @@ import QtQuick.Controls as Controls
 import QtTest
 import Quickshell
 import Quickshell.Io
-import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "harness"
@@ -13,7 +12,8 @@ import "plugin/kit"
 // (Ctrl+Enter), Tab moves the focus, editingFinished on focus loss, paste
 // through kit/clipboard.sh `multiline` and the fake wl-paste (line breaks
 // kept, NUL and oversized text refused, cut at maximumLength, a late result
-// dropped after newer typing or clear(), middle-click pastes the primary
+// dropped after newer typing, clear(), focus loss, hiding or disabling;
+// hiding clears a paste error; middle-click pastes the primary
 // selection), never Qt's own clipboard; typing at maximumLength drops the
 // key instead of the text's end; the height grows from minimumHeight to
 // maximumHeight and then scrolls to the caret; accessibility and the menu;
@@ -184,23 +184,43 @@ ShellRoot {
     onTriggered: shell.typing()
   }
 
+  // Fill and border colour of a field as strings: a colour read from a
+  // property can follow later changes of that property.
+  function look(field) {
+    return [String(field.background.color), String(field.background.borderSpec.color)]
+  }
+  function sameLook(field, expected) {
+    var now = look(field)
+    return Qt.colorEqual(now[0], expected[0]) && Qt.colorEqual(now[1], expected[1])
+  }
+
   // `quiet`: at rest neither fill nor border, with the border's width kept
   // (the text sits where a plain field's does); the cursor and the focus
-  // show the usual field.
+  // show what the plain field of the same type shows then.
   function quietness(field, plain, label) {
     var surface = field.background
     check(Qt.colorEqual(surface.color, "transparent") && Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": no fill or border at rest")
-    eq(surface.borderSpec.widths, plain._borderSpec.widths, label + ": the border keeps its width at rest")
+    eq(surface.borderSpec.widths, plain.background.borderSpec.widths, label + ": the border keeps its width at rest")
     eq([field.leftPadding, field.rightPadding], [plain.leftPadding, plain.rightPadding], label + ": the text sits where a plain field's does")
+    plain.hasCursor = true
+    var hot = look(plain)
+    plain.hasCursor = false
     field.hasCursor = true
     check(!Qt.colorEqual(surface.color, "transparent") && !Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": the cursor shows the field")
+    check(sameLook(field, hot), label + ": under the cursor it looks like a plain field there: got " + look(field) + ", expected " + hot)
     field.hasCursor = false
+    plain.focusInput()
+    var focused = look(plain)
     field.focusInput()
-    check(Qt.colorEqual(surface.color, Style.controlFill(true, false, field.foreground, field.accent)), label + ": the focus shows the focused fill")
-    check(Qt.colorEqual(surface.borderSpec.color, Border.controlSpec("focus", field.foreground, field.accent).color), label + ": the focus shows the focus border")
+    check(sameLook(field, focused), label + ": the focus shows the usual focused field: got " + look(field) + ", expected " + focused)
     field.editorItem.focus = false
     check(Qt.colorEqual(surface.color, "transparent"), label + ": at rest again after the focus leaves")
     check(!Qt.colorEqual(plain.background.color, "transparent") || !Qt.colorEqual(plain.background.borderSpec.color, "transparent"), label + ": a plain field keeps its look at rest")
+    // Focusing and leaving the plain field ended its edit: the typing checks
+    // below count from zero.
+    shell.finished = 0
+    shell.fieldFinished = 0
+    shell.edits = 0
   }
 
   function typing() {
@@ -331,10 +351,49 @@ ShellRoot {
             return !area.pasteRunning
           }, 10000, function () {
             eq(area.text, "", "losing the focus drops a paste in flight")
-            shell.middle()
+            shell.hiding()
           }, "the focus-loss paste ends")
         }, "the cleared paste ends")
       }, "the late paste ends")
+    })
+  }
+
+  // Hiding or disabling the field drops a paste in flight, even when the
+  // field is shown, enabled and focused again before the read ends; hiding
+  // also clears a shown paste error.
+  function hiding() {
+    area.clear()
+    area.focusInput()
+    setClipboard("delayed", function () {
+      key(Qt.Key_V, Qt.ControlModifier)
+      check(area.pasteRunning, "a slow paste runs before the field is hidden")
+      area.visible = false
+      area.visible = true
+      area.focusInput()
+      wait.waitFor(function () {
+        return !area.pasteRunning
+      }, 10000, function () {
+        eq([area.text, area.pasteError], ["", ""], "hiding the field drops a paste in flight")
+        area.clear()
+        key(Qt.Key_V, Qt.ControlModifier)
+        check(area.pasteRunning, "a slow paste runs before the field is disabled")
+        area.enabled = false
+        area.enabled = true
+        area.focusInput()
+        wait.waitFor(function () {
+          return !area.pasteRunning
+        }, 10000, function () {
+          eq([area.text, area.pasteError], ["", ""], "disabling the field drops a paste in flight")
+          pasteWith("nul", "NUL before hiding", function () {
+            check(area.pasteError !== "", "a refused paste shows its error")
+            area.visible = false
+            area.visible = true
+            eq(area.pasteError, "", "hiding the field clears the paste error")
+            area.clear()
+            shell.middle()
+          })
+        }, "the disabled paste ends")
+      }, "the hidden paste ends")
     })
   }
 

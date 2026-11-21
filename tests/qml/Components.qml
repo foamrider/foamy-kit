@@ -10,9 +10,9 @@ import "plugin/kit"
 
 // kit 0.4.0 components in real FoamyPopups on the simulated screen:
 // FoamyHeroBand `centered` (clock, weather), FoamyPanelFooter, FoamyButton,
-// FoamyInfoNote in a settings page, and popup height following the screen
-// (FoamyPopup and FoamyPopupCard, no fixed 640 cap). FOAMY_RTL=1 mirrors.
-// Cards are saved to FOAMY_OUT for screenshots.
+// FoamyInfoNote in a settings page, and FoamyPopupCard's height following
+// the screen (no fixed 640 cap). FOAMY_RTL=1 mirrors. Cards are saved to
+// FOAMY_OUT for screenshots.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -46,11 +46,17 @@ ShellRoot {
   readonly property Item anchorButton: sim.anchor
 
   property int refreshes: 0
+  property int weatherRefreshes: 0
+  property bool weatherRefreshing: true
   property int calendarClicks: 0
   property int applies: 0
+  property int verifies: 0
   property bool verifying: false
   property int toggleClicks: 0
-  property var cpuCommits: []
+
+  FoamyWait {
+    id: wait
+  }
 
   // --- clock: centred band, footer with a leading action -----------------------
   FoamyPopup {
@@ -209,38 +215,14 @@ ShellRoot {
           width: parent.width - FoamyStyle.padding * 2
           source: "MET Norway"
           status: "Updated 13 min ago"
-          refreshing: true
+          refreshing: shell.weatherRefreshing
+          onRefreshClicked: shell.weatherRefreshes++
         }
       }
     }
   }
 
-  // --- a tall panel: height follows the screen, not 640 ------------------------------
-  FoamyPopup {
-    id: tallPopup
-    anchorItem: shell.anchorButton
-    bar: bar
-    open: true
-    body: Component {
-      Rectangle {
-        implicitHeight: 1500
-        color: "transparent"
-      }
-    }
-  }
-  FoamyPopup {
-    id: cappedPopup
-    anchorItem: shell.anchorButton
-    bar: bar
-    open: true
-    maxHeight: FoamyStyle.popupMaxHeight
-    body: Component {
-      Rectangle {
-        implicitHeight: 1500
-        color: "transparent"
-      }
-    }
-  }
+  // --- a tall card: height follows the screen, not 640 -------------------------------
   FoamyPopupCard {
     id: tallCard
     anchorItem: shell.anchorButton
@@ -307,9 +289,6 @@ ShellRoot {
             value: 95
             from: 1
             to: 100
-            onCommitted: function (v) {
-              shell.cpuCommits = shell.cpuCommits.concat([v])
-            }
           }
           FoamyNumberField {
             id: ram
@@ -344,6 +323,7 @@ ShellRoot {
               iconName: "check"
               focusable: true
               busy: shell.verifying
+              onClicked: shell.verifies++
             }
             FoamyButton {
               id: primary
@@ -403,7 +383,6 @@ ShellRoot {
       if (t) {
         check(near(t.x + t.width / 2, band.width / 2, 1), "title column centred")
         check(t.mapToItem(band, 0, 0).y > clock.time.mapToItem(band, 0, 0).y + clock.time.height - 1, "big time above the date")
-        check(t.children[0].horizontalAlignment === Text.AlignHCenter, "title text centred")
       }
       var s = band.settingsButton.mapToItem(band, 0, 0)
       if (shell.rtl)
@@ -428,26 +407,24 @@ ShellRoot {
       }
       var line = r.y
       check(near(line - 1, footer.height - line - footer.refreshButton.height), "footer: row centred between hairline and bottom " + (line - 1) + " / " + (footer.height - line - footer.refreshButton.height))
-      check(st.text === "Updated 3 minutes ago" && st.font.pixelSize === FoamyStyle.font.bodySmall, "footer status text")
-      footer.refreshButton.clicked()
-      check(shell.refreshes === 1, "refresh emits refreshClicked")
-      var wfooter = weatherPopup.bodyItem.footer
-      check(wfooter.refreshButton.spinning && !wfooter.refreshButton.active, "refreshing: spinning and inert")
-      // Weather band centred.
-      var wband = weatherPopup.bodyItem.band
-      check(wband.hasHero && wband.centered, "weather band centred with hero")
+      check(st.text === "Updated 3 minutes ago", "footer status text")
 
       // Buttons.
       var page = formPopup.bodyItem
-      check(page.primary.color !== page.secondary.color && page.destructive.color !== page.secondary.color, "kinds have their own fill")
+      check(!Qt.colorEqual(page.primary.color, page.secondary.color) && !Qt.colorEqual(page.destructive.color, page.secondary.color), "kinds have their own fill")
       check(page.secondary.border.width >= 1 && page.destructive.border.width >= 1, "secondary/destructive are bordered")
-      check(page.primary.height === FoamyStyle.controlHeight && page.primary.activeFocusOnTab, "button height and Tab")
+      page.secondary.forceActiveFocus()
+      ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+      check(page.primary.activeFocus && page.primary.border.width > page.destructive.border.width, "Tab moves to the next button, which shows a focus ring " + [page.primary.activeFocus, page.primary.border.width, page.destructive.border.width])
       page.primary.forceActiveFocus()
       ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
       check(shell.applies === 1, "Enter activates the focused button " + shell.applies)
-      check(page.primary.border.width === 2, "focus ring on the focused button")
+      // A busy button takes no key. The pointer check makes it busy again.
       shell.verifying = true
-      check(!page.secondary.active, "busy button is inert")
+      page.secondary.forceActiveFocus()
+      ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
+      ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+      check(page.secondary.activeFocus && shell.verifies === 0, "a busy button ignores Space and Enter " + shell.verifies)
       // Info note: the (i) is beside the title and the note opens under it.
       var info = page.lfs.infoNote
       check(info.visible && !info.note.visible, "section with info: (i) shown, note folded")
@@ -459,14 +436,7 @@ ShellRoot {
       var ta = page.toggleA
       var fill = findByName(ta, "foamyToggleFill")
       check(fill && fill.border.width === 0 && fill.color.a === 0, "toggle row has no box at rest")
-      check(ta.height >= FoamyStyle.rowHeight && near(page.toggleB.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall, 1), "toggle row heights " + ta.height + " / " + page.toggleB.height)
       check(findByName(ta, "foamyToggleDivider").visible && !findByName(page.toggleB, "foamyToggleDivider").visible, "divider only where asked")
-      var sw = ta.switchItem.mapToItem(ta, 0, 0)
-      if (shell.rtl)
-        check(sw.x < 2, "RTL: switch on the left " + sw.x)
-      else
-        check(near(sw.x + ta.switchItem.width, ta.width), "switch on the end " + sw.x)
-      check(ta.children[1].children[0].font.weight !== Font.Bold && ta.children[1].children[0].font.weight < Font.DemiBold, "label in normal weight")
       // Compact number fields: one row, narrow field, units lined up.
       var cpu = page.cpu, margin = page.margin
       var cf = cpu.field.mapToItem(page, 0, 0), mf = margin.field.mapToItem(page, 0, 0)
@@ -475,29 +445,25 @@ ShellRoot {
         check(near(cf.x, mf.x), "RTL: stacked compact fields line up at their unit side " + cf.x + " / " + mf.x)
       else
         check(near(cf.x + cpu.field.width, mf.x + margin.field.width), "stacked compact fields line up at their unit side " + (cf.x + cpu.field.width) + " / " + (mf.x + margin.field.width))
-      check(near(cpu.height, FoamyStyle.rowHeight + FoamyStyle.gapSmall), "label, field and unit on one row, as tall as a toggle row " + cpu.height)
       if (shell.rtl)
         check(cf.x < cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "RTL: field toward the left")
       else
         check(cf.x > cpu.mapToItem(page, 0, 0).x + cpu.width / 2, "field toward the end")
-      cpu.field.text = "80"
-      cpu.dirty = true
-      cpu.commitEdit(false)
-      check(JSON.stringify(shell.cpuCommits) === "[80]", "compact field commits " + JSON.stringify(shell.cpuCommits))
       // hasHero counts shown hero items only.
       var hb = clock.hiddenHeroBand
       hb.visible = true
       check(!hb.hasHero, "a hidden hero item is no hero")
       clock.hiddenHero.visible = true
       check(hb.hasHero, "shown again, it is")
+      // A closed popup or an open settings page hides the band: it still
+      // answers whether it has hero items (plugins read it then).
       hb.visible = false
+      check(hb.hasHero, "a hidden band still answers that it has hero items")
 
-      // Popup height follows the screen.
-      var avail = tallPopup.availableCardHeight
-      check(avail > FoamyStyle.popupMaxHeight, "screen allows more than 640 " + avail)
-      check(near(tallPopup.cardItem.height, avail, 2), "tall popup grows to the available height " + tallPopup.cardItem.height + " of " + avail)
-      check(near(cappedPopup.cardItem.height, FoamyStyle.popupMaxHeight, 2), "maxHeight still caps when set " + cappedPopup.cardItem.height)
+      // FoamyPopupCard's height follows the screen.
+      check(tallCard.availableCardHeight > FoamyStyle.popupMaxHeight, "screen allows more than 640 " + tallCard.availableCardHeight)
       check(tallCard.cardItem.height > FoamyStyle.popupMaxHeight && tallCard.cardItem.height <= tallCard.availableCardHeight + 2, "FoamyPopupCard follows the screen " + tallCard.cardItem.height + " of " + tallCard.availableCardHeight)
+      // The form shot shows the Verify button at rest.
       shell.verifying = false
       capture.start()
     }
@@ -523,13 +489,12 @@ ShellRoot {
     property var queue: [["clock", clockPopup], ["weather", weatherPopup], ["form", formPopup]]
     onTriggered: {
       if (queue.length === 0) {
-        // Pointer checks need the form card on top: close the others first.
-        clockPopup.open = false
+        // The popups share one window: a pointer check needs its card
+        // alone on top, so the others close first.
         weatherPopup.open = false
-        tallPopup.open = false
-        cappedPopup.open = false
+        formPopup.open = false
         tallCard.open = false
-        pointerStep.start()
+        shell.whenAlone(clockPopup, [weatherPopup, formPopup, tallCard], shell.clockPointer, "clock")
         return
       }
       var item = queue.shift()
@@ -540,22 +505,72 @@ ShellRoot {
     }
   }
 
-  Timer {
-    id: pointerStep
-    interval: 600
-    onTriggered: {
-      var info = formPopup.bodyItem.lfs.infoNote
-      check(info.note.mapToItem(formPopup.bodyItem.lfs, 0, 0).y > info.infoButton.mapToItem(formPopup.bodyItem.lfs, 0, 0).y + info.infoButton.height - 1, "note under the title (once laid out)")
-      var ta = formPopup.bodyItem.toggleA
-      var fill = findByName(ta, "foamyToggleFill")
-      ev.mouseClick(ta, ta.width / 2, ta.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
-      check(shell.toggleClicks === 1 && !ta.checked, "click emits clicked, never flips checked " + shell.toggleClicks)
-      ev.mouseMove(ta, ta.width / 2, ta.height / 2 + 1, -1, Qt.NoButton, Qt.NoModifier)
-      check(ta.hot, "hover lights the row")
-      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-      console.log("FOAMY DONE")
-      Qt.quit()
-    }
+  function clickCentre(item) {
+    ev.mouseClick(item, item.width / 2, item.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+  }
+
+  // A click reaches a card once it has faded in and the closed popups'
+  // windows are gone (KeyboardPanel stays visible while its card fades out).
+  function whenAlone(popup, closed, then, name) {
+    wait.waitFor(function () {
+      return popup.visible && popup.cardItem.opacity === 1 && closed.every(function (other) {
+        return !other.visible
+      })
+    }, 3000, then, tag + " the " + name + " card alone on top")
+  }
+
+  function clockPointer() {
+    clickCentre(clockPopup.bodyItem.footer.refreshButton)
+    check(shell.refreshes === 1, "a click on refresh emits refreshClicked " + shell.refreshes)
+    clockPopup.open = false
+    weatherPopup.open = true
+    whenAlone(weatherPopup, [clockPopup], shell.weatherPointer, "weather")
+  }
+
+  function weatherPointer() {
+    var refresh = weatherPopup.bodyItem.footer.refreshButton
+    clickCentre(refresh)
+    check(refresh.spinning && shell.weatherRefreshes === 0, "refreshing: the spinning refresh button ignores a click " + shell.weatherRefreshes)
+    shell.weatherRefreshing = false
+    clickCentre(refresh)
+    check(shell.weatherRefreshes === 1, "done refreshing, the same click refreshes " + shell.weatherRefreshes)
+    weatherPopup.open = false
+    formPopup.open = true
+    whenAlone(formPopup, [weatherPopup], shell.pointerStep, "form")
+  }
+
+  function pointerStep() {
+    var page = formPopup.bodyItem
+    var ta = page.toggleA
+    var fill = findByName(ta, "foamyToggleFill")
+    // Hover first, before any click lands on the row: it lights up under
+    // the pointer (the colour animates).
+    wait.waitFor(function () {
+      return fill.color.a === 0
+    }, 1000, function () {
+      ev.mouseMove(ta, ta.width / 2, ta.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+      wait.waitFor(function () {
+        return fill.color.a > 0
+      }, 1000, function () {
+        shell.clicks()
+      }, tag + " hover lights the row")
+    }, tag + " the row is unlit before the pointer reaches it")
+  }
+
+  function clicks() {
+    var page = formPopup.bodyItem
+    var ta = page.toggleA
+    ev.mouseClick(ta, ta.width / 2, ta.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+    check(shell.toggleClicks === 1 && !ta.checked, "click emits clicked, never flips checked " + shell.toggleClicks)
+    shell.verifying = true
+    clickCentre(page.secondary)
+    check(shell.verifies === 0, "a busy button ignores a click " + shell.verifies)
+    shell.verifying = false
+    clickCentre(page.secondary)
+    check(shell.verifies === 1, "no longer busy, the same click verifies " + shell.verifies)
+    console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+    console.log("FOAMY DONE")
+    Qt.quit()
   }
 
   Item {

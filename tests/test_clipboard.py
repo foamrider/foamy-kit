@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """kit/clipboard.sh through hostenv.clipboard_fakes(), the stand-ins plugin
 clipboard tests share: the paste's bounds (size, NUL, single line or
-`multiline` with its line breaks kept, the 2 s
-deadline, a producer that ignores SIGTERM) and that a paste which works
-still works when the machine is slow. Shell only: no Quickshell or Omarchy
-host, so tests/suite.sh --ci runs it too."""
+`multiline` with its line breaks kept, the 2 s deadline, a producer that
+ignores SIGTERM), the exit codes FoamyClipboard maps to its messages, that
+a stopped read ends whole, and that a paste which works still works when
+the machine is slow. Shell only: no Quickshell or Omarchy host, so
+tests/suite.sh --ci runs it too."""
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -35,9 +37,9 @@ def paste(env, mode, selection="clipboard", *extra):
     return result, time.monotonic() - started
 
 
-def stopped(pid):
-    """True once `pid` is gone or a zombie (bounded wait)."""
-    deadline = time.monotonic() + 2
+def stopped(pid, within=2.0):
+    """True once `pid` is gone or a zombie, waiting at most `within` seconds."""
+    deadline = time.monotonic() + within
     while time.monotonic() < deadline:
         try:
             if Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "Z":
@@ -46,6 +48,55 @@ def stopped(pid):
             return True
         time.sleep(0.01)
     return False
+
+
+def catches_term(pid):
+    """True when `pid` has a handler for SIGTERM: clipboard.sh's trap is set.
+    The trap sets TERM, INT and HUP in one command, and only the trap
+    catches TERM (bash may hold its own INT handler before that)."""
+    try:
+        status = Path(f"/proc/{pid}/status").read_text()
+    except FileNotFoundError:
+        return False
+    caught = next(int(line.split()[1], 16) for line in status.splitlines() if line.startswith("SigCgt:"))
+    return bool(caught & 1 << (signal.SIGTERM - 1))
+
+
+def signalled(env, signum):
+    """(exit code or the reason no signal was sent, stdout, stderr, producer
+    pid, producer stopped within 1 s) for a `loaded` paste whose
+    clipboard.sh gets `signum` once its trap is set. The stand-in timeout gives `loaded` 60 s and its producer runs
+    2.5 s, so only the trap's kill of the whole read ends it within 1 s."""
+    state = Path(env["TEST_CLIPBOARD_STATE"])
+    state.write_text("loaded")
+    Path(f"{state}.pid").unlink(missing_ok=True)
+    # Files, not pipes: a producer that outlives clipboard.sh would hold a
+    # pipe open, and the wait below must still end with clipboard.sh.
+    out, err = Path(f"{state}.out"), Path(f"{state}.err")
+    with out.open("wb") as stdout, err.open("wb") as stderr:
+        proc = subprocess.Popen(["bash", str(HELPER), "clipboard"], env=env, stdout=stdout, stderr=stderr)
+    pid_file = Path(f"{state}.pid")
+    try:
+        deadline = time.monotonic() + 5
+        # The stand-in empties the pid file before it writes its pid.
+        producer = ""
+        while not (producer and catches_term(proc.pid)):
+            if proc.poll() is not None:
+                return f"clipboard.sh exited first with {proc.returncode}", b"", b"", producer or None, False
+            if time.monotonic() > deadline:
+                return "the trap and the producer pid not seen within 5 s", b"", b"", producer or None, False
+            time.sleep(0.01)
+            producer = pid_file.read_text().strip() if pid_file.exists() else ""
+        os.kill(proc.pid, signum)
+        try:
+            code = proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            code = "none within 2 s"
+        return code, out.read_bytes(), err.read_bytes(), producer, stopped(producer, within=1.0)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
 
 
 def main():
@@ -59,7 +110,6 @@ def main():
             ("unicode", "/home/test/Blåbær 📁"),
             ("empty", ""),
             ("limit", "x" * 16384),
-            ("delayed", "later"),
             ("lines", "one  two three"),
         ):
             result, _ = paste(env, mode)
@@ -75,14 +125,19 @@ def main():
             result.returncode == 0 and args == ["--no-newline", "--type", "text", "--primary"],
             str(args),
         )
+        # Exit 5 is what FoamyClipboard shows as "too large"; with an
+        # endless stream, pipefail reports jq's 5 as the last failure.
         for mode in ("large", "nul", "stream"):
             result, _ = paste(env, mode)
             ok &= report(
-                f"{mode}: refused, with no output",
-                result.returncode != 0 and result.stdout == b"" and result.stderr == b"",
+                f"{mode}: refused with exit 5, with no output",
+                result.returncode == 5 and result.stdout == b"" and result.stderr == b"",
                 f"exit {result.returncode}",
             )
-        ok &= report("a failing wl-paste fails the paste", paste(env, "failure")[0].returncode != 0)
+        # Not 5, 124 or 137, which FoamyClipboard shows as "too large" or
+        # "timed out": a failing wl-paste is "Could not paste".
+        code = paste(env, "failure")[0].returncode
+        ok &= report("a failing wl-paste fails the paste", code not in (0, 5, 124, 137), f"exit {code}")
 
         # multiline (SafeTextArea): the same bounds, line breaks kept as "\n".
         for mode, selection, expected in (
@@ -109,8 +164,8 @@ def main():
         for mode in ("large", "nul", "stream"):
             result, _ = paste(env, mode, "clipboard", "multiline")
             ok &= report(
-                f"multiline {mode}: refused, with no output",
-                result.returncode != 0 and result.stdout == b"" and result.stderr == b"",
+                f"multiline {mode}: refused with exit 5, with no output",
+                result.returncode == 5 and result.stdout == b"" and result.stderr == b"",
                 f"exit {result.returncode}",
             )
         for extra in (["lines"], ["multiline", "multiline"], ["", "multiline"]):
@@ -128,6 +183,16 @@ def main():
                 f"{mode}: killed at the 2 s deadline, producer included",
                 result.returncode == 137 and seconds < 4 and stopped(pid),
                 f"exit {result.returncode} after {seconds:.1f}s",
+            )
+
+        # The caller stops a read (Quickshell sends TERM): the whole read
+        # ends at once, producer included, with exit 143 and no output.
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            code, out, err, producer, gone = signalled(env, signum)
+            ok &= report(
+                f"{signum.name} to clipboard.sh kills the whole read",
+                code == 143 and out == b"" and err == b"" and gone,
+                f"exit {code}, output {out + err!r:.40}, producer {producer} stopped within 1 s: {gone}",
             )
 
         # Load: a paste that takes 2.5 s (a slow machine) still pastes with

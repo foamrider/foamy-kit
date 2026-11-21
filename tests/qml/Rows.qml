@@ -210,17 +210,28 @@ ShellRoot {
     }
   }
 
-  Timer {
-    interval: 900
-    running: true
-    onTriggered: {
-      Style.cornerRadius = 6
-      var w = formPopup.cardItem.Window.window
-      if (w && !w.active)
-        w.requestActivate()
-      settle.start()
-    }
+  FoamyWait {
+    id: wait
   }
+
+  // Start once the card has a window; check once the page is laid out and
+  // the window is active (the key steps need it).
+  Component.onCompleted: wait.waitFor(function () {
+    return formPopup.cardItem.Window.window !== null
+  }, 5000, function (ok) {
+    if (!ok) {
+      done.start()
+      return
+    }
+    Style.cornerRadius = 6
+    var w = formPopup.cardItem.Window.window
+    if (!w.active)
+      w.requestActivate()
+    wait.waitFor(function () {
+      var p = formPopup.bodyItem
+      return p !== null && w.active && p.lfs.y > 0 && p.lfs.infoNote.infoButton.width > 0 && p.mouseWheel.triggerItem.width > 0
+    }, 5000, settleChecks, "the settings page is laid out")
+  }, "the popup card has a window")
 
   // Trailing edge of a control in its row's coordinates: the end of the row
   // (right in LTR, left in RTL) should be flush with it.
@@ -232,63 +243,62 @@ ShellRoot {
     return item.mapToItem(ref, 0, item.height / 2).y
   }
 
-  Timer {
-    id: settle
-    interval: 500
-    onTriggered: {
-      var page = formPopup.bodyItem
-      var rowH = FoamyStyle.rowHeight + FoamyStyle.gapSmall
-      var mw = page.mouseWheel, lw = page.labelWidth, ta = page.toggleA, tb = page.toggleB
-      // One list: the same row height.
-      check(near(tb.height, rowH) && near(mw.height, rowH) && near(lw.height, rowH) && near(page.interval.height, rowH), "toggle, compact number and compact dropdown rows share a height " + [tb.height, mw.height, lw.height, page.interval.height, rowH])
-      var at = findByName(page.accent, "foamyDropdownRowText")
-      check(near(page.accent.height, Math.max(rowH, at.implicitHeight + FoamyStyle.gap * 2)) && near(ta.height, Math.max(rowH, ta.children[1].implicitHeight + FoamyStyle.gap * 2)), "rows with a description grow as toggle rows do " + page.accent.height + " / " + ta.height)
-      // Trailing controls on the row's end.
-      check(near(endGap(tb.switchItem, tb), 0), "switch on the end " + endGap(tb.switchItem, tb))
-      check(near(endGap(mw.triggerItem, mw), 0), "compact dropdown on the end " + endGap(mw.triggerItem, mw))
-      check(near(endGap(page.accent.triggerItem, page.accent), 0), "described dropdown on the end")
-      // The number field's unit column ends the row (field + unit block).
-      var unitEnd = shell.rtl ? lw.field.mapToItem(lw, 0, 0).x - FoamyStyle.gap - FoamyStyle.unitWidthCompact : lw.width - (lw.field.mapToItem(lw, 0, 0).x + lw.field.width + FoamyStyle.gap + FoamyStyle.unitWidthCompact)
-      check(near(unitEnd, 0, 1.5), "number field + unit end the row " + unitEnd)
-      var unit = findText(lw, "px")
-      var ux = unit.mapToItem(lw, 0, 0).x
-      check(shell.rtl ? near(ux, 0) && unit.effectiveHorizontalAlignment === Text.AlignLeft : near(ux + unit.width, lw.width) && unit.effectiveHorizontalAlignment === Text.AlignRight, "unit text ends on the row's end " + ux + " " + unit.effectiveHorizontalAlignment)
-      // Controls centred on their row, labels on the start.
-      check(near(midY(mw.triggerItem, mw), mw.height / 2) && near(midY(tb.switchItem, tb), tb.height / 2) && near(midY(lw.field, lw), lw.height / 2), "controls vertically centred " + [midY(mw.triggerItem, mw), midY(tb.switchItem, tb), midY(lw.field, lw)])
-      var rt = findByName(mw, "foamyDropdownRowText")
-      var rtx = rt.mapToItem(mw, 0, 0).x
-      if (shell.rtl)
-        check(near(rtx + rt.width, mw.width) && rtx >= mw.triggerItem.width + FoamyStyle.gapLarge - 1, "RTL: label on the right " + rtx)
-      else
-        check(near(rtx, 0) && rtx + rt.width <= mw.triggerItem.mapToItem(mw, 0, 0).x - FoamyStyle.gapLarge + 1, "label on the start " + rtx)
-      check(near(midY(rt, mw), mw.height / 2, 1.5), "label vertically centred")
-      check(rt.children[0].font.pixelSize === FoamyStyle.font.subtitle && rt.children[0].font.weight < Font.DemiBold, "label in the toggle row style")
-      var nt = findByName(lw, "foamyNumberRowText")
-      check(nt && nt.visible && near(nt.children[0].mapToItem(lw, 0, 0).x, shell.rtl ? lw.width - nt.children[0].width : 0, 1.5), "number label on the start")
-      // Sized to the widest option; capped at half the row and eliding.
-      check(near(mw.triggerItem.width, mw.compactNaturalWidth) && mw.triggerItem.width < mw.width / 2, "dropdown fits its widest option " + mw.triggerItem.width + " natural " + mw.compactNaturalWidth)
-      var metrics = Qt.createQmlObject('import QtQuick; FontMetrics { font.family: "' + FoamyStyle.fontFamily + '"; font.pixelSize: ' + FoamyStyle.font.body + ' }', shell)
-      check(mw.compactNaturalWidth >= metrics.advanceWidth("Previous/next track") + FoamyStyle.iconSize, "natural width covers the widest label and chevron")
-      var lc = page.longChoice
-      check(near(lc.triggerItem.width, Math.floor(lc.width * 0.5)), "long options cap at half the row " + lc.triggerItem.width + " of " + lc.width)
-      var plain = findText(lc.triggerItem, "com.microsoft.teams.progressive-web-app-instance")
-      check(plain && plain.truncated, "capped label elides")
-      // Full-width dropdown unchanged: label above, trigger full width.
-      var fw = page.fullWidth
-      check(near(fw.triggerItem.width, fw.width) && fw.triggerItem.mapToItem(fw, 0, 0).y > 8, "full-width dropdown keeps the label above")
-      check(!findByName(fw, "foamyDropdownRowText").visible, "no row label outside compact")
-      // Section titles: an (i) title is as far from its description as a plain one.
-      var dp = findByName(page.folders, "foamySectionDescription"), dl = findByName(page.lfs, "foamySectionDescription")
-      var tp = findByName(page.folders, "foamySectionTitle")
-      check(near(dp.y, dl.y, 0.5), "description as far below an (i) title as below a plain title " + dl.y + " vs " + dp.y)
-      var btn = page.lfs.infoNote.infoButton
-      var bTop = btn.mapToItem(page.lfs, 0, 0).y
-      check(bTop + btn.height <= dl.y + 1, "(i) button clear of the description " + (bTop + btn.height) + " / " + dl.y)
-      var gapAbove = page.lfs.mapToItem(page, 0, 0).y - (page.folders.mapToItem(page, 0, 0).y + page.folders.height)
-      check(gapAbove >= 0 && page.lfs.infoNote.height <= tp.height + 0.5, "heading line as tall as a title " + page.lfs.infoNote.height + " / " + tp.height)
-      shot.queue = [["rows", step2]]
-      shot.start()
+  function settleChecks() {
+    var page = formPopup.bodyItem
+    var rowH = FoamyStyle.rowHeight + FoamyStyle.gapSmall
+    var mw = page.mouseWheel, lw = page.labelWidth, ta = page.toggleA, tb = page.toggleB
+    // One list: the same row height.
+    check(near(tb.height, rowH) && near(mw.height, rowH) && near(lw.height, rowH) && near(page.interval.height, rowH), "toggle, compact number and compact dropdown rows share a height " + [tb.height, mw.height, lw.height, page.interval.height, rowH])
+    // A description makes its row taller and shows inside it, unclipped.
+    var described = [[page.accent, "The colour of the progress bar and the playing icon."], [ta, "Left-click opens the popup."]]
+    for (var d = 0; d < described.length; d++) {
+      var row = described[d][0], desc = findText(row, described[d][1])
+      var top = desc ? desc.mapToItem(row, 0, 0).y : -1
+      check(desc && top >= 0 && top + desc.height <= row.height + 0.5 && row.height > rowH + 1, "rows with a description grow to show it: " + described[d][1] + " at " + top + " + " + (desc ? desc.height : "missing") + " in " + row.height + " (plain row " + rowH + ")")
     }
+    // Trailing controls on the row's end.
+    check(near(endGap(tb.switchItem, tb), 0), "switch on the end " + endGap(tb.switchItem, tb))
+    check(near(endGap(mw.triggerItem, mw), 0), "compact dropdown on the end " + endGap(mw.triggerItem, mw))
+    check(near(endGap(page.accent.triggerItem, page.accent), 0), "described dropdown on the end")
+    // The number field's unit ends the row.
+    var unit = findText(lw, "px")
+    var ux = unit.mapToItem(lw, 0, 0).x
+    check(shell.rtl ? near(ux, 0) && unit.effectiveHorizontalAlignment === Text.AlignLeft : near(ux + unit.width, lw.width) && unit.effectiveHorizontalAlignment === Text.AlignRight, "unit text ends on the row's end " + ux + " " + unit.effectiveHorizontalAlignment)
+    // Controls centred on their row, labels on the start.
+    check(near(midY(mw.triggerItem, mw), mw.height / 2) && near(midY(tb.switchItem, tb), tb.height / 2) && near(midY(lw.field, lw), lw.height / 2), "controls vertically centred " + [midY(mw.triggerItem, mw), midY(tb.switchItem, tb), midY(lw.field, lw)])
+    var rt = findByName(mw, "foamyDropdownRowText")
+    var rtx = rt.mapToItem(mw, 0, 0).x
+    if (shell.rtl)
+      check(near(rtx + rt.width, mw.width) && rtx >= mw.triggerItem.width + FoamyStyle.gapLarge - 1, "RTL: label on the right " + rtx)
+    else
+      check(near(rtx, 0) && rtx + rt.width <= mw.triggerItem.mapToItem(mw, 0, 0).x - FoamyStyle.gapLarge + 1, "label on the start " + rtx)
+    check(near(midY(rt, mw), mw.height / 2, 1.5), "label vertically centred")
+    check(rt.children[0].font.pixelSize === FoamyStyle.font.subtitle && rt.children[0].font.weight < Font.DemiBold, "label in the toggle row style")
+    var nt = findByName(lw, "foamyNumberRowText")
+    check(nt && nt.visible && near(nt.children[0].mapToItem(lw, 0, 0).x, shell.rtl ? lw.width - nt.children[0].width : 0, 1.5), "number label on the start")
+    // Sized to the widest option; capped at half the row and eliding.
+    check(near(mw.triggerItem.width, mw.compactNaturalWidth) && mw.triggerItem.width < mw.width / 2, "dropdown fits its widest option " + mw.triggerItem.width + " natural " + mw.compactNaturalWidth)
+    var metrics = Qt.createQmlObject('import QtQuick; FontMetrics { font.family: "' + FoamyStyle.fontFamily + '"; font.pixelSize: ' + FoamyStyle.font.body + ' }', shell)
+    check(mw.compactNaturalWidth >= metrics.advanceWidth("Previous/next track") + FoamyStyle.iconSize, "natural width covers the widest label and chevron")
+    var lc = page.longChoice
+    check(near(lc.triggerItem.width, Math.floor(lc.width * 0.5)), "long options cap at half the row " + lc.triggerItem.width + " of " + lc.width)
+    var plain = findText(lc.triggerItem, "com.microsoft.teams.progressive-web-app-instance")
+    check(plain && plain.truncated, "capped label elides")
+    // Full-width dropdown unchanged: label above, trigger full width.
+    var fw = page.fullWidth
+    check(near(fw.triggerItem.width, fw.width) && fw.triggerItem.mapToItem(fw, 0, 0).y > 8, "full-width dropdown keeps the label above")
+    check(!findByName(fw, "foamyDropdownRowText").visible, "no row label outside compact")
+    // Section titles: an (i) title is as far from its description as a plain one.
+    var dp = findByName(page.folders, "foamySectionDescription"), dl = findByName(page.lfs, "foamySectionDescription")
+    var tp = findByName(page.folders, "foamySectionTitle")
+    check(near(dp.y, dl.y, 0.5), "description as far below an (i) title as below a plain title " + dl.y + " vs " + dp.y)
+    var btn = page.lfs.infoNote.infoButton
+    var bTop = btn.mapToItem(page.lfs, 0, 0).y
+    check(bTop + btn.height <= dl.y + 1, "(i) button clear of the description " + (bTop + btn.height) + " / " + dl.y)
+    var gapAbove = page.lfs.mapToItem(page, 0, 0).y - (page.folders.mapToItem(page, 0, 0).y + page.folders.height)
+    check(gapAbove >= 0 && page.lfs.infoNote.height <= tp.height + 0.5, "heading line as tall as a title " + page.lfs.infoNote.height + " / " + tp.height)
+    shot.queue = [["rows", step2]]
+    shot.start()
   }
 
   // Open the compact dropdown: the list grows toward the label, keys pick.
@@ -300,32 +310,30 @@ ShellRoot {
       var lc = page.longChoice
       lc.triggerItem.forceActiveFocus()
       ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
-      openCheck.start()
+      wait.waitFor(function () {
+        return lc.popupOpen && findPopupList(lc) !== null
+      }, 3000, openCheck)
     }
   }
-  Timer {
-    id: openCheck
-    interval: 400
-    onTriggered: {
-      var page = formPopup.bodyItem
-      var lc = page.longChoice
-      check(lc.popupOpen, "Enter opens the compact dropdown")
-      var list = findPopupList(lc)
-      if (list) {
-        var t = lc.triggerItem
-        var lp = list.mapToItem(lc, 0, 0)
-        var pw = list.width
-        check(pw > t.width + 10 && pw <= lc.width + 1, "open list wider than the capped trigger, within the row " + pw + " / " + t.width)
-        var tx = t.mapToItem(lc, 0, 0).x
-        if (shell.rtl)
-          check(near(lp.x, tx, 4), "RTL: list starts at the trigger's left edge " + lp.x + " / " + tx)
-        else
-          check(near(lp.x + pw, tx + t.width, 4), "list ends at the trigger's right edge " + (lp.x + pw) + " / " + (tx + t.width))
-      } else
-        check(false, "popup list found")
-      shot.queue = [["rows-open", step3, true]]
-      shot.start()
-    }
+  function openCheck() {
+    var page = formPopup.bodyItem
+    var lc = page.longChoice
+    check(lc.popupOpen, "Enter opens the compact dropdown")
+    var list = findPopupList(lc)
+    if (list) {
+      var t = lc.triggerItem
+      var lp = list.mapToItem(lc, 0, 0)
+      var pw = list.width
+      check(pw > t.width + 10 && pw <= lc.width + 1, "open list wider than the capped trigger, within the row " + pw + " / " + t.width)
+      var tx = t.mapToItem(lc, 0, 0).x
+      if (shell.rtl)
+        check(near(lp.x, tx, 4), "RTL: list starts at the trigger's left edge " + lp.x + " / " + tx)
+      else
+        check(near(lp.x + pw, tx + t.width, 4), "list ends at the trigger's right edge " + (lp.x + pw) + " / " + (tx + t.width))
+    } else
+      check(false, "popup list found")
+    shot.queue = [["rows-open", step3, true]]
+    shot.start()
   }
   Timer {
     id: step3
@@ -336,35 +344,31 @@ ShellRoot {
       var mw = page.mouseWheel
       mw.triggerItem.forceActiveFocus()
       ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
-      pick.start()
+      wait.waitFor(function () {
+        return mw.popupOpen
+      }, 3000, pick, "Enter opens the mouse wheel dropdown")
     }
   }
-  Timer {
-    id: pick
-    interval: 300
-    onTriggered: {
-      var mw = formPopup.bodyItem.mouseWheel
-      ev.keyClick(Qt.Key_Down, Qt.NoModifier, -1)
-      ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
-      check(JSON.stringify(shell.wheelChanges) === '["volume"]', "pick emits changed " + JSON.stringify(shell.wheelChanges))
-      check(mw.value === "track" && mw.currentLabel() === "Volume", "value stays the caller's; the pick shows")
-      // The info note opened sits clear of the (i).
-      var lfs = formPopup.bodyItem.lfs
-      lfs.infoNote.open()
-      noteCheck.start()
-    }
+  function pick() {
+    var mw = formPopup.bodyItem.mouseWheel
+    ev.keyClick(Qt.Key_Down, Qt.NoModifier, -1)
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    check(JSON.stringify(shell.wheelChanges) === '["volume"]', "pick emits changed " + JSON.stringify(shell.wheelChanges))
+    check(mw.value === "track" && mw.currentLabel() === "Volume", "value stays the caller's; the pick shows")
+    // The info note opened sits clear of the (i).
+    var lfs = formPopup.bodyItem.lfs
+    lfs.infoNote.open()
+    wait.waitFor(function () {
+      return lfs.infoNote.note.visible && lfs.infoNote.note.height > 0
+    }, 3000, noteCheck, "the open note shows with a height")
   }
-  Timer {
-    id: noteCheck
-    interval: 300
-    onTriggered: {
-      var lfs = formPopup.bodyItem.lfs
-      var btn = lfs.infoNote.infoButton
-      var n = lfs.infoNote.note
-      check(n.visible && n.mapToItem(lfs, 0, 0).y >= btn.mapToItem(lfs, 0, 0).y + btn.height - 0.5, "open note under the (i) button")
-      shot.queue = [["rows-note", done]]
-      shot.start()
-    }
+  function noteCheck() {
+    var lfs = formPopup.bodyItem.lfs
+    var btn = lfs.infoNote.infoButton
+    var n = lfs.infoNote.note
+    check(n.visible && n.mapToItem(lfs, 0, 0).y >= btn.mapToItem(lfs, 0, 0).y + btn.height - 0.5, "open note under the (i) button")
+    shot.queue = [["rows-note", done]]
+    shot.start()
   }
   Timer {
     id: done

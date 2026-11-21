@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """kit 0.4.0 components (tests/qml/Components.qml) on 4.5, LTR
 and RTL, at display scale 1.0 and 1.25: centred hero band, FoamyPanelFooter,
-FoamyButton, FoamyInfoNote, popup height following the screen. Card
-screenshots: tests/out/components/."""
+FoamyButton, FoamyInfoNote, FoamyPopupCard's height following the screen.
+Card screenshots: tests/out/components/."""
 
 import shutil
 import sys

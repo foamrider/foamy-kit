@@ -3,7 +3,8 @@
 #   tests/suite.sh          every test: tests/run-all.sh (needs qs, the Omarchy
 #                           4.5 shell, rustup; see run-all.sh)
 #   tests/suite.sh --ci     the tests that need neither Quickshell nor the
-#   tests/suite.sh --fast   Omarchy host: node, sync/check, image compare
+#   tests/suite.sh --fast   Omarchy host: node, sync/check, validate, image
+#                           compare, clipboard
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
 if [[ $# -eq 0 ]]; then

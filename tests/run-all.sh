@@ -8,8 +8,12 @@
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || exit 1
 status=0
+# Each run records its test file (the last argument), so the check at the
+# end can fail on a test file that no line here runs.
+ran=()
 run() {
   echo "== $*"
+  ran+=("${!#}")
   "$@" || status=1
 }
 run node prefs.test.cjs
@@ -44,9 +48,16 @@ run python3 -I test_masked.py
 run python3 -I test_text_runs.py
 run python3 -I test_text_area.py
 run python3 -I test_schedule.py
+run python3 -I test_clock.py
 run python3 -I test_wheel.py
 run python3 -I test_preview.py
 run python3 -I test_trio.py
+for file in test_*.py *.test.cjs; do
+  [[ " ${ran[*]} " == *" $file "* ]] || {
+    echo "FAIL $file is not run by run-all.sh"
+    status=1
+  }
+done
 echo
 if ((status == 0)); then echo "ALL TESTS PASSED"; else echo "SOME TESTS FAILED"; fi
 exit $status

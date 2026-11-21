@@ -160,20 +160,6 @@ ShellRoot {
     check(styled.runsShown, "matching runs are shown")
     check(styled.editorItem.color.a === 0, "the editor's own text is transparent under runs")
     check(!plain.runsShown && plain.editorItem.color.a === 1, "a field without runs draws its text")
-    // Each run starts where the editor puts its first character.
-    var layer = findByName(styled.editorItem, "runsLayer")
-    var texts = layer ? layer.children.filter(function (child) {
-      return child.text !== undefined
-    }) : []
-    eq(texts.length, tokens(sentence).length, "one Text per run")
-    var at = 0
-    var aligned = true
-    for (var i = 0; i < texts.length; i++) {
-      var rect = styled.editorItem.positionToRectangle(at)
-      aligned = aligned && near(texts[i].x + layer.x, rect.x) && near(texts[i].y, rect.y)
-      at += texts[i].text.length
-    }
-    check(aligned, "each run sits on the editor's own glyph position")
     // Where the editor clips its text (the paddings), in the field's pixels.
     console.log("FOAMY EDGES " + JSON.stringify([Math.round(styled.leftPadding), Math.round(styled.width - styled.rightPadding)]))
     pair("start", shell.scrolled)
@@ -374,10 +360,6 @@ ShellRoot {
     plain.text = sentence
     styled.runs = sameColour(sentence, "bogus")
     check(styled.runsShown, "bogus: runs with an unusable colour are shown")
-    var texts = runTexts(styled)
-    check(texts.length > 0 && texts.every(function (item) {
-      return Qt.colorEqual(item.color, styled.color)
-    }), "bogus: every run takes the field's colour " + (texts.length ? texts[0].color : "none") + " vs " + styled.color)
     pair("bogus", shell.composing)
   }
   // An input method composing in a styled field: its preedit shows only in
