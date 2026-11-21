@@ -106,6 +106,7 @@ ShellRoot {
           width: parent.width
           title: "Rows"
           Repeater {
+            id: toggles
             model: 8
             FoamyToggle {
               width: parent.width
@@ -113,6 +114,7 @@ ShellRoot {
             }
           }
           Repeater {
+            id: numbers
             model: 4
             FoamyNumberField {
               width: parent.width
@@ -121,6 +123,7 @@ ShellRoot {
             }
           }
           Repeater {
+            id: dropdowns
             model: 4
             FoamyDropdown {
               width: parent.width
@@ -221,6 +224,22 @@ ShellRoot {
       until: until
     }
   }
+  // Where the item lies in the settings page's content, and whether the
+  // view shows all of it.
+  function topOf(item) {
+    return item.mapToItem(page.flickable.contentItem, 0, 0).y
+  }
+  function inView(item) {
+    var view = page.flickable
+    return topOf(item) >= view.contentY - 1 && topOf(item) + item.height <= view.contentY + view.height + 1
+  }
+  // Whether the window's focus is in `item`.
+  function holdsFocus(item) {
+    for (var focused = page.Window.activeFocusItem; focused; focused = focused.parent)
+      if (focused === item)
+        return true
+    return false
+  }
 
   Component.onCompleted: {
     var notch = wheel.notch
@@ -319,6 +338,30 @@ ShellRoot {
         check(notes.inputActiveFocus && notes.height < view.height && near(view.contentY, notesAt) && y >= view.contentY - 1 && y + notes.height <= view.contentY + view.height + 1, "a focused text area in view: no scroll " + [y, notes.height, notesAt, view.contentY, view.height])
         notes.focus = false
       }, 300),
+      // Focus follow on ordinary controls: the least scroll that shows the
+      // focused control, a gap from the view's edge.
+      step(function () {
+        page.flickable.contentY = 0
+        numbers.itemAt(3).field.focusInput()
+      }, function () {
+        var field = numbers.itemAt(3).field
+        var view = page.flickable
+        var bottom = topOf(field) + field.height
+        check(field.inputActiveFocus && inView(field) && view.contentY > 0 && near(bottom + FoamyStyle.gap, view.contentY + view.height), "focus below the view scrolls the field just into view " + [bottom, view.contentY, view.height])
+      }), step(function () {
+        ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+      }, function () {
+        var next = dropdowns.itemAt(0)
+        check(holdsFocus(next) && inView(next), "Tab to the control below scrolls it into view " + [topOf(next), next.height, page.flickable.contentY])
+      }), step(function () {
+        page.flickable.contentY = page.wheel.maxY
+        toggles.itemAt(0).forceActiveFocus()
+      }, function () {
+        var toggle = toggles.itemAt(0)
+        var view = page.flickable
+        check(holdsFocus(toggle) && inView(toggle) && near(view.contentY, Math.max(0, topOf(toggle) - FoamyStyle.gap)), "focus above the view scrolls the control just into view " + [topOf(toggle), view.contentY])
+        toggle.focus = false
+      }),
       // ensureVisible follows a section while it grows.
       step(function () {
         page.flickable.contentY = 0
