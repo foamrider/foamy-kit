@@ -3,7 +3,6 @@ import QtQuick.Controls as Controls
 import QtTest
 import Quickshell
 import Quickshell.Io
-import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "harness"
@@ -184,23 +183,43 @@ ShellRoot {
     onTriggered: shell.typing()
   }
 
+  // Fill and border colour of a field as strings: a colour read from a
+  // property can follow later changes of that property.
+  function look(field) {
+    return [String(field.background.color), String(field.background.borderSpec.color)]
+  }
+  function sameLook(field, expected) {
+    var now = look(field)
+    return Qt.colorEqual(now[0], expected[0]) && Qt.colorEqual(now[1], expected[1])
+  }
+
   // `quiet`: at rest neither fill nor border, with the border's width kept
   // (the text sits where a plain field's does); the cursor and the focus
-  // show the usual field.
+  // show what the plain field of the same type shows then.
   function quietness(field, plain, label) {
     var surface = field.background
     check(Qt.colorEqual(surface.color, "transparent") && Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": no fill or border at rest")
-    eq(surface.borderSpec.widths, plain._borderSpec.widths, label + ": the border keeps its width at rest")
+    eq(surface.borderSpec.widths, plain.background.borderSpec.widths, label + ": the border keeps its width at rest")
     eq([field.leftPadding, field.rightPadding], [plain.leftPadding, plain.rightPadding], label + ": the text sits where a plain field's does")
+    plain.hasCursor = true
+    var hot = look(plain)
+    plain.hasCursor = false
     field.hasCursor = true
     check(!Qt.colorEqual(surface.color, "transparent") && !Qt.colorEqual(surface.borderSpec.color, "transparent"), label + ": the cursor shows the field")
+    check(sameLook(field, hot), label + ": under the cursor it looks like a plain field there: got " + look(field) + ", expected " + hot)
     field.hasCursor = false
+    plain.focusInput()
+    var focused = look(plain)
     field.focusInput()
-    check(Qt.colorEqual(surface.color, Style.controlFill(true, false, field.foreground, field.accent)), label + ": the focus shows the focused fill")
-    check(Qt.colorEqual(surface.borderSpec.color, Border.controlSpec("focus", field.foreground, field.accent).color), label + ": the focus shows the focus border")
+    check(sameLook(field, focused), label + ": the focus shows the usual focused field: got " + look(field) + ", expected " + focused)
     field.editorItem.focus = false
     check(Qt.colorEqual(surface.color, "transparent"), label + ": at rest again after the focus leaves")
     check(!Qt.colorEqual(plain.background.color, "transparent") || !Qt.colorEqual(plain.background.borderSpec.color, "transparent"), label + ": a plain field keeps its look at rest")
+    // Focusing and leaving the plain field ended its edit: the typing checks
+    // below count from zero.
+    shell.finished = 0
+    shell.fieldFinished = 0
+    shell.edits = 0
   }
 
   function typing() {
