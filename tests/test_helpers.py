@@ -320,14 +320,17 @@ def main():
         )
         env = {**run.env, **overrides}
         stub_dir = Path(overrides["PATH"].split(":")[0])
+        tree = Path(overrides["OMARCHY_PATH"])
         ok &= report(
             "make(): a private OMARCHY_PATH whose bin/ and PATH stubs come first",
-            overrides["OMARCHY_PATH"] == str(base / "host/omarchy-host")
-            and (Path(overrides["OMARCHY_PATH"]) / "shell/Commons").is_dir()
-            and (Path(overrides["OMARCHY_PATH"]) / "bin/omarchy-test-only").is_file()
+            tree.resolve().is_relative_to((base / "host").resolve())
+            # The private tree shows the real shell QML the tests load.
+            and os.path.realpath(tree / "shell") == os.path.realpath(hostenv.root() / "shell")
+            and (tree / "shell/Commons").is_dir()
+            and (tree / "bin/omarchy-test-only").is_file()
             and {"omarchy-shell", "omarchy-test-only", "omarchy-extra", "omarchy-plugin-validate"}
             <= set(os.listdir(stub_dir)),
-            overrides["PATH"].split(":")[0],
+            f"{tree}, shell -> {os.path.realpath(tree / 'shell')}, stubs {stub_dir}",
         )
         answer = subprocess.run(
             ["omarchy-shell", "foamy.helpers", "ping", "kit"], env=env, capture_output=True, text=True, timeout=20
