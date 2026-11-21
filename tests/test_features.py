@@ -21,7 +21,7 @@ exit 0
 FAKE_OMARCHY_SHELL = """#!/bin/bash
 case "${1:-}" in
   foamy.gone) echo "Target not found: $1"; exit 0 ;;
-  foamy.slow) printf '%s\\n' "omarchy-shell $*" >> "$FOAMY_CALLS" ;;
+  foamy.limited) printf '%s\\n' "omarchy-shell $*" >> "$FOAMY_CALLS" ;;
 esac
 echo "cli: $*"
 """

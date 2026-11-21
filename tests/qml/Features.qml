@@ -88,7 +88,6 @@ ShellRoot {
       // On a settings page, as in a plugin: Escape that a field leaves
       // unhandled would go back.
       FoamySettingsPage {
-        id: keyPage
         width: 300
         height: 300
         onBack: shell.pageBacks++
@@ -597,7 +596,14 @@ ShellRoot {
     numberField.field.focusInput()
     key(Qt.Key_Return)
     eq(shell.numberCommits, [9], "Enter commits a valid changed draft once")
-    textSetting.field.focusInput()
+    // The focus goes to a plain field, not to another settings field, so the
+    // text field's own focus-out checks below still start without the focus.
+    // A real focus move ends the edit while the editor still has the focus,
+    // so it does not reach the commit today. The field's context menu that
+    // closes without giving the focus back does: editingFinished() without
+    // the focus, as emitted here.
+    longField.focusInput()
+    numberField.field.editingFinished()
     eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
     shell.numberSetting = 9
     eq(numberField.field.text, "9", "shows the saved value")
@@ -617,13 +623,15 @@ ShellRoot {
     numberField.field.focusInput()
     type("33")
     check(numberField.editing && numberField.field.text.indexOf("33") !== -1, "typed digits reach the field and start a draft: " + numberField.field.text)
+    var numberBacks = shell.pageBacks
     key(Qt.Key_Escape)
-    check(numberField.field.text === "12" && !numberField.editing && shell.pageBacks === 0, "Escape restores the value and the page stays: " + [numberField.field.text, numberField.editing, shell.pageBacks])
+    check(numberField.field.text === "12" && !numberField.editing && shell.pageBacks === numberBacks, "Escape restores the value and the page stays: " + [numberField.field.text, numberField.editing, shell.pageBacks - numberBacks])
     key(Qt.Key_Up)
     check(numberField.field.text === "17" && numberField.editing, "Up steps the draft by stepSize: " + numberField.field.text)
     key(Qt.Key_Return)
     eq(shell.numberCommits, [9, 17], "Enter commits the stepped draft once")
-    textSetting.field.focusInput()
+    longField.focusInput()
+    numberField.field.editingFinished()
     eq(shell.numberCommits, [9, 17], "focus-out after Enter doesn't commit it again")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
@@ -658,8 +666,9 @@ ShellRoot {
     check(!textSetting.commitEdit(false) && textSetting.error === "Too long", "validate() message on Enter")
     textSetting.field.focusInput()
     type("x")
+    var textBacks = shell.pageBacks
     key(Qt.Key_Escape)
-    check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === 0, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks])
+    check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === textBacks, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks - textBacks])
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
 
@@ -952,6 +961,11 @@ ShellRoot {
     eq(Resolver.call(shell, "foamy.shared-target", "nope", []), {
       ran: false
     }, "undeclared functions don't run")
+    // destroy() is callable on every handler but not declared: only the
+    // registry's list of declared functions refuses it.
+    eq(Resolver.call(shell, "foamy.shared-target", "destroy", []), {
+      ran: false
+    }, "a handler's QObject methods don't run")
     peer.call("foamy.shared-target", "who", [], function (ok, output) {
       shell.peerResult = {
         ok: ok,
@@ -974,14 +988,14 @@ ShellRoot {
     })
     // limit: 1. The second call finds the one process slot taken.
     inNarrowCall = true
-    narrow.call("foamy.slow", "status", [], function (ok, output) {
-      shell.slowFirst = {
+    narrow.call("foamy.limited", "status", [], function (ok, output) {
+      shell.limitedFirst = {
         ok: ok,
         output: output
       }
     })
-    narrow.call("foamy.slow", "status", [], function (ok, output) {
-      shell.slowSecond = {
+    narrow.call("foamy.limited", "status", [], function (ok, output) {
+      shell.limitedSecond = {
         ok: ok,
         output: output,
         insideCall: shell.inNarrowCall
@@ -997,7 +1011,7 @@ ShellRoot {
 
     // The preferences re-claim every 300 ms; the peer calls answer later.
     wait.waitFor(function () {
-      return shell.peerResult !== null && shell.peerFallback !== null && shell.peerGone !== null && shell.slowFirst !== null && shell.slowSecond !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
+      return shell.peerResult !== null && shell.peerFallback !== null && shell.peerGone !== null && shell.limitedFirst !== null && shell.limitedSecond !== null && Resolver.call(shell, "foamy.shared-target", "who", []).output === "mine" && Resolver.call(shell, "foamy.guarded", "who", []).output === "guarded"
     }, 3000, function () {
       shell.stepFour()
     }, "peer calls answer and the preferences re-claim")
@@ -1007,8 +1021,8 @@ ShellRoot {
   property var peerResult: null
   property var peerFallback: null
   property var peerGone: null
-  property var slowFirst: null
-  property var slowSecond: null
+  property var limitedFirst: null
+  property var limitedSecond: null
   property bool inNarrowCall: false
 
   function stepFour() {
@@ -1027,18 +1041,18 @@ ShellRoot {
       ok: false,
       output: "Target not found: foamy.gone"
     }, "a missing target fails although omarchy-shell exits 0")
-    eq(shell.slowSecond, {
+    eq(shell.limitedSecond, {
       ok: false,
       output: "",
       insideCall: false
     }, "a call over the process limit fails, and later, not inside call()")
-    eq(shell.slowFirst, {
+    eq(shell.limitedFirst, {
       ok: true,
-      output: "cli: foamy.slow status"
+      output: "cli: foamy.limited status"
     }, "the call within the limit runs")
     eq(callLog.lines().filter(function (line) {
-      return line.indexOf("omarchy-shell foamy.slow") === 0
-    }), ["omarchy-shell foamy.slow status"], "the limit starts one process")
+      return line.indexOf("omarchy-shell foamy.limited") === 0
+    }), ["omarchy-shell foamy.limited status"], "the limit starts one process")
     var unfinished = function () {
       return shell.laterChecks.filter(function (name) {
         return shell.finished.indexOf(name) === -1
