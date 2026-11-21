@@ -12,7 +12,6 @@ ShellRoot {
   id: shell
   readonly property string out: Quickshell.env("FOAMY_OUT")
   readonly property string host: Quickshell.env("FOAMY_HOST")
-  readonly property bool hasFork: Quickshell.env("FOAMY_FORK") === "1"
   readonly property int stripThickness: 34
   readonly property int screenW: 1920
   readonly property int screenH: 1080
@@ -114,7 +113,8 @@ ShellRoot {
       contentHeight: fittedContentHeight(bodyImplicitHeight)
     }
   }
-  readonly property Component forkComponent: hasFork ? Qt.createComponent(Qt.resolvedUrl("fork/ForkedPopup.qml")) : null
+  // The negative control: the old forked 4.0 popup, which must misplace.
+  readonly property Component forkComponent: Qt.createComponent(Qt.resolvedUrl("fork/ForkedPopup.qml"))
 
   // Expected bar strip thickness for `bar`.
   function thicknessFor(bar) {
@@ -146,6 +146,7 @@ ShellRoot {
   property string currentKind: ""
 
   Component.onCompleted: {
+    check(forkComponent.status === Component.Ready, "negative control loaded: " + forkComponent.errorString())
     Style.cornerRadius = 6
     var positions = ["top", "bottom", "left", "right"]
     var list = []
@@ -175,12 +176,11 @@ ShellRoot {
         kind: "capped",
         bar: "facade"
       })
-      if (hasFork)
-        list.push({
-          position: positions[i],
-          kind: "fork",
-          bar: "facade"
-        })
+      list.push({
+        position: positions[i],
+        kind: "fork",
+        bar: "facade"
+      })
     }
     cases = list
     runner.start()
