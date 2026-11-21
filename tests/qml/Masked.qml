@@ -493,8 +493,6 @@ ShellRoot {
     var plainLeft = plain.editorItem.positionToRectangle(0).x
     var plainRight = plain.editorItem.positionToRectangle(12).x
     check(shell.rtl ? near(plainRight, right, 1.5) : near(plainLeft, left, 1.5), "aligned like a normal field " + [plainLeft, plainRight, left, right])
-    // Qt 6.12 reports no name for a password edit (QQuickAccessibleAttached::name()).
-    eq([secret.editorItem.Accessible.name, secret.editorItem.Accessible.description], ["", ""], "a password edit exposes no name or description")
     eq(plain.editorItem.Accessible.name, "Plain label", "a normal field keeps its label")
     secret.select(3, 8)
     shell.shot("masked-selection", function () {

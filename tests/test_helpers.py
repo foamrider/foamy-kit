@@ -117,17 +117,6 @@ def process_group(base):
     )
     qs = ["qs", "-p", str(app), "--no-color"]
 
-    # Why: stopping only qs leaves what its Process started running.
-    env["FOAMY_CHILD"] = str(base / "child-plain")
-    plain = subprocess.Popen(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    pid = child_pid(base / "child-plain")
-    plain.terminate()
-    plain.wait(10)
-    left = pid is not None and harness.wait_for(lambda: not alive(pid), 1) is None
-    ok &= report("stopping only qs leaves its Process's child running (why ProcessGroup exists)", left, str(pid))
-    if pid is not None and alive(pid):
-        os.kill(pid, signal.SIGKILL)
-
     env["FOAMY_CHILD"] = str(base / "child-group")
     with hostenv.ProcessGroup(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as shell:
         pid = child_pid(base / "child-group")

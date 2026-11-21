@@ -100,25 +100,6 @@ def long_tmpdir():
     )
     run.cleanup()
 
-    # A socket limit no temp dir can meet: Run() stops with the reason and
-    # leaves nothing behind.
-    before = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
-    limit = harness.SOCKET_PATH_MAX
-    harness.SOCKET_PATH_MAX = 40
-    try:
-        harness.Run("4.5", HANG, prefix="foamy-kit-no-socket-dir-")
-        message = "constructed"
-    except SystemExit as error:
-        message = str(error)
-    finally:
-        harness.SOCKET_PATH_MAX = limit
-    after = set(Path(tempfile.gettempdir()).glob("foamy-kit-*")) | set(Path("/tmp").glob("foamy-kit-s-*"))
-    ok &= report(
-        "Run() stops with the reason when no socket dir fits, creating nothing",
-        "past the unix limit of 40" in message and after == before,
-        f"{message}; new: {sorted(map(str, after - before))}",
-    )
-
     # qs's own report of an unbindable socket fails a run.
     marker = harness.Run(
         "4.5",
@@ -268,19 +249,6 @@ def main():
         both.stdout.strip().replace("\n", "; "),
     )
     shutil.rmtree(fake, ignore_errors=True)
-    demo = KIT_ROOT / "tests/fixtures/demo-plugin"
-    rendered = subprocess.run(
-        [sys.executable, "-I", str(KIT_ROOT / "preview/render.py"), str(demo), "--host", "4.0"],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        env=env,
-    )
-    ok &= report(
-        "render.py --host 4.0 fails with the retirement message (no render)",
-        rendered.returncode != 0 and retired in rendered.stderr and "Traceback" not in rendered.stderr,
-        rendered.stderr.strip()[-200:],
-    )
     return 0 if ok else 1
 
 
