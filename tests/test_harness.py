@@ -55,11 +55,18 @@ def ipc_reachable(run):
     return instance if shown.returncode == 0 else None
 
 
-def long_tmpdir():
-    ok = True
-    parent = Path(tempfile.mkdtemp(prefix="foamy-kit-long-tmp-"))
+def make_long_tmp():
+    """(parent, dir) for a temp dir longer than the socket limit. The parent
+    is in /tmp, whatever the caller's TMPDIR, so the padding is never empty."""
+    parent = Path(tempfile.mkdtemp(prefix="foamy-kit-long-tmp-", dir="/tmp"))
     long_tmp = parent / ("t" * (harness.SOCKET_PATH_MAX - len(str(parent))))
     long_tmp.mkdir()
+    return parent, long_tmp
+
+
+def long_tmpdir():
+    ok = True
+    parent, long_tmp = make_long_tmp()
     saved = tempfile.tempdir
     tempfile.tempdir = str(long_tmp)
     try:
@@ -139,34 +146,54 @@ def main():
     ok &= report("cleanup removes the temp dir", not base.exists())
 
     # 2. The Python parent is SIGKILLed mid-run (no finally, no atexit).
-    child = subprocess.Popen([sys.executable, "-I", "-c", CHILD], stdout=subprocess.PIPE, text=True)
-    base = Path(child.stdout.readline().strip())
-    sockets = child.stdout.readline().strip()
-    alive_before = bool(harness.wait_for(lambda: harness.processes_under(base), 10))
-    child.send_signal(signal.SIGKILL)
-    child.wait()
-    ok &= report(
-        "a killed parent takes qs and its bus with it",
-        alive_before and gone(base),
-        f"before={alive_before} after={harness.processes_under(base)}",
-    )
-    # gc recognises the dirs such a run left by their real names, wherever
-    # _socket_dir() put the socket dir (the temp dir, or /tmp when TMPDIR is
-    # long). Dry run: other runs' dirs on this machine stay untouched.
-    left = {base, Path(sockets)}
-    found = harness.wait_for(lambda: left <= set(harness.gc(dry_run=True)), 5)
-    missed = sorted(map(str, left - set(harness.gc(dry_run=True))))
-    ok &= report("gc finds a dead run's own dirs", bool(found), f"not found: {missed}" if missed else "")
-    shutil.rmtree(base, ignore_errors=True)
-    # Only a socket dir the child named: an empty line must not become ".".
-    if Path(sockets).name.startswith("foamy-kit-s-"):
-        shutil.rmtree(sockets, ignore_errors=True)
+    # Its TMPDIR is long, so _socket_dir() puts the socket dir in /tmp and
+    # gc's look at /tmp runs whatever TMPDIR this test has.
+    long_parent, long_tmp = make_long_tmp()
+    saved = tempfile.tempdir
+    sockets = ""
+    try:
+        child = subprocess.Popen(
+            [sys.executable, "-I", "-c", CHILD],
+            stdout=subprocess.PIPE,
+            text=True,
+            env={**os.environ, "TMPDIR": str(long_tmp)},
+        )
+        base = Path(child.stdout.readline().strip())
+        sockets = child.stdout.readline().strip()
+        log = base / "qs.log"
+        up = bool(harness.wait_for(lambda: log.exists() and "FOAMY UP" in log.read_text(errors="replace"), 30))
+        alive_before = bool(harness.processes_under(base))
+        child.send_signal(signal.SIGKILL)
+        child.wait()
+        ok &= report(
+            "a killed parent takes qs and its bus with it",
+            up and alive_before and gone(base),
+            f"qs up={up} before={alive_before} after={harness.processes_under(base)}",
+        )
+        # gc recognises the dirs such a run left by their real names: the
+        # run's dir in the temp dir and its socket dir in /tmp. Dry run:
+        # other runs' dirs on this machine stay untouched.
+        tempfile.tempdir = str(long_tmp)
+        left = {base, Path(sockets)}
+        found = harness.wait_for(lambda: left <= set(harness.gc(dry_run=True)), 5)
+        missed = sorted(map(str, left - set(harness.gc(dry_run=True))))
+        ok &= report(
+            "gc finds a dead run's own dirs, its socket dir in /tmp too",
+            bool(found) and Path(sockets).parent == Path("/tmp"),
+            f"not found: {missed}" if missed else f"socket dir {sockets}",
+        )
+    finally:
+        tempfile.tempdir = saved
+        shutil.rmtree(long_parent, ignore_errors=True)
+        # Only a socket dir the child named: an empty line must not become ".".
+        if Path(sockets).name.startswith("foamy-kit-s-"):
+            shutil.rmtree(sockets, ignore_errors=True)
 
     # 3. Context manager.
     with harness.Run("4.5", HANG, prefix="foamy-kit-ctx-") as ctx:
         ctx.start()
         base = ctx.base
-        started = bool(harness.wait_for(lambda: harness.processes_under(ctx.base), 10))
+        started = ctx.wait_for_log("FOAMY UP", 30) and bool(harness.processes_under(ctx.base))
     ok &= report(
         "Run as a context manager stops and removes everything",
         started and gone(base) and not base.exists() and not ctx.sockets.exists(),
@@ -182,6 +209,10 @@ def main():
         mode == 0o700 and socket_mode == 0o700,
         f"{run.base.name} {oct(mode)} {run.sockets.name} {oct(socket_mode)}",
     )
+    # gc tells a live run from a dead one by the owner pid in each dir's
+    # name: another process's --gc must not delete a running test's sockets.
+    listed = sorted(map(str, {run.base, run.sockets} & set(harness.gc(dry_run=True))))
+    ok &= report("gc leaves a live run's own dirs alone", not listed, f"listed: {listed}" if listed else "")
     run.cleanup()
     tmp = Path(tempfile.mkdtemp(prefix="foamy-kit-gc-test-"))
     dead = subprocess.Popen(["true"])
