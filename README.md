@@ -1140,32 +1140,41 @@ behaviour; `FoamyI18n` uses the shell's `Translations`, `FoamyMotion` its
 tests/run-all.sh             # every test
 tests/validate.sh            # the linters and formatters, then tests/suite.sh (run-all.sh)
 tests/validate.sh --ci       # what CI runs: tests/suite.sh --ci is the node, sync/check,
-                             # validate and image-compare tests
+                             # validate, image-compare and clipboard tests
 ```
 
 `test_validate.py` runs a synced plugin's own `tests/validate.sh`: QML-loaded
 JavaScript linted through its directives, baselines (line shifts, grown
 complexity, fixed entries), kit-owned files left alone, reasons required, a
-missing pinned tool, the suite hook and `--ci`. It needs `mise install`.
+missing pinned tool or one at another version, a misspelt check name, the
+suite hook, `--fast` and `--ci`, a local lint config that must extend the
+kit's, and root scripts listed in `foamy-kit.lock` left unlinted. It needs
+`mise install`. `run-all.sh` fails when a test file in `tests/` is not run by
+one of its lines.
 
 Host-based tests run on 4.5 (`/usr/share/omarchy/shell`, or `FOAMY_HOST_45`).
 
 Runs FoamyPrefs, FoamyText, FoamySchedule and FoamyI18nText unit tests (node, through `kit/node-loader.cjs`), sync/check/lint
 on throwaway copies, the FoamyPopup geometry test (4 bar positions, max
-height, menu padding, plus the old fork as a negative control), runtime
-tests of i18n/motion/palette/prefs/cursor/leader election/IPC
-(English, Danish, Arabic), the 0.2 features (icons, tokens, dropdown binding,
-prefs queue inline and CLI with fake `omarchy`, IPC preference and peer
-calls, settings state, private D-Bus), how a prefs-queue CLI save ends
+height, menu padding, `ensureBody()`, plus the old fork as a negative control
+that always runs), runtime tests of i18n/motion/palette with a live theme
+switch/cursor/icon mirroring/leader takeover/IPC (English, Danish, Arabic),
+the 0.2 features (icons, dropdown binding, number and text settings fields
+through real keys, prefs queue inline and CLI with fake `omarchy`, the
+pending-value expiry, IPC preference and peer calls with their failures,
+settings state), the wall clock across the Oslo DST fallback
+(`test_clock.py`), how a prefs-queue CLI save ends
 (`test_lifecycle.py`: exit, failed start, deadline, capped stderr, stopped,
 queue destroyed, an array save's stuck child killed with it so it never
 writes late; and a peer call that can't start), a `qs ipc` argument probe, harness
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
-centred band, footer, buttons, info note and screen-height popups
-(`test_components.py`), the tab row (`test_tabs.py`: LTR/RTL, the
-standard and wide popup, dark and light), and wheel scrolling (`test_wheel.py`, which also
-prints how far Qt's own Flickable gets per notch).
+centred band, footer, buttons, info note and FoamyPopupCard height
+(`test_components.py`), the tab row (`test_tabs.py`: 6 runs that cover every
+pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
+light in both directions), and wheel scrolling and the settings page's focus
+follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
+notch).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 FoamyNative (0.5.0): `native.test.cjs` (command builder and the real `bash
 exec` launch: arguments verbatim, exit 126/127) and `test_native.py` (subdirectory
