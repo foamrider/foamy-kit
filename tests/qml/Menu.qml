@@ -499,7 +499,7 @@ ShellRoot {
       ev.keyClick(Qt.Key_K, Qt.NoModifier, -1)
       eq(menu.currentIndex, 0, "k moves up like Up")
       ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
-      check(!menu.opened && body.catcher.activeFocus, "Tab closes the menu and gives the focus back")
+      eq([menu.opened, body.catcher.activeFocus], [false, true], "Tab closes the menu and gives the focus back (opened, catcher focus)")
       nc.openMenu(true)
       ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
       ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
