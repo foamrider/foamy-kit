@@ -395,6 +395,13 @@ ShellRoot {
     }).settings
   }
   property var storedFailures: []
+  property var inlineFailures: []
+  Connections {
+    target: inlineQueue
+    function onFailed(key, value, error) {
+      shell.inlineFailures = shell.inlineFailures.concat([error])
+    }
+  }
   // The documented bindings: both follow the queue's settings.
   readonly property string storedListProblem: storedQueue.storedProblems.list || ""
   readonly property string storedListProblemCall: storedQueue.storedProblem("list")
@@ -689,6 +696,8 @@ ShellRoot {
     eq(Object.keys(inlineQueue.pending), [], "pending settles once the host reflects it")
     check(!inlineQueue.save("list", [1, 2, 3, 4]), "array maxItems is enforced")
     eq(inlineQueue.error, "That value isn't allowed.", "error message for the catalog")
+    eq(inlineBar.saved.length, 2, "an invalid value writes nothing")
+    eq(shell.inlineFailures, ["That value isn't allowed."], "failed() reports it")
 
     // --- FoamyPrefsQueue: an invalid stored array is kept, not replaced ----------------
     eq([storedListProblem, storedListProblemCall], ["That value isn't allowed.", "That value isn't allowed."], "bindings on storedProblems.list and storedProblem(\"list\") name it")
