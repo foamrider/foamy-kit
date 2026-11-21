@@ -191,7 +191,8 @@ ShellRoot {
       Qt.quit()
       return
     }
-    var index = stepIndex++
+    var index = stepIndex
+    stepIndex = index + 1
     var step = steps[index]
     step.run()
     var settled = function (ok) {
