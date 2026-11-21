@@ -96,6 +96,76 @@ def tooling_tests(a, base):
     return ok
 
 
+def kit_dir_tests(a, base):
+    """kit/ belongs to foamy-kit: an unknown file is refused until --force
+    discards it, and a symlink (inside kit/ or kit/ itself) is refused even
+    with --force, so sync never writes through it."""
+    ok = True
+    stray = a / "kit/Mine.qml"
+    stray.write_text("import QtQuick\nItem {}\n")
+    code, out = sh(SYNC, str(a))
+    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
+    ok &= report(
+        "a plugin file inside kit/ is refused",
+        code != 0 and "not a foamy-kit file" in out and code2 != 0 and "not part of foamy-kit" in out2,
+    )
+    code, out = sh(SYNC, str(a), "--force")
+    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
+    ok &= report(
+        "--force discards a plugin file inside kit/",
+        code == 0 and not stray.exists() and code2 == 0,
+        (out + out2).strip()[-300:],
+    )
+    style = a / "kit/FoamyStyle.qml"
+    style_bytes = style.read_bytes()
+    link = a / "kit/Link.qml"
+    link.symlink_to(style)
+    code, out = sh(SYNC, str(a))
+    ok &= report("a symlink inside kit/ is refused", code != 0 and "symlink" in out)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report(
+        "a symlink inside kit/ is refused even with --force",
+        code != 0 and "Link.qml is a symlink" in out and link.is_symlink() and style.read_bytes() == style_bytes,
+        out.strip()[-300:],
+    )
+    link.unlink()
+    elsewhere = base / "kit-elsewhere"
+    shutil.move(a / "kit", elsewhere)
+    (a / "kit").symlink_to(elsewhere)
+    before = snapshot(elsewhere)
+    code, out = sh(SYNC, str(a), "--force")
+    ok &= report(
+        "a symlinked kit/ is refused even with --force, its target untouched",
+        code != 0 and "kit/ is a symlink" in out and snapshot(elsewhere) == before,
+        out.strip()[-300:],
+    )
+    (a / "kit").unlink()
+    shutil.move(elsewhere, a / "kit")
+    return ok
+
+
+def root_files_tests(base):
+    """The generated kit-check accepts every root file a component syncs: a
+    plugin with FoamyNative locks rust-toolchain.toml and verify-native.yml."""
+    native = base / "native-roots"
+    shutil.copytree(FIXTURES / "demo-plugin", native)
+    code, out = sh(SYNC, str(native), "--add", "FoamyNative")
+    roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
+    locked = foamykit.read_lock(native)["files"] if code == 0 else {}
+    code_c, out_c = sh("env", "-i", "PATH=/usr/bin:/bin", "bash", str(native / "tests/kit-check.sh"))
+    # Without a built helper the only expected problem is the missing native.pin.
+    problems = [line for line in out_c.splitlines() if line.startswith("kit-check: ") and "problem(s)" not in line]
+    return report(
+        "kit-check accepts every component root file a sync locks",
+        code == 0
+        and all(dest in locked for dest in roots)
+        and "not a path foamy-kit owns" not in out_c
+        and len(problems) == 1
+        and "native.pin" in problems[0],
+        (out + out_c).strip()[-300:],
+    )
+
+
 def git(repo, *args):
     # Throwaway repos: commits need no signature or user identity.
     return subprocess.run(
@@ -632,20 +702,7 @@ def main():
     ok &= report("--force restores the kit copy", code == 0 and "wide: false" in edited.read_text())
 
     # 4. Unknown files and symlinks in kit/ are refused.
-    stray = a / "kit/Mine.qml"
-    stray.write_text("import QtQuick\nItem {}\n")
-    code, out = sh(SYNC, str(a))
-    code2, out2 = sh("bash", str(a / "tests/kit-check.sh"))
-    ok &= report(
-        "a plugin file inside kit/ is refused",
-        code != 0 and "not a foamy-kit file" in out and code2 != 0 and "not part of foamy-kit" in out2,
-    )
-    stray.unlink()
-    link = a / "kit/Link.qml"
-    link.symlink_to(a / "kit/FoamyStyle.qml")
-    code, out = sh(SYNC, str(a))
-    ok &= report("a symlink inside kit/ is refused", code != 0 and "symlink" in out)
-    link.unlink()
+    ok &= kit_dir_tests(a, base)
 
     # 5. Changing the component set removes files no longer needed.
     code, out = sh(SYNC, str(a), "--components", "FoamyI18n")
@@ -676,7 +733,14 @@ def main():
     lock_path = a / foamykit.LOCK_NAME
     clean_lock = lock_path.read_text()
     digest = foamykit.sha256(victim.read_bytes())
-    for bad in ("../victim.txt", str(victim), "kit/../../victim.txt", "manifest.json"):
+    for bad in (
+        "../victim.txt",
+        str(victim),
+        "kit/../../victim.txt",
+        "manifest.json",
+        "kit/..\\..\\victim.txt",
+        "kit/./FoamyStyle.qml",
+    ):
         lock_path.write_text(clean_lock + f"{digest}  {bad}\n")
         code, out = sh(SYNC, str(a))
         code_f, out_f = sh(SYNC, str(a), "--force")
@@ -687,6 +751,7 @@ def main():
             and code_f != 0
             and "not a path foamy-kit owns" in out + out_f
             and code_c != 0
+            and "not a path foamy-kit owns" in out_c
             and victim.read_text() == "keep me\n"
             and (a / "manifest.json").exists(),
             (out + out_f + out_c).strip()[-300:],
@@ -708,13 +773,7 @@ def main():
         (out + out_l).strip()[-300:],
     )
     lock_path.write_text(clean_lock)
-    template = (KIT_ROOT / "tools/kit-check.sh.in").read_text()
-    roots = sorted({dest for spec in foamykit.load_components().values() for dest in spec.get("rootFiles", {})})
-    ok &= report(
-        "kit-check.sh.in allows every component root file",
-        all(f"$rel != {dest}" in template for dest in roots),
-        f"{roots}",
-    )
+    ok &= root_files_tests(base)
     tests_dir = a / "tests"
     moved = base / "tests-elsewhere"
     shutil.move(tests_dir, moved)
