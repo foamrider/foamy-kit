@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""SafeTextField `masked: true` (tests/qml/Masked.qml) on 4.5, LTR and RTL,
-dark and light: the editor holds only the mask, typing, selection, keys and
-mouse in step with a normal field, paste through kit/clipboard.sh with the
-hostenv.clipboard_fakes() wl-paste (never the real clipboard), copy and cut
-that leave Qt's offscreen clipboard alone, accessibility, the drawn caret.
-Field shots: tests/out/masked/ (FOAMY_MASKED_OUT overrides)."""
+"""SafeTextField `masked: true` (tests/qml/Masked.qml) on 4.5, LTR, RTL and
+an RTL input method, one run in the light theme: the editor holds only the
+mask, typing, selection, keys and mouse in step with a normal field, paste
+through kit/clipboard.sh with the hostenv.clipboard_fakes() wl-paste (never
+the real clipboard), copy and cut that leave Qt's offscreen clipboard alone,
+accessibility, the drawn caret. Field shots: tests/out/masked/
+(FOAMY_MASKED_OUT overrides)."""
 
 import os
 import shutil
@@ -17,9 +18,10 @@ from common import KIT_ROOT, harness, report, synced_demo  # noqa: E402
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import hostenv  # noqa: E402
 
-CASES = [(theme, rtl, False) for theme in ("dark", "light") for rtl in (False, True)]
-# An RTL locale: the input method runs right to left (arrow keys on the mask).
-CASES.append(("dark", False, True))
+# (theme, rtl, rtl_input). No check depends on the theme: the light run only
+# leaves light-theme shots in tests/out/masked/ for a person to look at. An
+# RTL locale: the input method runs right to left (arrow keys on the mask).
+CASES = [("dark", False, False), ("light", True, False), ("dark", False, True)]
 
 
 def run(host, plugin, theme, rtl, rtl_input, out):

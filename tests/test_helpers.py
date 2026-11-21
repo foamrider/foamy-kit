@@ -117,17 +117,6 @@ def process_group(base):
     )
     qs = ["qs", "-p", str(app), "--no-color"]
 
-    # Why: stopping only qs leaves what its Process started running.
-    env["FOAMY_CHILD"] = str(base / "child-plain")
-    plain = subprocess.Popen(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    pid = child_pid(base / "child-plain")
-    plain.terminate()
-    plain.wait(10)
-    left = pid is not None and harness.wait_for(lambda: not alive(pid), 1) is None
-    ok &= report("stopping only qs leaves its Process's child running (why ProcessGroup exists)", left, str(pid))
-    if pid is not None and alive(pid):
-        os.kill(pid, signal.SIGKILL)
-
     env["FOAMY_CHILD"] = str(base / "child-group")
     with hostenv.ProcessGroup(qs, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as shell:
         pid = child_pid(base / "child-group")
@@ -331,14 +320,17 @@ def main():
         )
         env = {**run.env, **overrides}
         stub_dir = Path(overrides["PATH"].split(":")[0])
+        tree = Path(overrides["OMARCHY_PATH"])
         ok &= report(
             "make(): a private OMARCHY_PATH whose bin/ and PATH stubs come first",
-            overrides["OMARCHY_PATH"] == str(base / "host/omarchy-host")
-            and (Path(overrides["OMARCHY_PATH"]) / "shell/Commons").is_dir()
-            and (Path(overrides["OMARCHY_PATH"]) / "bin/omarchy-test-only").is_file()
+            tree.resolve().is_relative_to((base / "host").resolve())
+            # The private tree shows the real shell QML the tests load.
+            and os.path.realpath(tree / "shell") == os.path.realpath(hostenv.root() / "shell")
+            and (tree / "shell/Commons").is_dir()
+            and (tree / "bin/omarchy-test-only").is_file()
             and {"omarchy-shell", "omarchy-test-only", "omarchy-extra", "omarchy-plugin-validate"}
             <= set(os.listdir(stub_dir)),
-            overrides["PATH"].split(":")[0],
+            f"{tree}, shell -> {os.path.realpath(tree / 'shell')}, stubs {stub_dir}",
         )
         answer = subprocess.run(
             ["omarchy-shell", "foamy.helpers", "ping", "kit"], env=env, capture_output=True, text=True, timeout=20

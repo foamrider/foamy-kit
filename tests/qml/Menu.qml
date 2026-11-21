@@ -47,6 +47,9 @@ ShellRoot {
   MockBar {
     id: bar
   }
+  FoamyWait {
+    id: wait
+  }
 
   property int searchClicks: 0
   property int clearClicks: 0
@@ -426,7 +429,6 @@ ShellRoot {
       var search = nc.shownTrailing[0]
       search.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/check-search.png")
-        console.log("FOAMY PNGCHECK check-search.png")
         step3c.start()
       })
     }
@@ -489,6 +491,19 @@ ShellRoot {
       nc.openMenu(true)
       ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
       check(!menu.opened, "Esc closes")
+      // j and k move like Down and Up, Tab leaves the menu, Space activates.
+      body.catcher.forceActiveFocus()
+      nc.openMenu(true)
+      ev.keyClick(Qt.Key_J, Qt.NoModifier, -1)
+      eq(menu.currentIndex, 1, "j moves down like Down")
+      ev.keyClick(Qt.Key_K, Qt.NoModifier, -1)
+      eq(menu.currentIndex, 0, "k moves up like Up")
+      ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+      check(!menu.opened && body.catcher.activeFocus, "Tab closes the menu and gives the focus back")
+      nc.openMenu(true)
+      ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+      ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
+      eq(shell.settingsClicks, 2, "Space activates the entry like Enter")
       // Pointer: open from a click selects nothing; hover moves the one cursor.
       ev.mouseClick(nc.menuButton, nc.menuButton.width / 2, nc.menuButton.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
       check(menu.opened && menu.currentIndex === -1, "click opens without a highlight")
@@ -522,41 +537,44 @@ ShellRoot {
         nc.visible = false
         check(!menu.opened, "hiding the header closes the menu")
         nc.visible = true
-        // Short card: grows for the menu, shrinks after.
+        // Short card: grows for the menu, shrinks after. The card's height
+        // follows the menu's reserve over a few frames: wait for the end state.
         shell.shortBefore = shortPopup.cardItem.height
-        shortPopup.bodyItem.openMenu(true)
-        step5.start()
+        var band = shortPopup.bodyItem
+        var shortMenu = band.menu
+        var shortCard = shortPopup.cardItem
+        var grown = function () {
+          return shortCard.height > shell.shortBefore + 40
+        }
+        var fits = function () {
+          return near(shortMenu.panel.height, shortMenu.overlayItem.naturalHeight)
+        }
+        var inside = function () {
+          return shortMenu.panel.mapToItem(shortCard, 0, 0).y + shortMenu.panel.height <= shortCard.height
+        }
+        band.openMenu(true)
+        wait.waitFor(function () {
+          return grown() && fits() && inside()
+        }, 5000, function () {
+          check(grown(), "a short card grows for the menu " + shell.shortBefore + " -> " + shortCard.height)
+          check(fits(), "the menu fits without scrolling " + shortMenu.panel.height + " / " + shortMenu.overlayItem.naturalHeight)
+          check(inside(), "and stays inside the card")
+          shortCard.grabToImage(function (shot) {
+            shot.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
+            band.closeMenu()
+            wait.waitFor(function () {
+              return near(shortCard.height, shell.shortBefore)
+            }, 5000, function (ok) {
+              check(ok, "the card shrinks back after " + shortCard.height)
+              step7.start()
+            })
+          })
+        })
       })
     }
   }
 
   property real shortBefore: 0
-  Timer {
-    id: step5
-    interval: 600
-    onTriggered: {
-      var band = shortPopup.bodyItem
-      var menu = band.menu
-      var card = shortPopup.cardItem
-      check(card.height > shell.shortBefore + 40, "a short card grows for the menu " + shell.shortBefore + " -> " + card.height)
-      check(near(menu.panel.height, menu.overlayItem.naturalHeight), "the menu fits without scrolling " + menu.panel.height + " / " + menu.overlayItem.naturalHeight)
-      var p = menu.panel.mapToItem(card, 0, 0)
-      check(p.y + menu.panel.height <= card.height, "and stays inside the card")
-      card.grabToImage(function (result) {
-        result.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
-        band.closeMenu()
-        step6.start()
-      })
-    }
-  }
-  Timer {
-    id: step6
-    interval: 600
-    onTriggered: {
-      check(near(shortPopup.cardItem.height, shell.shortBefore), "the card shrinks back after " + shortPopup.cardItem.height)
-      step7.start()
-    }
-  }
 
   // The long menu's Flickable and the shown row of entry i.
   function scrollerOf(menu) {

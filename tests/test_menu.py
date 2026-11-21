@@ -23,6 +23,9 @@ def main():
             for scale in (1.0, 1.25):
                 tag = f"{host}/{'rtl' if rtl else 'ltr'}@{scale}"
                 suffix = f"{host}-{'rtl' if rtl else 'ltr'}-{scale}"
+                png = out / f"check-search-{suffix}.png"
+                # A shot left by an earlier run must not pass for this one.
+                png.unlink(missing_ok=True)
                 results.append(
                     run_shell(
                         "Menu.qml",
@@ -36,7 +39,6 @@ def main():
                     )
                 )
                 # The action hidden and shown again is drawn (icon strokes on its button).
-                png = out / f"check-search-{suffix}.png"
                 drawn = 0
                 if png.is_file():
                     w, h, px = read_png(png)
