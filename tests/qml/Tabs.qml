@@ -264,10 +264,12 @@ ShellRoot {
       total += tab(s, i).fixedWidth + tab(s, i).naturalLabel
     return total
   }
-  // The label is whole. With "ends rowPadding after its content" and "not
-  // equal shares", that makes the tab as wide as its content.
+  // As wide as its content: the label is whole and the tab ends rowPadding
+  // after its last part (the count, or the label without one).
   function contentWidth(s, i) {
-    return !part(s, i, "foamyTabLabel").truncated
+    var label = part(s, i, "foamyTabLabel"), count = part(s, i, "foamyTabCount")
+    var last = count.visible ? count : label
+    return !label.truncated && near(tab(s, i).width - (startOf(last, tab(s, i)) + last.width), FoamyStyle.rowPadding, 1)
   }
 
   FoamyWait {
@@ -437,6 +439,8 @@ ShellRoot {
     check(cursor.index === 0 && s.hasCursor && s.cursorIndex === 2, "hover moves the panel cursor to the row, on that tab " + cursor.index + " " + s.cursorIndex)
     check(sameColor(part(s, 2, "foamyTabCursor").color, FoamyPalette.hoverFill), "hovered tab shows the cursor fill")
     check(sameColor(part(s, 0, "foamyTabCursor").color, "transparent"), "one highlight")
+    var fill = part(s, 2, "foamyTabCursor")
+    check(fill.mapToItem(s, 0, 0).y + fill.height <= s.height - 2, "the hover fill stays clear of the underline " + (fill.mapToItem(s, 0, 0).y + fill.height) + " of " + s.height)
     var g = tab(s, 2)
     ev.mouseClick(g, g.width / 2, g.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
     eq(shell.activations, ["upcoming"], "a press emits activated with its value")
@@ -482,7 +486,13 @@ ShellRoot {
     shell.view = "today"
     check(s.selectedIndex === 1 && part(s, 1, "foamyTabLabel").font.weight === Font.DemiBold, "the open tab follows the caller's value")
     check(sameColor(part(s, 1, "foamyTabCount").color, FoamyPalette.onSurface(FoamyPalette.error)), "urgent count keeps the error colour when open")
-    check(contentWidth(s, 1), "the DemiBold label is not cut")
+    // The tab's content row lays out on the next polish.
+    wait.waitFor(function () {
+      return contentWidth(s, 1)
+    }, 5000, step("the DemiBold label is not cut and its tab fits it", openTabCursor))
+  }
+  function openTabCursor() {
+    var s = body.tabs
     ev.keyClick(forward(), Qt.NoModifier, -1)
     eq(s.cursorIndex, 1, "cursor on the open tab")
     // The underline fades over to the new open tab (FoamyMotion.hover).
@@ -510,10 +520,15 @@ ShellRoot {
     check(s.hasCursor && s.cursorIndex === -1, "an empty model has no cursor tab " + s.cursorIndex)
     shell.views = full
     eq(s.cursorIndex, s.selectedIndex, "a refilled model puts the cursor on the open tab")
-    check(tab(s, 2) && contentWidth(s, 0) && contentWidth(s, 1) && contentWidth(s, 2), "refilled tabs are content-width again " + s.labelWidths)
+    wait.waitFor(function () {
+      return tab(s, 2) && contentWidth(s, 0) && contentWidth(s, 1) && contentWidth(s, 2)
+    }, 5000, step("refilled tabs are content-width again", refilledEnter))
+  }
+  function refilledEnter() {
+    var s = body.tabs
     var before = shell.activations.length
     ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
-    eq(shell.activations.slice(before), [shell.views[s.cursorIndex].value], "Enter works again after the refill")
+    eq(shell.activations.slice(before), ["today"], "Enter works again after the refill")
     console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
