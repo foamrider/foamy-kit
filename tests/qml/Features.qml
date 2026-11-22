@@ -621,6 +621,18 @@ ShellRoot {
     field.text = "abc\uD83D\uDE00"
     field.maximumLength = 4
     eq([field.text, field.text.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
+    // Typing in a full field drops the key wherever the caret is, as Qt's
+    // TextInput does: the end of the text stays ("09:00" never becomes "089:0").
+    field.maximumLength = 5
+    field.text = "09:00"
+    field.focusInput()
+    field.cursorPosition = 1
+    type("8")
+    eq(field.text, "09:00", "a key typed inside a full field is dropped, and the end of the text stays")
+    field.select(0, 1)
+    type("1")
+    eq(field.text, "19:00", "a key typed over a selection in a full field replaces it")
+    longField.focusInput()
     field.maximumLength = 3
 
     // --- FoamyDropdown keeps the caller's value binding ----------------------------------

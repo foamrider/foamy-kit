@@ -50,6 +50,14 @@
   cut now drops the whole pair, as the masked field already did. No plugin
   change is needed. `tests/test_features.py`, `tests/test_masked.py`,
   `tests/test_text_area.py`.
+- `SafeTextField` (since 0.2.0) drops a key typed at `maximumLength`,
+  wherever the caret is, as Qt's `TextInput` and `SafeTextArea` do.
+  Before, the key was kept and the end of the text was cut: typing 8
+  after the first 0 of a full `09:00` time field gave `089:0`, and in a
+  long field the lost end could be out of view. A longer `text` from the
+  caller or an input method is still cut at its end; a masked field
+  already dropped the key. No plugin change is needed.
+  `tests/test_features.py`.
 - `SafeTextField` with `masked: true` (since 0.12.0) tells a screen
   reader its label. Qt reports no accessible name for a password edit
   (Qt 6.12 drops `Accessible.name` there), so an "API token" field was
