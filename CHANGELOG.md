@@ -148,6 +148,23 @@
   needed; a helper may now use `is_over_limit` on `read_file_limited`'s
   error. `kit/rust/foamy-helper/src/fs.rs` (test
   `bounded_file_reads_refuse_links_and_special_files`).
+- `foamy_helper::lock::runtime_dir` (since 0.5.0) treats a shared
+  `XDG_RUNTIME_DIR` as unset. Before, only `<base>/<plugin>` was checked:
+  with `XDG_RUNTIME_DIR` set to `/tmp` or another directory other users
+  can write (a session without pam_systemd), another local user could
+  create `<base>/<plugin>` first, and `runtime_dir` then failed with
+  `PermissionDenied` or `InvalidInput` instead of the documented
+  `NotFound`, so a caller could not tell it from a broken directory. Now
+  the base must be the user's own directory, closed to everyone else and
+  not a symlink, as the XDG Base Directory spec requires, or `runtime_dir`
+  (and `try_runtime_lock`) returns `NotFound` before it creates anything,
+  so a caller can fall back. No source change is needed. foamy-todoist
+  and foamy-zendesk do not fall back: in such a session they now answer
+  `LOCK_UNAVAILABLE` for every locked operation, as they did before only
+  once another user had taken the directory; foamy-power, which checks
+  its own base this way, falls back to its cache directory.
+  `kit/rust/foamy-helper/src/lock.rs` (test
+  `a_shared_runtime_base_counts_as_unset`).
 - `foamy_helper::json::run` (since 0.9.0): the reply was marked as printed
   before it was written. A panic in another thread at that moment made the
   panic hook print nothing and exit 101 while the reply was still being
@@ -289,7 +306,7 @@
   code changes.
 
 ### Upgrading
-- `kit/rust` changed (the four `foamy_helper` items above): a plugin with a
+- `kit/rust` changed (the five `foamy_helper` items above): a plugin with a
   native helper rebuilds it after the sync (`kit/native/build-native.sh .`)
   and commits the new binaries and `native.pin`; until then `check.sh`,
   `tests/kit-check.sh` and `--verify` report the binaries stale. No call
