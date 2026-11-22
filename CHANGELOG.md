@@ -66,6 +66,14 @@
   caller or an input method is still cut at its end; a masked field
   already dropped the key. No plugin change is needed.
   `tests/test_features.py`.
+- `SafeTextField` (since 0.2.0) cuts its text to a `maximumLength` that is
+  lowered while the page is created. A bound `maximumLength` lowered after
+  the editor took its text and before the field's own
+  `Component.onCompleted` (Qt completes in reverse creation order, so a
+  root's or a later sibling's handler runs first) left the whole text,
+  since the field reacts to `maximumLength` changes only once it is
+  complete. `SafeTextArea` already cut the text then. No plugin change is
+  needed. `tests/test_features.py`.
 - `SafeTextField` with `masked: true` (since 0.12.0) tells a screen
   reader its label. Qt reports no accessible name for a password edit
   (Qt 6.12 drops `Accessible.name` there), so an "API token" field was

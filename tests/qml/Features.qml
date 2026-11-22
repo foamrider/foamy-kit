@@ -69,6 +69,12 @@ ShellRoot {
         width: 200
         maximumLength: 5
       }
+      SafeTextField {
+        id: createdField
+        width: 200
+        text: "abcdefgh"
+        maximumLength: shell.createdLimit
+      }
       FoamyIcon {
         id: icon
         width: 16
@@ -646,7 +652,14 @@ ShellRoot {
     panel: fakePanel
   }
 
-  Component.onCompleted: Qt.callLater(stepOne)
+  // A maximumLength lowered while the page is created: this root's
+  // Component.onCompleted runs before the field's own (Qt completes in
+  // reverse creation order), so only the field's completion can cut then.
+  property int createdLimit: 32767
+  Component.onCompleted: {
+    createdLimit = 5
+    Qt.callLater(stepOne)
+  }
 
   function stepOne() {
     // --- icons -----------------------------------------------------------------------------
@@ -675,6 +688,7 @@ ShellRoot {
     check(cursor.plain(Qt.ShiftModifier) && !cursor.plain(Qt.ControlModifier), "plain() ignores Shift only")
 
     // --- SafeTextField.maximumLength ---------------------------------------------------
+    eq([createdField.maximumLength, createdField.text], [5, "abcde"], "a maximumLength lowered while the field is created cuts its text")
     field.text = "abcdefgh"
     eq(field.text, "abcde", "maximumLength trims typed text")
     field.maximumLength = 3

@@ -820,6 +820,13 @@ Flickable {
     // A `text` given at creation never becomes the masked value or shows.
     if (masked && editor.text !== "")
       clear()
+    // A maximumLength lowered while the page is created, after the editor
+    // took its text and before this runs (Qt completes in reverse creation
+    // order: a root's or a later sibling's Component.onCompleted comes
+    // first), found onMaximumLengthChanged not ready yet.
+    var limit = maximumLength > 32767 ? 32767 : (maximumLength > 0 ? maximumLength : 0)
+    if (editor.length > limit)
+      editor.remove(_cutAt(editor.text, limit), editor.length)
     clampScroll()
   }
   // Nothing typed in one mode shows in the other.
