@@ -26,7 +26,9 @@ import qs.Ui
 // alignment, never background. `quiet: true` is for text edited in place
 // (an editor's title that reads as text): no fill or border at rest, the
 // usual field under the pointer or the cursor and with the focus. clipboardScript resolves relative to this
-// file (kit/clipboard.sh by default) unless absolute.
+// file (kit/clipboard.sh by default) unless absolute. A field that hides
+// gives up the focus (keys never edit hidden text), which ends the edit:
+// editingFinished.
 //
 // Secrets (API tokens, passwords): `masked: true`, set at creation.
 //
@@ -831,6 +833,9 @@ Flickable {
   onVisibleChanged: if (!visible) {
     cancelPaste()
     pasteError = ""
+    // Qt keeps the active focus on a hidden item, so keys would still edit
+    // text the user cannot see. Losing it ends the edit (editingFinished).
+    editor.focus = false
   }
 
   // Private: the masked value, and whether the field itself is writing the mask.

@@ -42,7 +42,8 @@ import qs.Ui
 // - textEdited fires on every change the user makes (typing, paste, cut,
 //   undo, redo); editingFinished when the field loses the focus (to
 //   anything but its own context menu: then when the menu closes without
-//   giving the focus back).
+//   giving the focus back). A field that hides gives up the focus, so keys
+//   never edit hidden text.
 // - Styled like SafeTextField (foamy radius, control fill and border), with
 //   its `quiet` mode for text edited in place.
 //   clipboardScript resolves relative to FoamyClipboard.qml unless absolute.
@@ -433,5 +434,8 @@ Flickable {
   onVisibleChanged: if (!visible) {
     cancelPaste()
     pasteError = ""
+    // Qt keeps the active focus on a hidden item, so keys would still edit
+    // text the user cannot see. Losing it ends the edit (editingFinished).
+    editor.focus = false
   }
 }

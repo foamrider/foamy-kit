@@ -13,7 +13,8 @@ import "plugin/kit"
 // through kit/clipboard.sh `multiline` and the fake wl-paste (line breaks
 // kept, NUL and oversized text refused, cut at maximumLength, a late result
 // dropped after newer typing, clear(), focus loss, hiding or disabling;
-// hiding clears a paste error; middle-click pastes the primary
+// hiding clears a paste error and takes the keys of a focused area or
+// field, ending its edit once; middle-click pastes the primary
 // selection), never Qt's own clipboard; typing at maximumLength drops the
 // key instead of the text's end; the height grows from minimumHeight to
 // maximumHeight and then scrolls to the caret; accessibility and the menu;
@@ -381,9 +382,34 @@ ShellRoot {
 
   // Hiding or disabling the field drops a paste in flight, even when the
   // field is shown, enabled and focused again before the read ends; hiding
-  // also clears a shown paste error.
+  // also clears a shown paste error. A hidden field keeps no keys: hiding
+  // a focused field ends its edit once, and typing then edits nothing.
   function hiding() {
     area.clear()
+    area.focusInput()
+    var ended = shell.finished
+    area.visible = false
+    check(!area.inputActiveFocus, "hiding the area drops the keys")
+    eq(shell.finished, ended + 1, "hiding the focused area ends its edit once")
+    type("x")
+    eq(area.text, "", "keys typed while the area is hidden never reach it")
+    area.visible = true
+    eq([shell.finished, area.inputActiveFocus], [ended + 1, false], "showing the area again ends nothing and takes no keys")
+    after.text = ""
+    after.focusInput()
+    var fieldEnded = shell.fieldFinished
+    after.visible = false
+    check(!after.inputActiveFocus, "hiding the text field drops the keys")
+    eq(shell.fieldFinished, fieldEnded + 1, "hiding the focused text field ends its edit once")
+    type("x")
+    eq(after.text, "", "keys typed while the text field is hidden never reach it")
+    after.visible = true
+    // Hidden with its parent: the same.
+    area.focusInput()
+    ended = shell.finished
+    column.visible = false
+    eq([area.inputActiveFocus, shell.finished], [false, ended + 1], "hiding the area's parent drops the keys and ends the edit once")
+    column.visible = true
     area.focusInput()
     setClipboard("delayed", function () {
       key(Qt.Key_V, Qt.ControlModifier)
