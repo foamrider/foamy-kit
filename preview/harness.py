@@ -51,7 +51,9 @@ Run.system_bus_address), and an explicit "unix:path=…" address uses that bus.
 
 Processes: qs (and the private bus) run in their own process group with a
 parent-death signal, so they die with the Python process even when it is
-killed; stop() kills the whole group, and every live run is stopped at exit.
+killed; stop() kills the whole group and what is left of qs's session (a
+helper that a plugin runs under coreutils timeout leads a group of its own),
+and every live run is stopped at exit.
 Use a Run as a context manager (or call cleanup()) to remove its temp dir.
 
 Temp dirs: each run owns one directory, `<prefix><pid>-<random>` (mode 0700,
@@ -638,10 +640,14 @@ class Run:
         return self
 
     def stop(self):
-        """Kill qs's whole process group and the private bus; read the log."""
+        """Kill qs's whole process group, what is left of its session (a
+        helper under coreutils timeout leads a group of its own) and the
+        private buses; read the log."""
         if self.process is not None and self.process.poll() is None:
             _kill_group(self.process, signal.SIGTERM)
         _kill_group(self.process)
+        if self.process is not None:
+            hostenv._kill_session(self.process.pid)
         _kill_group(self.bus_process)
         _kill_group(self.system_bus_process)
         self.process = self.bus_process = self.system_bus_process = None

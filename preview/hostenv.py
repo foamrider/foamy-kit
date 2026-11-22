@@ -86,6 +86,17 @@ def isolated_path(value=None, *extra_bins):
 # What isolate() drops unless display=True: the live compositor, Hyprland
 # and X11.
 DISPLAY_VARIABLES = ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")
+# isolate(): the private Omarchy tree in `base` (OMARCHY_PATH), and the log
+# of the host commands its stubs refused.
+_ISOLATED_TREE = "omarchy-isolated"
+_REFUSED_LOG = "host-commands.log"
+# A host command isolate() shadows: it logs the call and exits 127, as a
+# missing command would (harness.Run's stubs do the same).
+_REFUSING_STUB = """#!/bin/sh
+printf '%s\\n' "${0##*/} $*" >> "@LOG@"
+echo "foamy-kit hostenv: ${0##*/} is a host command; give the test a stand-in" >&2
+exit 127
+"""
 # Tests never show anything on the live desktop unless the user sets this to
 # 1 for the run: a validate run used to put test surfaces on the user's screen.
 DESKTOP_OPT_IN = "FOAMY_TEST_DESKTOP"
@@ -118,14 +129,39 @@ def isolate(env, base, session_bus=None, display=False):
     media players. WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and DISPLAY
     leave unless `display=True` (a test that runs on the live compositor
     on purpose), which raises RuntimeError unless FOAMY_TEST_DESKTOP=1 is
-    set."""
+    set.
+
+    No host command runs, by name or through OMARCHY_PATH: OMARCHY_PATH is
+    a private tree in `base` (`omarchy-isolated`: the host's shell/ and
+    default/ only, as make()'s), and every `omarchy`/`omarchy-*` command
+    left on PATH (/usr/bin, a wrapper in ~/.local/bin) or in the host's bin
+    directories is a stub in its bin/, first on PATH, that logs the call to
+    <base>/host-commands.log and exits 127. make() puts its own stubs in
+    front."""
     if session_bus is not None and not str(session_bus).startswith("unix:"):
         raise ValueError(f"session_bus must be a unix: address, not {session_bus!r}")
     if display:
         problem = desktop_problem(env, "hostenv.isolate(display=True)")
         if problem:
             raise RuntimeError(problem)
-    env["PATH"] = isolated_path(env.get("PATH", "/usr/bin:/bin"))
+    base, host = Path(base), root()
+    tree = base / _ISOLATED_TREE
+    # The caller's OMARCHY_PATH is a host tree too (the session's), also when
+    # it is not this process's.
+    omarchy_bin = [Path(env["OMARCHY_PATH"]) / "bin"] if env.get("OMARCHY_PATH") else []
+    path = [p for p in isolated_path(env.get("PATH", "/usr/bin:/bin"), *omarchy_bin).split(":") if p]
+    names = {n for b in host_bins(*omarchy_bin) if os.path.isdir(b) for n in os.listdir(b) if n.startswith("omarchy-")}
+    for folder in path:
+        try:
+            names |= {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
+        except OSError:
+            continue
+    write_commands(tree / "bin", dict.fromkeys(names, _REFUSING_STUB.replace("@LOG@", str(base / _REFUSED_LOG))))
+    for name in ("shell", "default"):
+        if (host / name).is_dir() and not (tree / name).is_symlink():
+            (tree / name).symlink_to(host / name, target_is_directory=True)
+    env["PATH"] = ":".join([str(tree / "bin"), *path])
+    env["OMARCHY_PATH"] = str(tree)
     libraries = library_path(env.get("LD_LIBRARY_PATH", ""))
     if libraries:
         env["LD_LIBRARY_PATH"] = libraries
@@ -208,14 +244,15 @@ def calls(base):
 
 def check(env, *outputs):
     """Fails (AssertionError) when a host script could run (the host's bin
-    directories on PATH, OMARCHY_PATH/bin not the stubs) or did (its path in
-    one of `outputs`)."""
+    directories on PATH, OMARCHY_PATH/bin not the stubs: a host tree such
+    as the session's /usr/share/omarchy) or did (its path in one of
+    `outputs`)."""
     bins = host_bins()
     assert not any(os.path.realpath(p) in bins for p in env["PATH"].split(":") if p), env["PATH"]
     if env.get("OMARCHY_PATH"):
         tree = Path(env["OMARCHY_PATH"])
         bin_dir = os.path.realpath(tree / "bin")
-        assert Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)), (
+        assert bin_dir not in bins and Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)), (
             "OMARCHY_PATH/bin must be the stub directory"
         )
     named = bins | {str(root() / "bin"), INSTALLED_BIN}
@@ -259,12 +296,14 @@ esac
 """
 # Modes whose outcome is clipboard.sh's own 2 s deadline.
 CLIPBOARD_DEADLINE_MODES = ("stall", "slow", "ignore")
-# timeout(1) in front of clipboard.sh: the deadline modes keep the real 2 s,
-# every other mode (it ends by itself) gets 60 s.
+# timeout(1) on the test's PATH. Only clipboard.sh's read (`timeout
+# --signal=KILL 2s bash <clipboard.sh> _read …`) changes: the deadline modes
+# keep the real 2 s, every other mode (it ends by itself) gets 60 s. Any other
+# command, also one with the same 2 s, keeps its own deadline.
 CLIPBOARD_TIMEOUT = r"""#!/bin/bash
 case $(<"$TEST_CLIPBOARD_STATE") in
   stall | slow | ignore) ;;
-  *) [[ $1 == --signal=KILL && $2 == 2s ]] && set -- "$1" 60s "${@:3}" ;;
+  *) [[ $1 == --signal=KILL && $2 == 2s && $3 == bash && $5 == _read ]] && set -- "$1" 60s "${@:3}" ;;
 esac
 exec @TIMEOUT@ "$@"
 """
@@ -289,7 +328,9 @@ def clipboard_fakes(folder, env=None):
     The stand-in timeout keeps clipboard.sh's 2 s for the deadline modes,
     whose outcome is that deadline, and gives every other mode 60 s, so a
     loaded machine (the paste is six processes) can't turn a paste that
-    works into a timeout. clipboard.sh itself is unchanged."""
+    works into a timeout. It changes clipboard.sh's read only: any other
+    command the test runs under timeout keeps its deadline. clipboard.sh
+    itself is unchanged."""
     folder = Path(folder)
     path = (env if env is not None else os.environ).get("PATH", "/usr/bin:/bin")
     real = shutil.which("timeout", path=path)
@@ -314,16 +355,62 @@ def die_with_parent():
         _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
 
 
+def _session_of(pid):
+    """(state, session id) of `pid` from /proc, or None once it is gone."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        return fields[0], int(fields[3])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def _kill_session(sid, timeout=5.0):
+    """SIGKILL what is left of session `sid` (a process the caller started
+    with start_new_session) until no live member remains, or `timeout`
+    seconds. A child that leads a process group of its own (coreutils
+    timeout, and the helper under it) is outside the group that a stop
+    signals, but still in this session; only setsid leaves it. harness.Run
+    uses this too."""
+    deadline = time.monotonic() + timeout
+    while True:
+        members = []
+        for entry in Path("/proc").iterdir():
+            info = _session_of(entry.name) if entry.name.isdigit() else None
+            if info and info[1] == sid and info[0] != "Z":
+                members.append(int(entry.name))
+        if not members or time.monotonic() >= deadline:
+            return
+        for pid in members:
+            # The pidfd holds the process the pid names now; it is checked
+            # again through /proc, so a pid reused since the scan above never
+            # gets the signal (at worst it goes to a process already gone).
+            try:
+                fd = os.pidfd_open(pid)
+            except OSError:
+                continue
+            try:
+                info = _session_of(pid)
+                if info and info[1] == sid:
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+            except OSError:
+                pass
+            finally:
+                os.close(fd)
+        time.sleep(0.02)
+
+
 class ProcessGroup:
     """`argv` (a qs or service a test starts itself) as the leader of its own
     process group; `popen` goes to subprocess.Popen. stop() signals the
     whole group, so the scripts a shell's `Process`es started go with it:
     Popen.terminate() reaches qs alone, and a `sh -c` child's own children
-    outlived it. The leader also dies with the Python process (its children
-    then don't). A child that makes its own group or session (setsid,
-    coreutils timeout) leaves this one. Wait through wait(), not
-    `.process.wait()`: the leader stays unreaped until stop(), so its pid,
-    the group id, can't name another group while stop() signals it.
+    outlived it. A child that leads a group of its own (coreutils timeout)
+    stays in the leader's session, and stop() kills what is left of that
+    too; only a child that makes its own session (setsid) leaves. The leader
+    also dies with the Python process (its children then don't). Wait
+    through wait(), not `.process.wait()`: the leader stays unreaped until
+    stop(), so its pid, the group and session id, can't name another group
+    or session while stop() signals it.
 
       with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:
           shell.wait(60)       # None while it still runs
@@ -380,6 +467,9 @@ class ProcessGroup:
         self.wait(grace)
         # Members that ignored SIGTERM, and children the leader left behind.
         self._signal(signal.SIGKILL)
+        # Children that lead a group of their own (coreutils timeout). The
+        # leader is still unreaped, so the session id names no other session.
+        _kill_session(self.pid)
         self.returncode = self.process.wait()
         return self.returncode
 

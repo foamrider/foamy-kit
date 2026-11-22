@@ -50,6 +50,30 @@
   cut now drops the whole pair, as the masked field already did. No plugin
   change is needed. `tests/test_features.py`, `tests/test_masked.py`,
   `tests/test_text_area.py`.
+- `SafeTextArea` (since 0.13.0) shows its text inside its paddings. The
+  attached `TextArea` left the field scrolled one padding to the side
+  (`contentX` at minus `leftPadding`), so the text sat one padding too far
+  in, and in a right-to-left layout the ends of the lines were cut at the
+  field's edge ("line" showed as "lir", a quiet area's "In place" as "In
+  plac"). It now keeps the horizontal scroll inside the text, as
+  `SafeTextField` does. No plugin change is needed.
+  `tests/test_text_area.py`.
+- `SafeTextField` (since 0.2.0) drops a key typed at `maximumLength`,
+  wherever the caret is, as Qt's `TextInput` and `SafeTextArea` do.
+  Before, the key was kept and the end of the text was cut: typing 8
+  after the first 0 of a full `09:00` time field gave `089:0`, and in a
+  long field the lost end could be out of view. A longer `text` from the
+  caller or an input method is still cut at its end; a masked field
+  already dropped the key. No plugin change is needed.
+  `tests/test_features.py`.
+- `SafeTextField` (since 0.2.0) cuts its text to a `maximumLength` that is
+  lowered while the page is created. A bound `maximumLength` lowered after
+  the editor took its text and before the field's own
+  `Component.onCompleted` (Qt completes in reverse creation order, so a
+  root's or a later sibling's handler runs first) left the whole text,
+  since the field reacts to `maximumLength` changes only once it is
+  complete. `SafeTextArea` already cut the text then. No plugin change is
+  needed. `tests/test_features.py`.
 - `SafeTextField` with `masked: true` (since 0.12.0) tells a screen
   reader its label. Qt reports no accessible name for a password edit
   (Qt 6.12 drops `Accessible.name` there), so an "API token" field was
@@ -100,6 +124,25 @@
   time field or a change of `value`. Callers that reflect the value at
   once (`FoamyPrefsQueue`) see no change. No plugin change is needed.
   `tests/test_schedule.py`.
+- `FoamyNumberField` and `FoamyTextSettingField` (since 0.3.4): a
+  refused paste (too large, timed out, not plain text) replaces the error
+  the line shows for the draft. Before, a field that already showed its
+  draft's error (a number out of range, a `validate` message, after Enter
+  or a focus-out) kept it, so the refused paste said nothing:
+  `SafeTextField` sets `pasteError` without a text change, and the line
+  put the draft's error first. Enter with the draft still invalid shows
+  that error again. `FoamyTextSettingField.pasteFailed`, documented since
+  0.3.4 but never emitted, now comes as `FoamyNumberField`'s does. No
+  plugin change is needed. `tests/test_features.py`.
+- `FoamyScheduleDay` (since 0.9.0) says why a paste into a From or To
+  field was refused (too large, timed out, not plain text: the field's
+  `pasteError`), through `FoamyI18n.t`, in an error line under the row,
+  as `FoamyNumberField` does. The newest refused paste shows, until that
+  field's next edit. Before, the paste just did nothing. The row's root
+  is now a `ColumnLayout` (the row, then the line), so its `spacing` is
+  the gap above the line; no plugin sets it. No plugin change is needed:
+  foamy-train and foamy-zendesk have the three messages in both
+  catalogs. `tests/test_schedule.py`.
 - `FoamyWheelScroll.ensureVisible` (and `FoamySettingsPage.ensureVisible`)
   shows all of a section that unfolds at the end of the content. Before
   (since 0.4.0), it placed the section when the section's height changed,
@@ -123,6 +166,15 @@
   `FoamyPrefsQueue` save that `save()` refuses) calls the new
   `saveFailed()` on the failure (see Added).
   `tests/test_features.py`.
+- `FoamyDropdown` (since 0.1.0) closes its list when it is disabled (its
+  own `enabled` or a parent's), and `open()` and `toggle()` open no list
+  while it is disabled. The list lives in the window's overlay, outside
+  the disabled tree, so a list left open when the dropdown was disabled (a
+  settings page that starts saving, a panel busy with a drag) still took
+  Enter and a click, and the pick reached `onChanged`; a panel's `open()`
+  on a disabled dropdown opened a working list too. No plugin change is
+  needed; a plugin that refuses such a pick itself (foamy-monitor) can
+  drop that once it syncs. `tests/test_features.py`.
 - `FoamyAction`, `FoamyButton` and `FoamyPanelFooter` tooltips (the
   footer's `statusTooltip`): at most `Style.space(320)` wide, as the host
   caps its own long tooltips, and a few lines high. Before (since 0.1.0
@@ -133,10 +185,14 @@
   a tooltip-sized box, a word with no break (a name typed without spaces)
   breaks anywhere, and the shown text is cut to 3 lines of 200 characters
   with a visible "…" (`FoamyText.cap()`), so a 4096-byte path no longer
-  fills the popup's height. Short labels keep their own width and text;
-  `Accessible.name` keeps the whole text. The three components now depend
-  on `FoamyText`, so a plugin's next sync adds `kit/FoamyText.js` where it
-  was not selected yet; no plugin change is needed.
+  fills the popup's height. Short labels keep their own width and text.
+  Where the tooltip names the control, its `Accessible.name` keeps the
+  whole text: a `FoamyAction`, and a `FoamyButton` without text. A
+  `FoamyButton` with text is named by its text and the footer's status
+  by `status`, so a screen reader reads neither tooltip, as before. The
+  three components now depend on `FoamyText`, so a plugin's next sync
+  adds `kit/FoamyText.js` where it was not selected yet; no plugin change
+  is needed.
   `tests/test_features.py`.
 - `foamy_helper::fs::read_file_limited` (since 0.5.0): the error for a file
   over the limit lost its `io::TooLarge` payload when the path was added to
@@ -148,6 +204,23 @@
   needed; a helper may now use `is_over_limit` on `read_file_limited`'s
   error. `kit/rust/foamy-helper/src/fs.rs` (test
   `bounded_file_reads_refuse_links_and_special_files`).
+- `foamy_helper::lock::runtime_dir` (since 0.5.0) treats a shared
+  `XDG_RUNTIME_DIR` as unset. Before, only `<base>/<plugin>` was checked:
+  with `XDG_RUNTIME_DIR` set to `/tmp` or another directory other users
+  can write (a session without pam_systemd), another local user could
+  create `<base>/<plugin>` first, and `runtime_dir` then failed with
+  `PermissionDenied` or `InvalidInput` instead of the documented
+  `NotFound`, so a caller could not tell it from a broken directory. Now
+  the base must be the user's own directory, closed to everyone else and
+  not a symlink, as the XDG Base Directory spec requires, or `runtime_dir`
+  (and `try_runtime_lock`) returns `NotFound` before it creates anything,
+  so a caller can fall back. No source change is needed. foamy-todoist
+  and foamy-zendesk do not fall back: in such a session they now answer
+  `LOCK_UNAVAILABLE` for every locked operation, as they did before only
+  once another user had taken the directory; foamy-power, which checks
+  its own base this way, falls back to its cache directory.
+  `kit/rust/foamy-helper/src/lock.rs` (test
+  `a_shared_runtime_base_counts_as_unset`).
 - `foamy_helper::json::run` (since 0.9.0): the reply was marked as printed
   before it was written. A panic in another thread at that moment made the
   panic hook print nothing and exit 101 while the reply was still being
@@ -218,17 +291,63 @@
   stopped. Before, the run went on with a dead bus address and a later
   D-Bus step failed with an unrelated error. A missing `dbus-daemon` still
   leaves the dead address, as documented. `tests/test_harness.py`.
+- `preview/harness.py` `Run.stop()` (since 0.1.0) and
+  `hostenv.ProcessGroup.stop()` (since 0.9.0) also end a helper that leads
+  a process group of its own. A helper that a plugin runs under coreutils
+  `timeout` (FoamyNative's documented call) is outside qs's group, and
+  Quickshell does not end it when qs stops, so it ran on after the test
+  until its own deadline (30 s in FoamyNative's example). Now `stop()`
+  also kills every process left in qs's session (the leader's, for
+  `ProcessGroup`) and returns once none is left; only a child that makes
+  its own session (`setsid`) is outside it. No plugin change is needed.
+  README.md: Preview, Test helpers for plugins. `tests/test_harness.py`,
+  `tests/test_helpers.py`.
 - `preview/hostenv.py` `check()` (since 0.9.0) fails when `OMARCHY_PATH/bin`
   resolves outside the private tree's parent as a path. Before, a string
-  prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
-  session's `OMARCHY_PATH` (a test that only calls `hostenv.isolate()`)
-  passes as before. No plugin change is needed. `tests/test_helpers.py`.
+  prefix let `/tmp/xy/bin` pass for `/tmp/x`. No plugin change is needed.
+  `tests/test_helpers.py`.
+- `preview/hostenv.py` `isolate()` (since 0.9.0): a test that isolates
+  its environment with `isolate()` alone can no longer run a host
+  command. It kept the caller's `OMARCHY_PATH` (the installed
+  `/usr/share/omarchy` in an Omarchy session) and the `omarchy-*` commands
+  in `/usr/bin`, so a host script reached through `OMARCHY_PATH` or by
+  name ran for real (`/usr/bin/omarchy-shell` finds the live shell from
+  `OMARCHY_PATH` and `XDG_RUNTIME_DIR`), and `check()` passed such an env
+  although it is documented to fail when `OMARCHY_PATH/bin` is not the
+  stubs. Now `OMARCHY_PATH` is a private tree in `base` (the host's
+  `shell/` and `default/` only, as `make()`'s), every `omarchy`/`omarchy-*`
+  command on `PATH` or in Omarchy's bin dirs is a stub in its `bin/`,
+  first on `PATH`, that logs the call to `<base>/host-commands.log` and
+  exits 127, and `check()` fails for an env whose `OMARCHY_PATH` is a host
+  tree. A test that needs a host command gives it a stand-in (`make()`, or
+  its own directory in front of `PATH`). No plugin change is needed.
+  README.md: Test helpers for plugins. `tests/test_helpers.py`.
+- `preview/hostenv.py` `clipboard_fakes()` (since 0.9.0): the stand-in
+  `timeout` changes only clipboard.sh's read. Before, it turned every
+  `timeout --signal=KILL 2s …` on the test's `PATH` into 60 s, so a
+  plugin command with the same deadline (foamy-menu's launcher probe,
+  `timeout --signal=KILL 2s bash -lc …`) passed when it was too slow, and
+  a test of that deadline waited 60 s. Now only `timeout --signal=KILL 2s
+  bash <clipboard.sh> _read …` gets 60 s (outside the deadline modes);
+  every other call keeps its own deadline. A plugin test that works
+  around it (foamy-menu's guard probe uses 3 s) can use 2 s again.
+  README.md: Test helpers for plugins. `tests/test_clipboard.py`.
 - `preview/compare.py` (since 0.5.2) exits 2 ("unreadable") with the reason
   for a damaged PNG: a header cut short, a chunk that runs past the end of
   the file, image data shorter than its rows, or a row filter type above 4.
   Before, these ended in a traceback with exit 1 ("different"), or a filter
   type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
   ignored, as before. No plugin change is needed. `tests/test_compare.py`.
+- `preview/compare.py` (since 0.5.2) inflates no more image data than the
+  picture's rows need. Before, it inflated all of it before it checked
+  the length, and it trusted any width and height in the header, so a PNG
+  of a few hundred KiB could take gigabytes of memory. Now a PNG whose
+  image data runs on past its rows, or whose header declares more than a
+  4096 x 4096 RGBA picture (the kit's largest render, a 1920x1080 screen
+  at scale 2, is 3840 x 2160), is unreadable (exit 2) before the rest is
+  inflated; before, data past the rows was ignored. A stream that does
+  not end after the rows is unreadable, as before. No plugin change is
+  needed. README.md: Preview. `tests/test_compare.py`.
 
 ### Changed
 - `REVIEW.md`, section 6 "Test the behavior": it now says what a test must
@@ -241,9 +360,17 @@
   section before it adds or changes a test. `check.sh` and
   `tests/kit-check.sh` expect the new block after the next sync. No plugin
   code changes.
+- README.md, Preview: reads of the preview's scope inside the `body`
+  Component lint clean when `preview/Preview.qml` starts with `pragma
+  ComponentBehavior: Bound`: `preview.…` and `preview.popup.…` do, a bare
+  `popup.…` stays `unqualified`. README said no form was clean there. The
+  demo plugin's preview, with the pragma, has no `unqualified` finding
+  left and renders the same. No plugin change is needed; a preview that
+  adds the pragma drops the baseline entries it ends
+  (`tests/validate.sh --update-baseline qmllint`).
 
 ### Upgrading
-- `kit/rust` changed (the four `foamy_helper` items above): a plugin with a
+- `kit/rust` changed (the five `foamy_helper` items above): a plugin with a
   native helper rebuilds it after the sync (`kit/native/build-native.sh .`)
   and commits the new binaries and `native.pin`; until then `check.sh`,
   `tests/kit-check.sh` and `--verify` report the binaries stale. No call
@@ -383,6 +510,18 @@
   and plugins that were never pushed are not checked.
 - The `omarchy-marketplace-plugin-update` skill, in `.agents/skills/` with a
   `.claude/skills/` link. Submissions target the `main` merge commit.
+
+### Changed
+- `REVIEW.md`, section 5 "Review security at the actual sink": never ship
+  an editable `TextInput`, or a `TextField` built on it. Qt reads the
+  whole clipboard text on the UI thread, with no byte cap or deadline, on
+  every clipboard change to update `canPaste`, with no paste gesture, so
+  a bounded paste alone does not protect the shell (the marketplace
+  review of Foamy Lock, cited in the guide's evidence table). Use
+  `SafeTextField`, or a read-only `TextInput` that the plugin edits
+  itself (foamy-lock's password field), and paste through
+  `FoamyClipboard`. The sync replaces `REVIEW.md` in each plugin; a
+  plugin that ships an editable Qt text input changes it.
 
 ## 0.12.0 — 2026-11-16
 

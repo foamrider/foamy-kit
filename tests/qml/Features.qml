@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtTest
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -67,6 +68,12 @@ ShellRoot {
         id: field
         width: 200
         maximumLength: 5
+      }
+      SafeTextField {
+        id: createdField
+        width: 200
+        text: "abcdefgh"
+        maximumLength: shell.createdLimit
       }
       FoamyIcon {
         id: icon
@@ -153,6 +160,25 @@ ShellRoot {
           shell.pasteMessage = message
         }
       }
+      // Real pastes through kit/clipboard.sh (refusedPastes()).
+      FoamyNumberField {
+        id: pasteNumber
+        width: 300
+        value: 20
+        from: 1
+        to: 100
+      }
+      FoamyTextSettingField {
+        id: pasteText
+        width: 300
+        value: "short"
+        validate: function (text) {
+          return text.length <= 5 || "Too long"
+        }
+        onPasteFailed: function (message) {
+          shell.textPasteMessages = shell.textPasteMessages.concat([message])
+        }
+      }
       FoamyNumberField {
         id: decimalField
         width: 300
@@ -237,6 +263,24 @@ ShellRoot {
         options: ["a", "b", "c"]
         onChanged: function (v) {
           shell.dropdownChanges = shell.dropdownChanges.concat([v])
+        }
+      }
+    }
+    // A dropdown disabled while its list is open, itself or through its
+    // parent (disabledDropdown()); nothing lies under its list.
+    Item {
+      id: lockHolder
+      x: 560
+      y: 300
+      width: 160
+      height: 40
+      FoamyDropdown {
+        id: lockDropdown
+        width: 160
+        value: "x"
+        options: ["x", "y", "z"]
+        onChanged: function (v) {
+          shell.lockPicks = shell.lockPicks.concat([v])
         }
       }
     }
@@ -560,6 +604,101 @@ ShellRoot {
   }
   property var retryCommits: []
   property string pasteMessage: ""
+  property var textPasteMessages: []
+  property var lockPicks: []
+
+  // A dropdown disabled while its list is open (a settings page that starts
+  // saving) closes the list, and nothing there picks: a key or a click on the
+  // list would reach onChanged. A panel's open() on a disabled dropdown opens
+  // no list either.
+  function disabledDropdown(then) {
+    var trigger = lockDropdown.triggerItem
+    // Open the list, disable `target` (the dropdown or its parent), then
+    // `act` on where the list was.
+    function attempt(label, target, act, next) {
+      target.enabled = true
+      lockDropdown.open()
+      wait.waitFor(function () {
+        return lockDropdown.popupOpen
+      }, 3000, function (opened) {
+        check(opened, label + ": the dropdown's list opens")
+        target.enabled = false
+        wait.waitFor(function () {
+          return !lockDropdown.popupOpen
+        }, 3000, function (closed) {
+          check(closed, label + ": a dropdown disabled while its list is open closes the list")
+          act()
+          eq(shell.lockPicks, [], label + ": a dropdown disabled while its list is open takes no pick")
+          target.enabled = true
+          next()
+        })
+      })
+    }
+    attempt("keys, the dropdown disabled", lockDropdown, function () {
+      key(Qt.Key_Down)
+      key(Qt.Key_Return)
+    }, function () {
+      attempt("click, its parent disabled", lockHolder, function () {
+        // The list's first row, where it showed.
+        ev.mouseClick(trigger, 20, trigger.height + 12, Qt.LeftButton, Qt.NoModifier, -1)
+      }, function () {
+        lockDropdown.enabled = false
+        lockDropdown.open()
+        check(!lockDropdown.popupOpen, "open() on a disabled dropdown opens no list")
+        lockDropdown.enabled = true
+        then()
+      })
+    })
+  }
+
+  // What the stand-in wl-paste does on the next paste (hostenv.clipboard_fakes()).
+  Process {
+    id: fixture
+  }
+  function setClipboard(mode, then) {
+    fixture.command = ["clipboard-fixture", mode]
+    fixture.running = true
+    wait.waitFor(function () {
+      return !fixture.running
+    }, 5000, then, "clipboard-fixture " + mode)
+  }
+  // Ctrl+V into `input` (a SafeTextField), then `then` once the paste has ended.
+  function paste(input, then) {
+    input.focusInput()
+    ev.keyClick(Qt.Key_V, Qt.ControlModifier, -1)
+    check(input.pasteRunning, "the paste runs out of process")
+    wait.waitFor(function () {
+      return !input.pasteRunning
+    }, 10000, then, "the paste ends")
+  }
+  // A refused paste is the field's newest news: it replaces the error the
+  // field shows for its draft (a number out of range, a text too long).
+  function refusedPastes(then) {
+    var tooLarge = "Clipboard text is too large or contains invalid characters."
+    var numberLine = findNamed(pasteNumber, "foamyFieldError")
+    var textLine = findNamed(pasteText, "foamyFieldError")
+    pasteNumber.field.focusInput()
+    pasteNumber.field.selectAll()
+    type("500")
+    key(Qt.Key_Return)
+    check(numberLine !== null && numberLine.visible && numberLine.text === pasteNumber.invalidText, "an out-of-range number says why: " + (numberLine ? numberLine.text : "no error line"))
+    setClipboard("large", function () {
+      paste(pasteNumber.field, function () {
+        check(numberLine !== null && numberLine.visible && numberLine.text === tooLarge, "a refused paste into a number field replaces its range error: " + (numberLine ? numberLine.text : "no error line"))
+        pasteText.field.focusInput()
+        pasteText.field.selectAll()
+        type("toolong")
+        key(Qt.Key_Return)
+        check(textLine !== null && textLine.visible && textLine.text === "Too long", "a text too long says why: " + (textLine ? textLine.text : "no error line"))
+        paste(pasteText.field, function () {
+          check(textLine !== null && textLine.visible && textLine.text === tooLarge, "a refused paste into a text field replaces its validation error: " + (textLine ? textLine.text : "no error line"))
+          eq(shell.textPasteMessages, [tooLarge], "a text field reports a refused paste (pasteFailed)")
+          longField.focusInput()
+          then()
+        })
+      })
+    })
+  }
 
   QtObject {
     id: fakePanel
@@ -576,7 +715,14 @@ ShellRoot {
     panel: fakePanel
   }
 
-  Component.onCompleted: Qt.callLater(stepOne)
+  // A maximumLength lowered while the page is created: this root's
+  // Component.onCompleted runs before the field's own (Qt completes in
+  // reverse creation order), so only the field's completion can cut then.
+  property int createdLimit: 32767
+  Component.onCompleted: {
+    createdLimit = 5
+    Qt.callLater(stepOne)
+  }
 
   function stepOne() {
     // --- icons -----------------------------------------------------------------------------
@@ -605,6 +751,7 @@ ShellRoot {
     check(cursor.plain(Qt.ShiftModifier) && !cursor.plain(Qt.ControlModifier), "plain() ignores Shift only")
 
     // --- SafeTextField.maximumLength ---------------------------------------------------
+    eq([createdField.maximumLength, createdField.text], [5, "abcde"], "a maximumLength lowered while the field is created cuts its text")
     field.text = "abcdefgh"
     eq(field.text, "abcde", "maximumLength trims typed text")
     field.maximumLength = 3
@@ -621,6 +768,18 @@ ShellRoot {
     field.text = "abc\uD83D\uDE00"
     field.maximumLength = 4
     eq([field.text, field.text.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
+    // Typing in a full field drops the key wherever the caret is, as Qt's
+    // TextInput does: the end of the text stays ("09:00" never becomes "089:0").
+    field.maximumLength = 5
+    field.text = "09:00"
+    field.focusInput()
+    field.cursorPosition = 1
+    type("8")
+    eq(field.text, "09:00", "a key typed inside a full field is dropped, and the end of the text stays")
+    field.select(0, 1)
+    type("1")
+    eq(field.text, "19:00", "a key typed over a selection in a full field replaces it")
+    longField.focusInput()
     field.maximumLength = 3
 
     // --- FoamyDropdown keeps the caller's value binding ----------------------------------
@@ -1254,9 +1413,14 @@ ShellRoot {
       return unfinished().length === 0
     }, 5000, function () {
       shell.eq(unfinished(), [], "every later check ran")
-      console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-      console.log("FOAMY DONE")
-      Qt.quit()
+      // Last, so no other check types meanwhile.
+      shell.refusedPastes(function () {
+        shell.disabledDropdown(function () {
+          console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+          console.log("FOAMY DONE")
+          Qt.quit()
+        })
+      })
     })
   }
 }

@@ -415,11 +415,32 @@ Flickable {
     }
   }
 
+  // Keep the horizontal scroll inside the text, as SafeTextField does: the
+  // attached TextArea leaves the view scrolled to contentX = -leftPadding,
+  // which put the text one padding too far in, and in RTL pushed the ends
+  // of the lines past the field's edge. The lines wrap, so this is 0.
+  function _clampScroll() {
+    if (!editorReady)
+      return
+    var max = contentWidth > width ? contentWidth - width : 0
+    if (contentX < 0)
+      contentX = 0
+    else if (contentX > max)
+      contentX = max
+  }
+  onWidthChanged: _clampScroll()
+  onContentWidthChanged: _clampScroll()
+  onContentXChanged: _clampScroll()
   onHeightChanged: _followCursor()
   Component.onCompleted: {
     editorReady = true
+    // A maximumLength lowered while the page is created, after the editor
+    // took its text and before this runs (Qt completes in reverse creation
+    // order: a root's or a later sibling's Component.onCompleted comes
+    // first), was not applied: onMaximumLengthChanged waits for editorReady.
     if (editor.length > _limit())
       editor.remove(_cutAt(editor.text, _limit()), editor.length)
+    _clampScroll()
   }
   // Runs when maximumLength changes after creation (see SafeTextField: no
   // JS globals here).

@@ -20,7 +20,10 @@ import QtQuick.Layouts
 //   committed(v) once); an unchanged draft just goes back to showing `value`.
 //   An invalid draft shows `invalidText`; Enter keeps the draft to fix,
 //   focus-out restores `value`. Hiding the field is a focus-out; shown
-//   again, it has no error.
+//   again, it has no error. A destroyed field commits nothing: a page that
+//   a Loader unloads loses its draft. Keep a settings page loaded while it
+//   can show again (FoamyPopup keeps its body), or move the focus away
+//   before it unloads.
 // - Escape: restores `value` and stays on the page (the key is consumed, so
 //   FoamySettingsPage doesn't go back). Up/Down step the
 //   draft by stepSize within from..to.
@@ -70,7 +73,8 @@ Item {
   property bool hasCommitted: false
 
   // A refused paste (too large, timed out, not plain text): shown in the
-  // field's error line and emitted for callers with their own error area.
+  // field's error line, in place of the draft's error, and emitted for
+  // callers with their own error area.
   signal pasteFailed(string message)
   signal committed(real value)
 
@@ -282,8 +286,12 @@ Item {
           root.lastCommitted = ""
           root.hasCommitted = false
         }
-        onPasteErrorChanged: if (pasteError !== "")
+        // The newest news replaces the draft's error in the line (Enter
+        // with the draft still invalid shows that error again).
+        onPasteErrorChanged: if (pasteError !== "") {
+          root.errorText = ""
           root.pasteFailed(FoamyI18n.t(pasteError))
+        }
         onAccepted: root.commitEdit(false)
         onEditingFinished: if (!field.inputActiveFocus)
           root.commitEdit(true)
@@ -309,6 +317,7 @@ Item {
 
     Text {
       readonly property string message: root.errorText !== "" ? root.errorText : (root.field.pasteError !== "" ? FoamyI18n.t(root.field.pasteError) : "")
+      objectName: "foamyFieldError"
       visible: message !== ""
       width: parent.width
       text: message

@@ -233,6 +233,22 @@ Flickable {
   function focusInput() {
     editor.forceActiveFocus()
   }
+  // Whether a typed key would pass maximumLength, as
+  // QInputControl::isAcceptableInput reads it: Ctrl and Ctrl+Shift
+  // combinations are shortcuts, control characters never type.
+  function _overflows(event) {
+    var text = event.text
+    var modifiers = event.modifiers & ~Qt.KeypadModifier
+    if (text === "" || modifiers === Qt.ControlModifier || modifiers === (Qt.ControlModifier | Qt.ShiftModifier))
+      return false
+    for (let i = 0; i < text.length; i++) {
+      let code = text.charCodeAt(i)
+      if (code < 0x20 || (code >= 0x7f && code < 0xa0))
+        return false
+    }
+    var limit = maximumLength > 32767 ? 32767 : (maximumLength > 0 ? maximumLength : 0)
+    return editor.length - (editor.selectionEnd - editor.selectionStart) + text.length > limit
+  }
   // Where to cut `text` so it keeps at most `limit` UTF-16 units without
   // splitting a surrogate pair. No JS globals (see onMaximumLengthChanged).
   function _cutAt(text, limit) {
@@ -624,6 +640,9 @@ Flickable {
         nextItemInFocusChain(!backwards).forceActiveFocus(Qt.TabFocusReason)
       } else if (root.masked && root.maskedKey(event, true)) {
         event.accepted = true
+      } else if (!root.masked && root._overflows(event)) {
+        // At maximumLength: drop the key rather than cut the text's end.
+        event.accepted = true
       }
     }
     // A read-only editor claims no shortcuts; masked mode claims the keys
@@ -801,6 +820,13 @@ Flickable {
     // A `text` given at creation never becomes the masked value or shows.
     if (masked && editor.text !== "")
       clear()
+    // A maximumLength lowered while the page is created, after the editor
+    // took its text and before this runs (Qt completes in reverse creation
+    // order: a root's or a later sibling's Component.onCompleted comes
+    // first), was not applied: onMaximumLengthChanged waits for editorReady.
+    var limit = maximumLength > 32767 ? 32767 : (maximumLength > 0 ? maximumLength : 0)
+    if (editor.length > limit)
+      editor.remove(_cutAt(editor.text, limit), editor.length)
     clampScroll()
   }
   // Nothing typed in one mode shows in the other.

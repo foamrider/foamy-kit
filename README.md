@@ -56,7 +56,7 @@ edited in a plugin: change it here, then sync.
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblems.<key>` says which), node loader for unit tests |
 | FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never splitting a surrogate pair |
-| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
+| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component, the reason of a refused paste under the row). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
 | FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
@@ -717,7 +717,7 @@ fn main() -> ExitCode {
 | `io` | `read_limited`, `read_stdin_limited`, `LineReader` (max line length; an overlong line is reported and skipped, the next one still reads) |
 | `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
 | `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign-owned targets and directories, and directories that are world-writable without the sticky bit; group-writable own directories, as with umask 002, are fine), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
-| `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`; a missing lock file is created 0600, an existing one keeps its mode; owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700), `try_runtime_lock` |
+| `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`; a missing lock file is created 0600, an existing one keeps its mode; owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700; `NotFound` when `XDG_RUNTIME_DIR` is unset or not the user's own private directory, as `/tmp` is not), `try_runtime_lock` |
 | `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default; `stdin_fd` (standard input straight from an open file, still seekable), `nice`, `io_idle`; `pipe_into` → `Pipeline` (one child's standard output into another's input, moved with `splice` and counted: `run`, `run_with_progress`, `PipelineOutput`; see [Two-stage jobs](#two-stage-jobs)) |
 | `net` | `DeadlineStream` (wraps a `TcpStream`/`UnixStream`; re-arms the socket timeout to the time left before every read and write, so rustls, an HTTP parser or `read_to_end` on top is bounded as a whole; `DeadlineExceeded`, `is_deadline`), `set_deadline` for long-lived connections. Connecting and name resolution are outside it: use `TcpStream::connect_timeout` with the time left, on a resolved address |
 | `process` | `exit_on_panic` (exit with a code instead of aborting), `die_with_parent` (`PR_SET_PDEATHSIG`), `new_session` (`setsid`), `limit` (rlimits), `set_umask`, `set_run_budget`/`run_deadline` (one deadline for the whole run: every `Bounded` child and `Pipeline` ends by then, none starts after it) |
@@ -842,7 +842,10 @@ screen; its geometry and motion code is the host's. The bar window spans the
 screen, like the real 4.5 bar. Each run gets a
 private D-Bus session (no service activation: the desktop's MPRIS players
 and notifications are invisible), and `qs` dies with the render, even when
-the render itself is killed; the temp dir is removed (`--keep` keeps it).
+the render itself is killed; `Run.stop()` also ends what is left of qs's
+session, so a helper that a plugin runs under coreutils `timeout` (a
+process group of its own) ends with the run; the temp dir is removed
+(`--keep` keeps it).
 
 What a run's processes (qs, the plugin's `Process`es, the host QML) can
 reach is isolated by default (0.9.0):
@@ -945,9 +948,15 @@ property, the same object. Write each read so that it adds no qmllint entry
   both lint clean (the `var` property also ends the old `missing-property`
   entries for calls on `popup.bodyItem`);
 - inside the `body` Component, qmllint reports every read of the preview's
-  scope as `unqualified`, `preview.…` included, so no form is clean there:
-  leave an existing `popup.…` as it is, and its baselined entry still
-  matches; rewriting it only swaps one entry for another.
+  scope as `unqualified`, `preview.…` included, unless the file starts with
+  `pragma ComponentBehavior: Bound` (foamy-todoist's preview has it). The
+  Component is then bound to the preview's context, the preview renders
+  the same, and reads through the root id (`preview.previewState`,
+  `preview.popup.…`) lint clean; a bare `popup.…` stays `unqualified`, so
+  qualify it as well. With the pragma an id of the file wins over a
+  property of the same name in the body's objects. Without it no form is
+  clean there: leave an existing `popup.…` as it is, and its baselined
+  entry still matches; rewriting it only swaps one entry for another.
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
@@ -975,10 +984,13 @@ MultiEffect, ShaderEffect and layer effects draw nothing under the software
 renderer the harness uses (as under Omarchy CPU rendering): gate them so the
 content still reads without them (DESIGN.md, "Effects").
 
-Temp dirs: each run owns one PID-tagged dir under the temp dir (`$TMPDIR`,
-else `/tmp`) and removes only that one. Never `rm -rf /tmp/foamy-kit-preview-*`
-— concurrent renders (other agents') live there. `python3 preview/harness.py
---gc` removes only dirs of runs whose process is gone.
+Temp dirs: each run owns two PID-tagged dirs, `run.base` under the temp dir
+(`$TMPDIR`, else `/tmp`) and its socket dir `run.sockets` (below), and
+`cleanup()` removes only those two. A run that is not cleaned up (a failed
+run kept to look at, a test killed midway) leaves both: remove both, by
+exact path, or run `python3 preview/harness.py --gc`, which removes only the
+dirs of runs whose process is gone. Never `rm -rf /tmp/foamy-kit-preview-*`
+— concurrent renders (other agents') live there.
 
 Sockets: a unix socket path holds at most 107 bytes, so each run keeps its
 runtime dir (`XDG_RUNTIME_DIR`, where qs binds
@@ -992,6 +1004,8 @@ test's `XDG_RUNTIME_DIR` is too long. Read the runtime dir from
 
 Comparing screenshots: `preview/compare.py old.png new.png` (or two
 directories). It compares RGB and alpha; never compare one without the other.
+It reads pictures up to 4096 x 4096 RGBA and inflates no more image data than
+their rows need; a larger or damaged PNG is unreadable (exit 2).
 
 ### Test helpers for plugins
 
@@ -1045,7 +1059,13 @@ import harness, hostenv
     `notify-send`): no Omarchy bin dir or `$APPDIR` on
     `PATH`/`LD_LIBRARY_PATH`, dead audio, system-bus and session-bus
     addresses, and no `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or
-    `DISPLAY`. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
+    `DISPLAY`. No host command runs, by name or through `OMARCHY_PATH`:
+    `OMARCHY_PATH` is a private tree in `base` (the host's `shell/` and
+    `default/` only, as `make()`'s), and every `omarchy`/`omarchy-*`
+    command left on `PATH` (`/usr/bin`, a wrapper in `~/.local/bin`) or in
+    Omarchy's bin dirs is a stub in its `bin/`, first on `PATH`, that logs
+    the call to `<base>/host-commands.log` and exits 127; `make()` puts its
+    own stubs in front. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
     inside `dbus-run-session`); one that runs on the live compositor on
     purpose passes `display=True`, which raises RuntimeError unless the user
     set `FOAMY_TEST_DESKTOP=1`. Set `QT_QPA_PLATFORMTHEME` (`basic`) for
@@ -1057,8 +1077,10 @@ import harness, hostenv
     `<base>/omarchy-calls.log` and succeed; `omarchy-shell` reaches the test's
     own shell (`qs ipc -n -p <app>`), never the live one. `stubs` replaces or
     adds scripts; `calls(base)` reads the log.
-  - `check(env, *outputs)`: fails when a host bin dir is on `PATH` or a host
-    script's path shows up in the outputs.
+  - `check(env, *outputs)`: fails when a host bin dir is on `PATH`,
+    `OMARCHY_PATH` is a host tree (the session's `/usr/share/omarchy`: its
+    `bin/` is not the stubs), or a host script's path shows up in the
+    outputs.
   - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
     whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
     fake.
@@ -1072,7 +1094,10 @@ import harness, hostenv
     for the modes whose outcome is that deadline (`CLIPBOARD_DEADLINE_MODES`:
     stall, slow, ignore) and gives every other mode 60 s: a paste through
     six processes on a loaded machine no longer fails a test that is
-    otherwise right. clipboard.sh itself is unchanged. Modes and the files
+    otherwise right. It changes only clipboard.sh's read (`timeout
+    --signal=KILL 2s bash <clipboard.sh> _read …`): any other command under
+    `timeout`, also one with the same 2 s, keeps its own deadline.
+    clipboard.sh itself is unchanged. Modes and the files
     each paste writes (`<state>.args`, `<state>.pid`) are in the docstring;
     `tests/test_clipboard.py` is a full example.
   - `ProcessGroup(argv, **popen)`: a `qs` (or service) the test starts
@@ -1082,8 +1107,10 @@ import harness, hostenv
     started go too; `Popen.terminate()` stopped qs alone and left their
     children running. `wait(timeout)` returns the exit status, or None while
     it runs; wait through it, not `.process.wait()`, so the group id stays
-    reserved until `stop()`. A child that makes its own session or group
-    (`setsid`, coreutils `timeout`) is outside it.
+    reserved until `stop()`. A child that leads a group of its own
+    (coreutils `timeout`) stays in the leader's session, and `stop()` kills
+    what is left of it too; only a child that makes its own session
+    (`setsid`) is outside it.
 
     ```python
     with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:

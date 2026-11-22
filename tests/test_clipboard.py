@@ -10,6 +10,7 @@ so tests/suite.sh --ci runs it too."""
 import contextlib
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -171,6 +172,72 @@ def killed(env, early, group_signal=None):
                 os.kill(pid, signal.SIGKILL)
 
 
+def stat(pid):
+    """(state, process group) of `pid`, or None once it is gone."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+    return fields[0], int(fields[2])
+
+
+def killed_before_group(env, folder):
+    """The pids of a `loaded` paste's processes still alive 1 s after its
+    clipboard.sh got SIGKILL once the read's job had started but before
+    timeout led a process group of its own, or the reason no kill was sent.
+    A `timeout` in `folder`, first on PATH, holds the job at that moment: it
+    stops itself before it runs the stand-in. Only the guard's kill by pid
+    can end the job then. The job is continued once the guard is gone, so a
+    job the guard missed goes on with the read."""
+    state = Path(env["TEST_CLIPBOARD_STATE"])
+    state.write_text("loaded")
+    held = folder / "held.pid"
+    stand_in = shutil.which("timeout", path=env["PATH"])
+    script = f'#!/bin/sh\necho $$ > "{held}"\nkill -STOP $$\nexec "{stand_in}" "$@"\n'
+    hostenv.write_commands(folder, {"timeout": script})
+    tag = uuid.uuid4().hex
+    marker = f"FOAMY_TEST_READ={tag}".encode()
+    proc = subprocess.Popen(
+        ["bash", str(HELPER), "clipboard"],
+        env=dict(env, PATH=f"{folder}:{env['PATH']}", FOAMY_TEST_READ=tag),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    children = Path(f"/proc/{proc.pid}/task/{proc.pid}/children")
+    job = None
+    try:
+        deadline = time.monotonic() + 5
+        while job is None or (stat(job) or ("",))[0] != "T":
+            if proc.poll() is not None:
+                return f"clipboard.sh exited first with {proc.returncode}"
+            if time.monotonic() > deadline:
+                return "the read's job did not stop in front of timeout within 5 s"
+            time.sleep(0.01)
+            job = int(held.read_text()) if held.exists() and held.read_text().strip() else None
+        guards = [int(pid) for pid in children.read_text().split() if int(pid) != job]
+        if stat(job)[1] == job or len(guards) != 1:
+            return f"not the moment named: job {job} {stat(job)}, other children {guards}"
+        proc.kill()
+        proc.wait()
+        deadline = time.monotonic() + 2
+        while (stat(guards[0]) or ("Z",))[0] != "Z" and time.monotonic() < deadline:
+            time.sleep(0.01)
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(job, signal.SIGCONT)
+        deadline = time.monotonic() + 1
+        while (left := read_processes(marker)) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return left
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        for pid in read_processes(marker):
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+        held.unlink(missing_ok=True)
+
+
 def main():
     ok = True
     with tempfile.TemporaryDirectory(prefix="foamy-kit-clipboard-") as work:
@@ -257,6 +324,22 @@ def main():
                 f"exit {result.returncode} after {seconds:.1f}s",
             )
 
+        # The stand-in stretches only clipboard.sh's own read: another command
+        # under the same deadline (a plugin's probe, `bash -lc …`) keeps 2 s.
+        # At its deadline `timeout --signal=KILL` kills its whole group,
+        # itself included, so it ends by SIGKILL.
+        Path(state).write_text("normal")
+        started = time.monotonic()
+        other = subprocess.run(
+            ["timeout", "--signal=KILL", "2s", "bash", "-c", "sleep 3"], env=env, capture_output=True, timeout=90
+        )
+        seconds = time.monotonic() - started
+        ok &= report(
+            "the stand-in timeout keeps another command's 2 s deadline",
+            other.returncode == -signal.SIGKILL,
+            f"exit {other.returncode} after {seconds:.1f}s",
+        )
+
         # The caller stops a read (Quickshell sends TERM): the whole read
         # ends at once, producer included, with exit 143 and no output.
         for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
@@ -273,6 +356,14 @@ def main():
         for early, when in ((True, "at its start"), (False, "mid-read")):
             left = killed(env, early)
             ok &= report(f"SIGKILL to clipboard.sh {when} kills the whole read", left == [], f"still running: {left}")
+        # The moment the row "at its start" reaches only by chance: the
+        # read's job has started, and timeout does not lead its group yet.
+        left = killed_before_group(env, Path(work) / "held")
+        ok &= report(
+            "SIGKILL to clipboard.sh after the read's job starts, before timeout leads its group, kills the whole read",
+            left == [],
+            f"still running: {left}",
+        )
 
         # A stop sent to clipboard.sh's whole process group mid-read: the
         # processes of that group end together, and the read still ends.

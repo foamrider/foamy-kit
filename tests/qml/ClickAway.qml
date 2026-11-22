@@ -13,7 +13,8 @@ import "plugin/kit"
 // focused SafeTextField or SafeTextArea and gives them to the key home
 // (the popup's focusTarget, the body item while it is the default, the
 // settings page, or a plugin's `foamyKeyHome`); the field ends its edit
-// once. A click on a real control (a button, a row) changes no focus; a
+// once. A click on a real control (a button, a row with a MouseArea, a
+// FoamyCursorSurface row with its TapHandler) changes no focus; a
 // drag on empty space still flicks and the wheel still scrolls, and
 // neither takes the keys. FoamyWheelScroll says `spaceClicked`.
 ShellRoot {
@@ -23,6 +24,7 @@ ShellRoot {
   property int failures: 0
   property int buttonClicks: 0
   property int rowClicks: 0
+  property int surfaceClicks: 0
   property int listSpace: 0
   property int tallSpace: 0
   property int fieldDone: 0
@@ -79,6 +81,7 @@ ShellRoot {
         property alias list: list
         property alias heading: heading
         property alias rowA: rowA
+        property alias surfaceRow: surfaceRow
         property alias tall: tall
         property alias area: area
         property alias scopeKeys: scopeKeys
@@ -157,6 +160,14 @@ ShellRoot {
                 anchors.fill: parent
                 onClicked: shell.rowClicks++
               }
+            }
+            // The row most Foamy lists use: its click comes from a
+            // TapHandler, not a MouseArea.
+            FoamyCursorSurface {
+              id: surfaceRow
+              width: parent.width
+              height: 20
+              onClicked: shell.surfaceClicks++
             }
           }
         }
@@ -253,6 +264,9 @@ ShellRoot {
     body.field.focusInput()
     click(body.rowA, 40, 15)
     check(shell.rowClicks === 1 && shell.listSpace === 2 && body.field.inputActiveFocus, "a row's click leaves the field alone")
+    var done = shell.fieldDone
+    click(body.surfaceRow, 40, 10)
+    check(shell.surfaceClicks === 1 && shell.listSpace === 2 && body.field.inputActiveFocus && shell.fieldDone === done, "a FoamyCursorSurface row's click leaves the field alone and is no click on empty space: " + [shell.surfaceClicks, shell.listSpace, body.field.inputActiveFocus, shell.fieldDone - done])
     body.keys.forceActiveFocus()
     click(body.list, 100, 110)
     check(shell.listSpace === 3 && focused() === body.keys, "with no field focused a click changes no focus")

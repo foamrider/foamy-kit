@@ -39,6 +39,11 @@ ShellRoot {
   // inputActiveFocus as each field's editingFinished handler reads it.
   property var areaFocusAtFinish: null
   property var fieldFocusAtFinish: null
+  // A maximumLength lowered while the page is created: this root's
+  // Component.onCompleted runs before the area's own (Qt completes in
+  // reverse creation order), so only the area's completion can cut then.
+  property int createdLimit: 32767
+  Component.onCompleted: createdLimit = 5
 
   // A hint tone: between the background and the text, clearly apart from
   // both (a placeholder must not read as typed text in either theme).
@@ -150,6 +155,12 @@ ShellRoot {
           quiet: true
           text: "In place"
         }
+        SafeTextArea {
+          id: createdArea
+          width: parent.width
+          text: "abcdefgh"
+          maximumLength: shell.createdLimit
+        }
       }
     }
     Item {
@@ -234,7 +245,24 @@ ShellRoot {
     shell.edits = 0
   }
 
+  // [left, right] of `field`'s text, in the field's own coordinates: where
+  // it shows.
+  function textSpan(field) {
+    var e = field.editorItem
+    var a = e.mapToItem(field, e.positionToRectangle(0)).x
+    var b = e.mapToItem(field, e.positionToRectangle(field.text.length)).x
+    return [Math.min(a, b), Math.max(a, b)]
+  }
+
   function typing() {
+    // The same text in an area and a field of the same width shows in the
+    // same place, inside the paddings. The area used to sit scrolled one
+    // padding off: its text one padding too far in, and in RTL the ends of
+    // its lines past its edge.
+    var areaSpan = textSpan(quietArea), fieldSpan = textSpan(quietField)
+    check(near(areaSpan[0], fieldSpan[0]) && near(areaSpan[1], fieldSpan[1]), "an area's text shows where a field's does: " + areaSpan + " vs " + fieldSpan)
+    check(areaSpan[0] >= quietArea.leftPadding - 1 && areaSpan[1] <= quietArea.width - quietArea.rightPadding + 1, "an area's text stays inside its paddings: " + areaSpan + " in " + quietArea.width)
+    eq([createdArea.maximumLength, createdArea.text], [5, "abcde"], "a maximumLength lowered while the area is created cuts its text")
     shell.quietness(quietArea, area, "quiet area")
     shell.quietness(quietField, after, "quiet field")
     var editor = area.editorItem
