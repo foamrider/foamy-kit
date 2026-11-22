@@ -56,6 +56,17 @@
   `continuesCluster`, `splitsFlag`). `tests/text.test.cjs`.
 
 ### Fixed
+- The preview's mock bar (`preview/qml/MockBar.qml`, since 0.1.0) has the
+  theme's bar colours, as the host's bar binds them: `foreground` and
+  `barForeground` the bar text, `background` the bar background, `urgent`
+  the bar's active colour. Before, it was white on black whatever the
+  theme, so a host part a popup draws in the bar's colours showed wrong:
+  in a light picture foamy-monitor's brightness slider had a white fill on
+  a faint white track. Renders of the demo plugin are unchanged;
+  foamy-monitor's display and trial pictures now show the slider as the
+  host does, in both themes. No plugin change is needed; a plugin test
+  that renders or reads the mock bar's colours sees the theme's. README.md:
+  Preview. `tests/test_preview.py`.
 - `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
   whose clock runs a little ahead of this one (NFS, SMB) reuses its icons
   again. 0.13.1 made every file time in the future stale, so there each

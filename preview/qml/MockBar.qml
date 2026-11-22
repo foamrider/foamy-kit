@@ -1,8 +1,11 @@
 import QtQuick
+import qs.Commons as Commons
 
 // The `bar` a third-party bar widget receives (Ui/PluginBarApi): scalar
 // state plus popout coordination. barSize only; no barSizeFor, exactly like
-// the 4.5 plugin facade. MockFullBar adds barSizeFor.
+// the 4.5 plugin facade. MockFullBar adds barSizeFor. The colours are the
+// theme's bar colours, as the host's Bar.qml binds them, so host parts a
+// popup draws in them (PanelSlider) look as they do on the host.
 QtObject {
   id: bar
   property string pluginId: "foamy.preview"
@@ -10,10 +13,10 @@ QtObject {
   property string position: "top"
   readonly property bool vertical: position === "left" || position === "right"
   property int barSize: 34
-  property color foreground: "white"
-  property color barForeground: "white"
-  property color background: "black"
-  property color urgent: "red"
+  property color foreground: Commons.Color.bar.text
+  property color barForeground: Commons.Color.bar.text
+  property color background: Commons.Color.bar.background
+  property color urgent: Commons.Color.bar.active
   property string fontFamily: "monospace"
   property bool transparent: false
   property bool foregroundAnimationEnabled: true

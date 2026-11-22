@@ -928,7 +928,7 @@ import "../kit"
 import ".." as Plugin
 Item {
   id: preview
-  required property QtObject bar          // mock bar facade (barSize, popout, shell.updateEntryInline)
+  required property QtObject bar          // mock bar facade (barSize, the theme's bar colours, popout, shell.updateEntryInline)
   required property Item anchorItem       // the bar button on the simulated screen
   property var previewStates: ["default", "empty", "settings"]
   property string previewState: "default" // set by the harness before each capture
@@ -978,7 +978,11 @@ ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
 code the plugin has a catalog for (`i18n/<code>.json`, or its base
 language's); without one the render stops instead of showing English.
 Omarchy's Norwegian is `no`: `--language nb` renders `no` when only
-`no.json` exists.
+`no.json` exists. The mock `bar` (preview/qml/MockBar.qml, also in tests
+through `import "harness"`) has the theme's bar colours, as the host's bar
+binds them: `foreground` and `barForeground` the bar text, `background` the
+bar background, `urgent` the bar's active colour; so a host part a popup
+draws in them (PanelSlider) looks in either theme as it does on the host.
 
 Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 

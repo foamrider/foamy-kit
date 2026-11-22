@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Demo preview render on 4.5 (a preview that logs an error fails the
-render), plus publish-screenshots.sh on a throwaway git repository with an
+render; the mock bar's colours are the theme's bar colours, dark and
+light), plus publish-screenshots.sh on a throwaway git repository with an
 isolated Git config: orphan branch, untouched working tree, nothing pushed
 to a local push remote, unsafe subdirs and an empty PNG dir refused."""
 
@@ -15,7 +16,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import KIT_ROOT, harness, report, synced_demo  # noqa: E402
+from common import KIT_ROOT, harness, read_png, report, synced_demo  # noqa: E402
 
 sys.path.insert(0, str(KIT_ROOT / "preview"))
 import render  # noqa: E402
@@ -203,7 +204,72 @@ def render_tests():
             shots is not None and size(service_out / "toast.png") == (420, 72),
         )
         ok &= broken_preview_test(plugin, out_root / host / "broken")
+        ok &= bar_colour_test(plugin, host, out_root / host / "bar-colours")
     shutil.rmtree(plugin.parent, ignore_errors=True)
+    return ok
+
+
+# A card of four swatches, each drawn in one colour the preview's `bar`
+# hands a plugin, as the host's bar API hands them to host parts a popup
+# shows (PanelSlider's track, fill and knob).
+BAR_SWATCHES = """import QtQuick
+Item {
+  id: preview
+  required property QtObject bar
+  required property Item anchorItem
+  property var previewStates: ["bar"]
+  property string previewState: ""
+  readonly property var popup: card
+  Item {
+    id: card
+    readonly property Item cardItem: swatches
+    Row {
+      id: swatches
+      x: 100
+      y: 100
+      Repeater {
+        model: [preview.bar.foreground, preview.bar.barForeground, preview.bar.background, preview.bar.urgent]
+        Rectangle {
+          required property color modelData
+          width: 20
+          height: 20
+          color: modelData
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def bar_colour_test(plugin, host, out):
+    """The preview's bar hands a plugin the theme's bar colours, as the host
+    bar does (Bar.qml: foreground and barForeground from the bar text,
+    background from the bar background, urgent from the bar's active
+    colour, here the theme's red), in the dark and the light theme. A light
+    picture of a bar-coloured host part (foamy-monitor's brightness slider)
+    then shows it as the host does, not white."""
+    preview = plugin / "preview/BarColours.qml"
+    preview.write_text(BAR_SWATCHES)
+    ok = True
+    for theme in ("dark", "light"):
+        toml = (KIT_ROOT / f"preview/themes/{theme}.toml").read_text()
+        colour = {
+            key: re.search(rf'^{key} = "#([0-9a-f]{{6}})"$', toml, re.M).group(1)
+            for key in ("foreground", "background", "red")
+        }
+        expected = [colour["foreground"], colour["foreground"], colour["background"], colour["red"]]
+        shots = render.render(plugin, host, out / theme, preview=preview, theme=theme)
+        got = []
+        if shots is not None:
+            width, height, pixel = read_png(out / theme / "bar.png")
+            got = ["%02x%02x%02x" % pixel(i * 20 + 10, 10)[:3] for i in range(4)] if (width, height) == (80, 20) else []
+        ok &= report(
+            f"preview {host} {theme}: the bar's foreground, barForeground, background and urgent are the theme's bar colours",
+            got == expected,
+            f"got {got}, expected {expected}",
+        )
+    preview.unlink()
     return ok
 
 
