@@ -265,6 +265,26 @@ ShellRoot {
           shell.dropdownChanges = shell.dropdownChanges.concat([v])
         }
       }
+      // Linked to a FoamyPrefsQueue key (linkedDropdowns()): the queue's
+      // refusals of the key end the pick's hold.
+      FoamyDropdown {
+        id: refusedDropdown
+        width: 160
+        value: linkQueue.value("mode")
+        options: ["x", "y", "z"]
+        onChanged: function (v) {
+          linkQueue.save("mode", v)
+        }
+      }
+      FoamyDropdown {
+        id: queuedDropdown
+        width: 160
+        value: linkCliQueue.value("mode")
+        options: ["x", "y", "z"]
+        onChanged: function (v) {
+          linkCliQueue.save("mode", v)
+        }
+      }
       // Quick picks whose saves end one by one (serialPicks()).
       FoamyDropdown {
         id: serialDropdown
@@ -617,6 +637,76 @@ ShellRoot {
   property var textPasteMessages: []
   property var lockPicks: []
   property var serialChanges: []
+
+  // The queues of the linked dropdowns: one that saves inline, whose schema
+  // refuses "z", and one that saves through the fake CLI (0.3 s a save).
+  QtObject {
+    id: linkBar
+    property QtObject shell: QtObject {
+      function updateEntryInline(id, settings) {
+        return true
+      }
+    }
+  }
+  FoamyPrefsQueue {
+    id: linkQueue
+    bar: linkBar
+    moduleName: "foamy.link"
+    fields: [
+      {
+        key: "mode",
+        type: "enum",
+        options: ["x", "y"],
+        defaultValue: "x"
+      }
+    ]
+    settings: ({
+        id: "foamy.link",
+        mode: "x"
+      })
+  }
+  FoamyPrefsQueue {
+    id: linkCliQueue
+    bar: cliBar
+    moduleName: "foamy.link-cli"
+    fields: [
+      {
+        key: "mode",
+        type: "enum",
+        options: ["x", "y", "z"],
+        defaultValue: "x"
+      }
+    ]
+    settings: ({
+        id: "foamy.link-cli",
+        mode: "x"
+      })
+  }
+  // A dropdown linked to a queue and a key gives way when the queue
+  // refuses that key: at once when save() refuses the pick (it returns
+  // false), and when a pick that waited behind a running save is refused
+  // as it runs; a refusal of another key leaves it.
+  function linkedDropdowns(then) {
+    refusedDropdown.queue = linkQueue
+    refusedDropdown.queueKey = "mode"
+    queuedDropdown.queue = linkCliQueue
+    queuedDropdown.queueKey = "mode"
+    refusedDropdown.select("z")
+    eq([refusedDropdown.value, refusedDropdown.shownValue], ["x", "x"], "a pick the linked queue's save() refuses gives way at once")
+    queuedDropdown.select("y")
+    queuedDropdown.select("z")
+    eq([linkCliQueue.saving, linkCliQueue.waiting.length, queuedDropdown.value, queuedDropdown.shownValue], [true, 1, "y", "z"], "a second pick waits behind the running save and shows")
+    linkCliQueue.save("bogus", 1)
+    eq(queuedDropdown.shownValue, "z", "a refusal of another key leaves the pick on show")
+    // The widget loses its bar entry while the pick waits: its save is refused when it runs.
+    linkCliQueue.moduleName = ""
+    wait.waitFor(function () {
+      return !linkCliQueue.busy
+    }, 5000, function (drained) {
+      eq([drained, linkCliQueue.error, queuedDropdown.value, queuedDropdown.shownValue], [true, "Settings can't be saved: this widget has no bar entry.", "y", "y"], "a queued pick the linked queue refuses as it runs gives way at once")
+      then()
+    })
+  }
 
   // Picks A, B, A, each saved on its own: changed() names each pick with a
   // serial, and saveFailed(serial) drops only that pick, so the refusal of
@@ -1453,9 +1543,11 @@ ShellRoot {
       // Last, so no other check types meanwhile.
       shell.refusedPastes(function () {
         shell.disabledDropdown(function () {
-          console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-          console.log("FOAMY DONE")
-          Qt.quit()
+          shell.linkedDropdowns(function () {
+            console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+            console.log("FOAMY DONE")
+            Qt.quit()
+          })
         })
       })
     })

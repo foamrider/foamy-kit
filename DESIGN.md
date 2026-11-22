@@ -158,10 +158,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   changing `value`, call its `saveFailed()` so it shows the saved choice
   again at once; when saves end one by one, pass the pick's serial from
   `changed(value, serial)` (`saveFailed(serial)`), so a newer pick stays
-  on show. With `FoamyPrefsQueue` that is a save `save()` refuses
-  (it returns false: a value the schema rejects, a kept invalid stored
-  array, a widget with no bar entry); a CLI save that fails later rolls
-  `value` back and needs nothing. **Toggles**: `FoamyToggle`
+  on show. With `FoamyPrefsQueue`, link the dropdown instead (`queue:
+  prefs; queueKey: "mode"`): it then gives way by itself when the queue
+  refuses that key, whether `save()` refuses the pick (it returns false: a
+  value the schema rejects, a kept invalid stored array, a widget with no
+  bar entry) or a queued pick is refused as it runs (`failed()`); a CLI
+  save that fails later rolls `value` back and needs nothing. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
 - **Tab row** (`FoamyTabs`): a few views of one panel (Inbox / Today /
   Upcoming), at the top of the popup body directly under the hero band, the

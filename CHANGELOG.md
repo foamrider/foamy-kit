@@ -76,6 +76,21 @@
   none needed; a plugin that ends a pick on its own failed save may pass
   the serial instead of comparing `pickedValue`. DESIGN.md: Choices.
   `tests/test_features.py`.
+- `FoamyDropdown.queue` and `queueKey`: a dropdown linked to the
+  FoamyPrefsQueue it saves through and its key ends its pick by itself
+  when the queue refuses that key: at once when `save()` refuses the pick
+  (a value the schema rejects, a kept invalid stored array, a widget with
+  no bar entry; `save()` returns false), and when a pick that waited
+  behind a running CLI save is refused as it runs, which only `failed()`
+  reports. Before, such a pick stayed on show next to the error for up to
+  `pickHoldMs` (10 s) unless the plugin called `saveFailed()` on
+  `save()`'s false return, and the later refusal reached only `failed()`.
+  A refusal of another key leaves the pick; a dropdown without the link
+  works as before. Plugin change: none needed; a plugin that saves a
+  dropdown through FoamyPrefsQueue sets `queue` and `queueKey` and drops
+  its own `saveFailed()` call (foamy-power, foamy-monitor and
+  foamy-notification-center adopt it at their next sync). DESIGN.md:
+  Choices. `tests/test_features.py`.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
