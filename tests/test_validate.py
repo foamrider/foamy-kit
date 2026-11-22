@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -188,13 +189,32 @@ def main():
     )
     (plugin / ".ruff.toml").unlink()
     (plugin / "tool.py").unlink()
-    (lint / "oxlintrc.json").write_text('{"rules": {}}\n')
-    code, out = validate(plugin, "--only", "oxlint")
-    ok &= report(
-        "a tests/lint/oxlintrc.json that does not extend the kit's config fails",
-        code != 0 and "must extend the kit's config" in out,
-        summary(out),
-    )
+    # Only an "extends" list that names the kit's config counts; the name
+    # elsewhere in the text (another key, a comment, a string) does not.
+    extend = "must extend the kit's config"
+    for name, text, expected in (
+        ("has no extends", '{"rules": {}}\n', extend),
+        (
+            "names the kit's config in ignorePatterns",
+            '{"extends": [], "ignorePatterns": ["../../.oxlintrc.json"]}\n',
+            extend,
+        ),
+        ("names it only in a comment", '{\n  // "extends": ["../../.oxlintrc.json"],\n  "rules": {}\n}\n', extend),
+        ("has extends as a string", '{"extends": "../../.oxlintrc.json"}\n', extend),
+        ("is not a JSON object", '["../../.oxlintrc.json"]\n', extend),
+        ("is not JSON", '{"extends": ["../../.oxlintrc.json"]\n', "oxlintrc.json is not JSON"),
+        (
+            "extends it, with comments and trailing commas",
+            '// Plugin rules.\n{\n  "extends": ["../../.oxlintrc.json",],\n  /* why */ "rules": {"no-console": "off",},\n}\n',
+            None,
+        ),
+    ):
+        (lint / "oxlintrc.json").write_text(text)
+        code, out = validate(plugin, "--only", "oxlint")
+        passed = code == 0 and "PASS  oxlint" in out if expected is None else code != 0 and expected in out
+        ok &= report(
+            f"a tests/lint/oxlintrc.json that {name} {'passes' if expected is None else 'fails'}", passed, summary(out)
+        )
     (lint / "oxlintrc.json").unlink()
 
     # A missing pinned tool is a failure that says what to do.
@@ -215,6 +235,24 @@ def main():
         code != 0 and "mise.toml pins oxlint" in out and "run `mise install`" in out,
         summary(out),
     )
+    # A linter that ends without its JSON report (killed, out of memory)
+    # fails with its exit code, as qmllint does.
+    pins = tomllib.loads((KIT_ROOT / "mise.toml").read_text())["tools"]
+    (plugin / "probe.py").write_text("x = 1\n")
+    (plugin / "probe.sh").write_text("#!/bin/bash\necho ok\n")
+    for tool, label in (("oxlint", "oxlint"), ("ruff", "ruff check"), ("shellcheck", "shellcheck")):
+        version = next(v for k, v in pins.items() if k.rsplit("/", 1)[-1] == tool)
+        (empty / tool).unlink(missing_ok=True)
+        (empty / tool).write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo "{tool} {version}" && exit 0\nexit 9\n')
+        (empty / tool).chmod(0o755)
+        code, out = validate(plugin, "--only", tool, env=env)
+        ok &= report(
+            f"{label} with no JSON report fails with its exit code",
+            code != 0 and f"{label} produced no JSON report (exit 9)" in out,
+            summary(out),
+        )
+    (plugin / "probe.py").unlink()
+    (plugin / "probe.sh").unlink()
     shutil.rmtree(empty, ignore_errors=True)
 
     # The suite hook, and --ci.
@@ -260,6 +298,30 @@ def main():
     (plugin / "tests/suite.sh").write_text("#!/bin/bash\nexit 3\n")
     code, out = validate(plugin, "--ci", "--only", "suite")
     ok &= report("a failing suite fails validate", code != 0 and "exit 3" in out, summary(out))
+
+    # A qmllint that leaves no readable report: the failure names its exit
+    # code and why the report could not be read (a full disk looks the same).
+    fake = Path(tempfile.mkdtemp(prefix="foamy-kit-fakeqt-"))
+    (fake / "bin").mkdir()
+    (fake / "shell/Commons").mkdir(parents=True)
+    qt_env = dict(os.environ, FOAMY_QT_BIN=str(fake / "bin"), FOAMY_HOST_45=str(fake / "shell"))
+    for name, script, expected in (
+        ("no report", "#!/bin/sh\nexit 5\n", ("exit 5", "No such file or directory")),
+        (
+            "a report that is not JSON",
+            '#!/bin/sh\nwhile [ "$1" != --json ]; do shift; done\necho broken >"$2"\nexit 0\n',
+            ("exit 0", "Expecting value"),
+        ),
+    ):
+        (fake / "bin/qmllint").write_text(script)
+        (fake / "bin/qmllint").chmod(0o755)
+        code, out = validate(plugin, "--only", "qmllint", env=qt_env)
+        ok &= report(
+            f"qmllint with {name} fails with its exit code and the read error",
+            code != 0 and "qmllint wrote no JSON report" in out and all(part in out for part in expected),
+            summary(out),
+        )
+    shutil.rmtree(fake, ignore_errors=True)
 
     # qmllint on the host: the real imports, unused imports are errors.
     if os.access("/usr/lib/qt6/bin/qmllint", os.X_OK) and Path("/usr/share/omarchy/shell/Commons").is_dir():

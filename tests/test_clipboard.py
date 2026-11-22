@@ -3,10 +3,11 @@
 clipboard tests share: the paste's bounds (size, NUL, single line or
 `multiline` with its line breaks kept, the 2 s deadline, a producer that
 ignores SIGTERM), the exit codes FoamyClipboard maps to its messages, that
-a stopped read ends whole, and that a paste which works still works when
-the machine is slow. Shell only: no Quickshell or Omarchy host, so
-tests/suite.sh --ci runs it too."""
+a stopped or killed read ends whole, and that a paste which works still
+works when the machine is slow. Shell only: no Quickshell or Omarchy host,
+so tests/suite.sh --ci runs it too."""
 
+import contextlib
 import json
 import os
 import signal
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -66,7 +68,8 @@ def signalled(env, signum):
     """(exit code or the reason no signal was sent, stdout, stderr, producer
     pid, producer stopped within 1 s) for a `loaded` paste whose
     clipboard.sh gets `signum` once its trap is set. The stand-in timeout gives `loaded` 60 s and its producer runs
-    2.5 s, so only the trap's kill of the whole read ends it within 1 s."""
+    2.5 s, so only clipboard.sh's own kill of the whole read ends it within
+    1 s."""
     state = Path(env["TEST_CLIPBOARD_STATE"])
     state.write_text("loaded")
     Path(f"{state}.pid").unlink(missing_ok=True)
@@ -97,6 +100,75 @@ def signalled(env, signum):
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+
+
+def read_processes(marker):
+    """Pids of the live processes whose environment holds `marker`: the
+    clipboard.sh run that got it and every process it started."""
+    pids = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            # A zombie's environ reads empty, so only live processes count.
+            if marker in (entry / "environ").read_bytes().split(b"\0"):
+                pids.append(int(entry.name))
+        except OSError:
+            continue
+    return pids
+
+
+def killed(env, early, group_signal=None):
+    """The pids of a `loaded` paste's processes still alive 1 s after its
+    clipboard.sh got SIGKILL (no trap runs: Quickshell kills it so when its
+    Process is destroyed), or the reason no kill was sent. With `early`, the
+    kill comes as soon as clipboard.sh has started a child, else once the
+    producer runs. With `group_signal`, clipboard.sh leads its own process
+    group and that signal goes to the whole group instead (a closed
+    terminal, a session that ends), which also reaches the processes
+    clipboard.sh started in its group. The stand-in timeout gives `loaded`
+    60 s and its producer runs 2.5 s, so only clipboard.sh's own kill of the
+    read ends it within 1 s."""
+    state = Path(env["TEST_CLIPBOARD_STATE"])
+    state.write_text("loaded")
+    pid_file = Path(f"{state}.pid")
+    pid_file.unlink(missing_ok=True)
+    tag = uuid.uuid4().hex
+    marker = f"FOAMY_TEST_READ={tag}".encode()
+    proc = subprocess.Popen(
+        ["bash", str(HELPER), "clipboard"],
+        env=dict(env, FOAMY_TEST_READ=tag),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=group_signal is not None,
+    )
+    children = Path(f"/proc/{proc.pid}/task/{proc.pid}/children")
+    try:
+        deadline = time.monotonic() + 5
+        while not (children.read_text().strip() if early else pid_file.exists() and pid_file.read_text().strip()):
+            if proc.poll() is not None:
+                return f"clipboard.sh exited first with {proc.returncode}"
+            if time.monotonic() > deadline:
+                return "no child or producer seen within 5 s"
+            # Early: poll without a pause, to kill as close to the start as possible.
+            if not early:
+                time.sleep(0.01)
+        if group_signal is None:
+            proc.kill()
+        else:
+            os.killpg(proc.pid, group_signal)
+        proc.wait()
+        deadline = time.monotonic() + 1
+        while (left := read_processes(marker)) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        return left
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        for pid in read_processes(marker):
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
 
 
 def main():
@@ -193,6 +265,23 @@ def main():
                 f"{signum.name} to clipboard.sh kills the whole read",
                 code == 143 and out == b"" and err == b"" and gone,
                 f"exit {code}, output {out + err!r:.40}, producer {producer} stopped within 1 s: {gone}",
+            )
+
+        # clipboard.sh itself killed (SIGKILL: a destroyed Process), right
+        # after it starts or in the middle of the read: no part of the read
+        # outlives it by more than a moment.
+        for early, when in ((True, "at its start"), (False, "mid-read")):
+            left = killed(env, early)
+            ok &= report(f"SIGKILL to clipboard.sh {when} kills the whole read", left == [], f"still running: {left}")
+
+        # A stop sent to clipboard.sh's whole process group mid-read: the
+        # processes of that group end together, and the read still ends.
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            left = killed(env, False, signum)
+            ok &= report(
+                f"{signum.name} to clipboard.sh's process group kills the whole read",
+                left == [],
+                f"still running: {left}",
             )
 
         # Load: a paste that takes 2.5 s (a slow machine) still pastes with

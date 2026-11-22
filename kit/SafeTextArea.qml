@@ -36,13 +36,14 @@ import qs.Ui
 //   scrolls (wheel through FoamyWheelScroll, and to keep the caret in view).
 //   Lines wrap at word boundaries (`wrapMode`, TextEdit's).
 // - maximumLength counts UTF-16 units, like SafeTextField's. Typing or a
-//   newline that would pass it is dropped; a paste is cut to fit, never
-//   inside a surrogate pair; a longer `text` given by the caller is cut at
-//   the end.
+//   newline that would pass it is dropped; a paste is cut to fit; a longer
+//   `text` given by the caller, or a lower maximumLength, cuts the end. No
+//   cut splits a surrogate pair.
 // - textEdited fires on every change the user makes (typing, paste, cut,
 //   undo, redo); editingFinished when the field loses the focus (to
 //   anything but its own context menu: then when the menu closes without
-//   giving the focus back).
+//   giving the focus back). A field that hides gives up the focus, so keys
+//   never edit hidden text.
 // - Styled like SafeTextField (foamy radius, control fill and border), with
 //   its `quiet` mode for text edited in place.
 //   clipboardScript resolves relative to FoamyClipboard.qml unless absolute.
@@ -89,7 +90,8 @@ Flickable {
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
   property alias horizontalAlignment: editor.horizontalAlignment
-  readonly property bool inputActiveFocus: editor.activeFocus
+  // An alias (see SafeTextField): current inside editingFinished.
+  readonly property alias inputActiveFocus: editor.activeFocus
   // The editor itself (tests, glyph geometry).
   readonly property Item editorItem: editor
   readonly property int length: editor.length
@@ -190,11 +192,7 @@ Flickable {
     if (!current)
       return
     // Keep maximumLength (with repeated pastes), never cutting a surrogate pair.
-    var room = Math.max(0, _limit() - editor.length + pasteEnd - pasteStart)
-    if (value.length > room) {
-      let code = room > 0 ? value.charCodeAt(room - 1) : 0
-      value = value.slice(0, code >= 0xd800 && code < 0xdc00 ? room - 1 : room)
-    }
+    value = value.slice(0, _cutAt(value, Math.max(0, _limit() - editor.length + pasteEnd - pasteStart)))
     if (value === "" && pasteStart === pasteEnd)
       return
     // Not file-backed: reset the modified marker at each boundary so Qt keeps
@@ -213,6 +211,16 @@ Flickable {
   }
   function _limit() {
     return maximumLength > 32767 ? 32767 : (maximumLength > 0 ? maximumLength : 0)
+  }
+  // Where to cut `text` so it keeps at most `limit` UTF-16 units without
+  // splitting a surrogate pair. No JS globals (see onMaximumLengthChanged).
+  function _cutAt(text, limit) {
+    if (limit >= text.length)
+      return text.length
+    if (limit <= 0)
+      return 0
+    var code = text.charCodeAt(limit - 1)
+    return code >= 0xd800 && code < 0xdc00 ? limit - 1 : limit
   }
   // Whether a typed key (text or a newline) would pass maximumLength, as
   // QInputControl::isAcceptableInput reads it: Ctrl and Ctrl+Shift
@@ -277,6 +285,9 @@ Flickable {
     objectName: "safeEditor"
 
     Accessible.name: root.Accessible.name
+    // Setting the description stops Qt from showing the placeholder as the
+    // description, so the placeholder is the fallback here.
+    Accessible.description: root.Accessible.description !== "" ? root.Accessible.description : root.placeholderText
     Accessible.role: Accessible.EditableText
     Accessible.multiLine: true
     activeFocusOnTab: true
@@ -320,7 +331,9 @@ Flickable {
         text: root.translate("Paste")
         onTriggered: {
           editMenu.close()
-          root.focusInput()
+          // A hidden field takes no keys, also from a menu still closing.
+          if (root.visible)
+            root.focusInput()
           root.requestPaste(false)
         }
       }
@@ -363,7 +376,7 @@ Flickable {
       // is cut at the end.
       var limit = root._limit()
       if (length > limit)
-        remove(limit, length)
+        remove(root._cutAt(text, limit), length)
       root.revision++
       root.pasteError = ""
     }
@@ -406,7 +419,7 @@ Flickable {
   Component.onCompleted: {
     editorReady = true
     if (editor.length > _limit())
-      editor.remove(_limit(), editor.length)
+      editor.remove(_cutAt(editor.text, _limit()), editor.length)
   }
   // Runs when maximumLength changes after creation (see SafeTextField: no
   // JS globals here).
@@ -415,7 +428,7 @@ Flickable {
       return
     var limit = _limit()
     if (editor.length > limit)
-      editor.remove(limit, editor.length)
+      editor.remove(_cutAt(editor.text, limit), editor.length)
   }
   Component.onDestruction: cancelPaste()
   onActiveFocusChanged: if (activeFocus)
@@ -425,5 +438,10 @@ Flickable {
   onVisibleChanged: if (!visible) {
     cancelPaste()
     pasteError = ""
+    // Qt keeps the active focus on a hidden item, so keys would still edit
+    // text the user cannot see. Losing it ends the edit (editingFinished).
+    // An open menu would give the focus back on Esc or Paste: close it first.
+    editMenu.close()
+    editor.focus = false
   }
 }

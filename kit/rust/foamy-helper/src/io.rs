@@ -40,11 +40,18 @@ impl fmt::Display for LineTooLong {
 
 impl Error for LineTooLong {}
 
-/// Whether `error` reports input over a cap ([`TooLarge`] or [`LineTooLong`]).
+/// Whether `error` reports input over a cap ([`TooLarge`] or [`LineTooLong`]),
+/// also when the cap error is the source of the error inside it (as with
+/// [`crate::fs::read_file_limited`], which adds the path to the message).
 pub fn is_over_limit(error: &io::Error) -> bool {
-    error
-        .get_ref()
-        .is_some_and(|inner| inner.is::<TooLarge>() || inner.is::<LineTooLong>())
+    let mut next = error.get_ref().map(|inner| inner as &(dyn Error + 'static));
+    while let Some(inner) = next {
+        if inner.is::<TooLarge>() || inner.is::<LineTooLong>() {
+            return true;
+        }
+        next = inner.source();
+    }
+    false
 }
 
 /// Reads `reader` to its end, failing with [`TooLarge`] (kind

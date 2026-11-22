@@ -1,5 +1,240 @@
 # Changelog
 
+## 0.13.1 — 2026-11-22
+
+### Added
+- `FoamyDropdown.saveFailed()`: tells the dropdown that its last pick was
+  not saved, so it shows `value` again at once, as
+  `FoamyNumberField.saveFailed()` does for a field. Call it when a save
+  fails without changing `value`; a `FoamyPrefsQueue` caller needs no
+  change, since its rollback changes `value`. Plugin change: foamy-power's
+  default profile dropdowns (a failed `PowerService.setDefault()` leaves
+  `value` as it was) call `saveFailed()` on the dropdown whose save failed,
+  and only when the failed value equals its `pickedValue`: the function
+  takes no argument, so after two quick picks a failure of the first must
+  not drop the second. DESIGN.md: Choices. `tests/test_features.py`.
+
+### Fixed
+- `FoamyNumberField` and `FoamyTextSettingField` commit on focus-out
+  (broken since they came in, 0.3.2). Moving the focus away (Tab, a click
+  on another field) left a valid draft uncommitted and an invalid one on
+  screen: only Enter saved. The fields commit on `editingFinished` only
+  when the editor has lost the focus, and `SafeTextField.inputActiveFocus`
+  was a binding that still read true inside that handler. It is now an
+  alias of the editor's `activeFocus` (same name, type and change signal),
+  so a focus move commits a valid changed draft once and restores `value`
+  with the error for an invalid one. `SafeTextArea.inputActiveFocus` had
+  the same lag and is an alias too. No plugin change is needed; a plugin
+  that reads `inputActiveFocus` in its own `onEditingFinished` now gets
+  false there. `tests/test_features.py`, `tests/test_text_area.py`.
+- `SafeTextField` (since 0.2.0) and `SafeTextArea` (since 0.13.0) never
+  keep half of a surrogate pair at `maximumLength`. A normal
+  `SafeTextField` cut a paste, a longer `text` and a lowered
+  `maximumLength` by UTF-16 unit, so an emoji at the limit left a lone
+  high surrogate at the end (maximumLength 5 and "abcd😀" gave five units
+  ending in 0xD83D). `SafeTextArea` did so for a longer `text` and a
+  lowered `maximumLength` (its paste was already cut by code point). Every
+  cut now drops the whole pair, as the masked field already did. No plugin
+  change is needed. `tests/test_features.py`, `tests/test_masked.py`,
+  `tests/test_text_area.py`.
+- `SafeTextField` with `masked: true` (since 0.12.0) tells a screen
+  reader its label. Qt reports no accessible name for a password edit
+  (Qt 6.12 drops `Accessible.name` there), so an "API token" field was
+  announced as an unnamed password field. The masked editor now also gives
+  the field's `Accessible.name` as its description, which Qt keeps. The
+  editors of `SafeTextField` and `SafeTextArea` also pass the field's
+  `Accessible.description` on (it never reached them, so
+  `FoamyNumberField`'s `description` was not read out); a masked field
+  uses its description for the name instead. A field or area with no
+  `Accessible.description` gives its `placeholderText` as the description,
+  as Qt does while nothing sets one, so a screen reader still reads out a
+  placeholder hint (a search field labelled only "Search"). No plugin
+  change is needed. DESIGN.md: Inputs. `tests/test_masked.py`,
+  `tests/test_text_area.py`.
+- `SafeTextField` (since 0.1.0) and `SafeTextArea` (since 0.13.0) give up
+  the keyboard focus when they hide (their own `visible` or a parent's).
+  Qt keeps the active focus on a hidden item, so keys typed after a
+  focused field was hidden still edited text the user could not see. A
+  field hidden while its context menu is open closes the menu, so Esc or
+  the menu's Paste no longer gives the hidden field the focus back.
+  Losing the focus ends the edit as any focus loss does: `editingFinished`
+  comes once, when the field hides, instead of at the next focus move. A
+  plugin that saves on `editingFinished` now saves a hidden field's draft
+  at once (foamy-clock's custom value already ignores a hidden field
+  there); a plugin that shows the field again focuses it again
+  (`focusInput()`). The focus goes to the field's nearest focus scope, not
+  to a `PanelKeyCatcher` in it: a plugin whose panel keys (Esc, arrows)
+  must work right after a field hides moves the focus itself, as
+  foamy-notification-center's search does. `tests/test_text_area.py`.
+- `clipboard.sh` (`FoamyClipboard`, `SafeTextField`, `SafeTextArea`): a
+  read ends at once however its wrapper ends. Before (since 0.1.0), a
+  `FoamyClipboard` destroyed during a read (a closed field, a reload) left
+  `wl-paste` and its pipeline running until the 2 s deadline: Quickshell
+  kills the script with SIGKILL then, which its trap never saw. A TERM in
+  the moment between the start of the read and the trap did the same.
+  Now a small guard process kills the read when the script ends without
+  finishing it, SIGKILL included, also when a stop goes to the script's
+  whole process group, and the TERM, INT and HUP trap is set before the
+  read starts. The exit codes and the output are unchanged; the 2 s
+  deadline stays. No plugin change is needed. `tests/test_clipboard.py`
+  (SIGKILL at the start and mid-read, a stop to the process group),
+  `tests/test_clipboard_reader.py` (a destroyed reader).
+- `FoamyScheduleDay`: a time range is sent once per commit. Before (since
+  0.9.0, when the row moved into the kit), Enter emitted `changed(range)`
+  and the focus loss after it (Tab, a click elsewhere, the other field)
+  emitted the same range again whenever the caller's `value` had not yet
+  caught up. Now the same range is sent again only after an edit of a
+  time field or a change of `value`. Callers that reflect the value at
+  once (`FoamyPrefsQueue`) see no change. No plugin change is needed.
+  `tests/test_schedule.py`.
+- `FoamyWheelScroll.ensureVisible` (and `FoamySettingsPage.ensureVisible`)
+  shows all of a section that unfolds at the end of the content. Before
+  (since 0.4.0), it placed the section when the section's height changed,
+  before the Flickable's content had grown, so the scroll stopped at the
+  old end of the content: the last pixels of an animated section, or
+  almost all of one that unfolds at once (reduced motion), stayed below
+  the fold. Now it places the section again when the content height
+  changes while it follows. No plugin change is needed.
+  `tests/test_wheel.py`.
+- `FoamyDropdown`: a failed save that does not change `value` no longer
+  leaves the unsaved pick on show. Before (since 0.2.0), the trigger kept
+  showing the pick (`shownValue`) for up to `pickHoldMs` (10 s) next to
+  the save's error, and the caller had no way to drop it. A caller whose
+  failed save does not change `value` (foamy-power's default profiles)
+  calls the new `saveFailed()` on the failure (see Added).
+  `tests/test_features.py`.
+- `FoamyAction`, `FoamyButton` and `FoamyPanelFooter` tooltips (the
+  footer's `statusTooltip`): at most `Style.space(320)` wide, as the host
+  caps its own long tooltips, and a few lines high. Before (since 0.1.0
+  for `FoamyAction`, 0.4.0 for the other two), the host's `PanelToolTip`
+  was as wide as its text and wrapped only under a cap, so a long
+  `tooltipText` or `statusTooltip` (a folder path, an app's name, an
+  error's detail) spread over the whole popup. Now a long text wraps in
+  a tooltip-sized box, a word with no break (a name typed without spaces)
+  breaks anywhere, and the shown text is cut to 3 lines of 200 characters
+  with a visible "…" (`FoamyText.cap()`), so a 4096-byte path no longer
+  fills the popup's height. Short labels keep their own width and text;
+  `Accessible.name` keeps the whole text. The three components now depend
+  on `FoamyText`, so a plugin's next sync adds `kit/FoamyText.js` where it
+  was not selected yet; no plugin change is needed.
+  `tests/test_features.py`.
+- `foamy_helper::fs::read_file_limited` (since 0.5.0): the error for a file
+  over the limit lost its `io::TooLarge` payload when the path was added to
+  the message, so `io::is_over_limit` was false for it and a helper could
+  not tell "too large" from other read errors. The error now keeps the
+  payload as its source and `io::is_over_limit` also looks at the source,
+  so it is true; the message (`cannot read <path>: input is larger than N
+  bytes`) and the kind (`InvalidData`) are unchanged. No source change is
+  needed; a helper may now use `is_over_limit` on `read_file_limited`'s
+  error. `kit/rust/foamy-helper/src/fs.rs` (test
+  `bounded_file_reads_refuse_links_and_special_files`).
+- `foamy_helper::json::run` (since 0.9.0): the reply was marked as printed
+  before it was written. A panic in another thread at that moment made the
+  panic hook print nothing and exit 101 while the reply was still being
+  written, so the caller got no JSON or a cut-off line. The mark and the
+  write now share one lock with the panic hook: a panic during the write
+  waits until the whole line is out, and `run` then returns 101 too, so
+  the helper exits 101 without a second reply whether the hook or `main`
+  ends the process. No source change is needed.
+  `kit/rust/foamy-helper/src/json.rs` (test
+  `a_panic_while_the_reply_is_written_waits_for_it`).
+- `foamy_helper::favicon` (since 0.5.2): a set but empty or relative
+  `XDG_CACHE_HOME` was used as a relative cache directory, so the helper
+  copied the browser's icon into `foamy/browser-favicons/` under its
+  working directory and then replied `error` (a relative path has no
+  `file://` URI); an empty or relative `XDG_CONFIG_HOME` made it look for
+  browser profiles relative to the working directory. `Dirs::from_env` now
+  treats an empty or relative XDG variable as unset, as the XDG Base
+  Directory spec says (`~/.cache`, `~/.config`), and `resolve` refuses a
+  relative cache or browser profile directory (a relative `HOME`, or a
+  caller's `Dirs`) with the same `error` reply before it reads or writes
+  anything. No source change is needed.
+  `kit/rust/foamy-helper/src/favicon/tests.rs` (test
+  `xdg_dirs_must_be_absolute`).
+- `foamy_helper::favicon` cache (since 0.5.2): a cached icon with a
+  modification time in the future counted as fresh, so after the clock was
+  set back an old icon stayed in use until the clock passed its time plus
+  24 hours. Such a file is now stale and the icon is looked up again.
+  When the cache is full, such files are removed first and the icon just
+  written is always kept; before, a cache full of them made the helper
+  remove each new icon at once and reply `found` with a file that no
+  longer existed. No source change is needed.
+  `kit/rust/foamy-helper/src/favicon/tests.rs` (tests
+  `only_a_cached_icon_younger_than_a_day_is_reused`,
+  `a_new_icon_outlives_a_full_cache_of_files_from_the_future`,
+  `prune_keeps_the_icon_just_written`).
+- `tests/kit-check.sh` (generated from `tools/kit-check.sh.in`) names a
+  `native.pin` checksum line for a file other than `bin/x86_64/<binary>`
+  and `bin/aarch64/<binary>`: "`<crate>/native.pin lists unexpected file
+  <path>`", the message `check.sh` has given since 0.5.0. Before, it
+  ignored such a line and failed the pin only through the notices check,
+  without the reason. Plugins get the new check at their next sync.
+  `tests/test_native.py`.
+- `tests/validate.sh` qmllint check (since 0.9.0): when qmllint leaves no
+  readable report, the failure gives qmllint's exit code and the read
+  error ("`qmllint wrote no JSON report (exit 5): [Errno 2] No such file
+  or directory: …`"). Before, a full `/tmp` or a crashed qmllint looked
+  like a plain lint failure. The oxlint, ruff and shellcheck checks give
+  the tool's exit code the same way when it prints no JSON report
+  ("`oxlint produced no JSON report (exit 9)`"). No plugin change is
+  needed. `tests/test_validate.py`.
+- `tests/validate.sh` oxlint check (since 0.9.0): a local
+  `tests/lint/oxlintrc.json` must list `"../../.oxlintrc.json"` in its
+  `"extends"` array. Before, the name anywhere in the file passed (a
+  comment, `ignorePatterns`, an `extends` string), and such a file replaced
+  the kit's rules. The file is read as oxlint reads it (comments and
+  trailing commas allowed); one that does not parse fails with "is not
+  JSON" and the parse error. No plugin carries a local oxlintrc.json today.
+  `tests/test_validate.py`.
+- `preview/render.py --trio` (since 0.5.2) keeps each render's log in the
+  output dir: `render-before.log` and `render-after-<host>.log`. Before,
+  a failed render printed the path of a `render.log` inside the trio's
+  temporary work dir, which the trio then removed. `render.render()` takes
+  a new optional `log` path (default `<out>/render.log`, as before).
+  README.md: Before / after trio. `tests/test_trio.py`.
+- `preview/harness.py` (since 0.5.2): a private dbus-daemon that exits, or
+  that does not create its socket within 2 s, now stops `Run.start()` and
+  `Run.start_buses()` with `SystemExit` naming the cause, and the daemon is
+  stopped. Before, the run went on with a dead bus address and a later
+  D-Bus step failed with an unrelated error. A missing `dbus-daemon` still
+  leaves the dead address, as documented. `tests/test_harness.py`.
+- `preview/hostenv.py` `check()` (since 0.9.0) fails when `OMARCHY_PATH/bin`
+  resolves outside the private tree's parent as a path. Before, a string
+  prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
+  session's `OMARCHY_PATH` (a test that only calls `hostenv.isolate()`)
+  passes as before. No plugin change is needed. `tests/test_helpers.py`.
+- `preview/compare.py` (since 0.5.2) exits 2 ("unreadable") with the reason
+  for a damaged PNG: a header cut short, a chunk that runs past the end of
+  the file, image data shorter than its rows, or a row filter type above 4.
+  Before, these ended in a traceback with exit 1 ("different"), or a filter
+  type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
+  ignored, as before. No plugin change is needed. `tests/test_compare.py`.
+
+### Changed
+- `REVIEW.md`, section 6 "Test the behavior": it now says what a test must
+  protect, asks that every new or changed test is seen failing with the
+  behavior broken, lists the tests not to add (source text as a stand-in
+  for behavior, a mirror of the implementation, a repeat of a kit test in a
+  plugin, a test that cannot fail), and says that a new test file runs in
+  `tests/suite.sh` in the same change. The review block that sync keeps in
+  each plugin's `AGENTS.md` gains one sentence that sends an agent to that
+  section before it adds or changes a test. `check.sh` and
+  `tests/kit-check.sh` expect the new block after the next sync. No plugin
+  code changes.
+
+### Upgrading
+- `kit/rust` changed (the four `foamy_helper` items above): a plugin with a
+  native helper rebuilds it after the sync (`kit/native/build-native.sh .`)
+  and commits the new binaries and `native.pin`; until then `check.sh`,
+  `tests/kit-check.sh` and `--verify` report the binaries stale. No call
+  site changes, and `foamy-helper`'s version stays the same.
+- foamy-power calls `FoamyDropdown.saveFailed()` when a default profile
+  save fails (see Added). The text field items above ask a plugin to act
+  only in the cases they name (a hidden field shown again, panel keys
+  right after a field hides).
+- The sync replaces `REVIEW.md` and the review block in `AGENTS.md` (see
+  Changed). Nothing else in a plugin changes for it.
+
 ## 0.13.0 — 2026-11-19
 
 ### Added

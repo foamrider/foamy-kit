@@ -21,7 +21,7 @@ ShellRoot {
   property int checks: 0
   property int failures: 0
   // The checks that end later; the run reports only after all of them ran.
-  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers", "expiry"]
+  readonly property var laterChecks: ["dropdown", "tooltip", "long field", "unit stack", "state switches", "covers", "expiry"]
   property var finished: []
   function done(name) {
     finished = finished.concat([name])
@@ -207,6 +207,19 @@ ShellRoot {
         width: 120
         text: "a long value that cannot fit in the field at all"
       }
+      // A caller that shows its value whenever the field has no focus
+      // (foamy-lock's step field) still reads the typed text when the edit
+      // ends.
+      SafeTextField {
+        id: idleShown
+        property string seen: ""
+        width: 120
+        Binding on text {
+          value: "shown"
+          when: !idleShown.inputActiveFocus
+        }
+        onEditingFinished: seen = text
+      }
       // Switching between settings states (train: settings -> settings-schedule)
       // destroys and builds pages with text and number fields.
       Loader {
@@ -226,6 +239,32 @@ ShellRoot {
           shell.dropdownChanges = shell.dropdownChanges.concat([v])
         }
       }
+    }
+    // An action whose tooltip is app text of any length (a folder's name).
+    FoamyAction {
+      id: tipAction
+      x: 700
+      y: 540
+      iconName: "folder"
+      tooltipText: "Pause synchronization for " + "A folder name with words ".repeat(20)
+    }
+    // A form button and a footer status whose tooltips are app text too.
+    FoamyButton {
+      id: tipButton
+      x: 620
+      y: 540
+      text: "Open"
+      tooltipText: "Open"
+    }
+    FoamyPanelFooter {
+      id: tipFooter
+      x: 380
+      y: 530
+      width: 220
+      divider: false
+      showRefresh: false
+      status: "Sync failed"
+      statusTooltip: "Sync failed"
     }
   }
 
@@ -570,6 +609,19 @@ ShellRoot {
     eq(field.text, "abcde", "maximumLength trims typed text")
     field.maximumLength = 3
     eq(field.text, "abc", "lowering maximumLength trims")
+    idleShown.focusInput()
+    idleShown.selectAll()
+    type("typed")
+    longField.focusInput()
+    eq([idleShown.seen, idleShown.text], ["typed", "shown"], "editingFinished reads the typed text before a focus-bound Binding shows the value again")
+    // A cut never keeps half of a surrogate pair (the emoji is two units).
+    field.maximumLength = 5
+    field.text = "abcd\uD83D\uDE00"
+    eq([field.text, field.text.length], ["abcd", 4], "a longer text is cut by whole code point (text, UTF-16 units)")
+    field.text = "abc\uD83D\uDE00"
+    field.maximumLength = 4
+    eq([field.text, field.text.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
+    field.maximumLength = 3
 
     // --- FoamyDropdown keeps the caller's value binding ----------------------------------
     dropdown.select("b")
@@ -580,9 +632,57 @@ ShellRoot {
     eq([dropdown.value, dropdown.shownValue], ["b", "b"], "the binding follows the setting")
     shell.dropdownSetting = "c"
     eq([dropdown.value, dropdown.shownValue], ["c", "c"], "a later external change still shows (binding intact)")
+    // a save that failed: the caller says so, and the saved value shows at once
+    dropdown.select("b")
+    dropdown.saveFailed()
+    eq([dropdown.value, dropdown.shownValue], ["c", "c"], "saveFailed() drops the unsaved pick at once")
     // a save that never lands
     dropdown.select("a")
     dropdownRevert.start()
+
+    // --- FoamyAction: a long tooltip wraps in a capped width ---------------------------
+    wait.waitFor(function () {
+      if (window.visible && !tipAction.hovered)
+        ev.mouseMove(tipAction, 5, 5, -1, Qt.NoButton, Qt.NoModifier)
+      var tip = shell.toolTipOf(tipAction)
+      return tip !== null && tip.opened
+    }, 3000, function (ok) {
+      var tip = shell.toolTipOf(tipAction)
+      var cap = Style.space(320)
+      shell.check(ok && tip.width <= cap + 0.5 && tip.height < window.height / 2, "a long tooltip wraps within " + cap + " px instead of covering the window: " + (tip ? tip.width + "x" + tip.height : "none"))
+      // A name typed without spaces has no word break, and still stays in the box.
+      tipAction.tooltipText = "Pause synchronization for " + "X".repeat(512)
+      var fits = function () {
+        var text = tip.contentItem
+        return tip.width <= cap + 0.5 && text.contentWidth + text.leftPadding + text.rightPadding <= tip.width + 0.5
+      }
+      wait.waitFor(fits, 2000, function (inside) {
+        shell.check(inside, "an unbreakable word wraps inside the tooltip: " + tip.contentItem.contentWidth + " px of text in " + tip.width + " px")
+        // A path of any length keeps the tooltip a few lines high, cut with a "…".
+        tipAction.tooltipText = "Open /home/test/" + "Sync/Folder-with-a-long-name/".repeat(140) + "\nFolder ID: abcde-fghij"
+        wait.waitFor(function () {
+          return tip.height < window.height / 3 && fits()
+        }, 2000, function (short) {
+          var lines = String(tip.text).split("\n")
+          shell.check(short && lines.length === 2 && lines[0].slice(-1) === "\u2026" && lines[1] === "Folder ID: abcde-fghij", "a long path is cut so the tooltip stays short and shows its last line: " + tip.width + "x" + tip.height + ", " + lines.length + " lines")
+          tipAction.tooltipText = "Refresh"
+          wait.waitFor(function () {
+            return tip.width < cap / 2
+          }, 2000, function () {
+            shell.check(Math.abs(tip.width - (tip.implicitContentWidth + tip.leftPadding + tip.rightPadding)) < 0.5 && tip.text === "Refresh", "a short tooltip keeps its own width and text: " + tip.width)
+            shell.longTip(tipButton, function (text) {
+              tipButton.tooltipText = text
+            }, "FoamyButton", function () {
+              shell.longTip(shell.findNamed(tipFooter, "foamyFooterStatus"), function (text) {
+                tipFooter.statusTooltip = text
+              }, "FoamyPanelFooter status", function () {
+                shell.done("tooltip")
+              })
+            })
+          }, "a short tooltip is narrow")
+        })
+      })
+    }, "the action's tooltip opens")
 
     // --- FoamyNumberField: binding-safe numeric settings ------------------------------------
     eq(numberField.field.text, "5", "shows the bound value")
@@ -598,12 +698,7 @@ ShellRoot {
     eq(shell.numberCommits, [9], "Enter commits a valid changed draft once")
     // The focus goes to a plain field, not to another settings field, so the
     // text field's own focus-out checks below still start without the focus.
-    // A real focus move ends the edit while the editor still has the focus,
-    // so it does not reach the commit today. The field's context menu that
-    // closes without giving the focus back does: editingFinished() without
-    // the focus, as emitted here.
     longField.focusInput()
-    numberField.field.editingFinished()
     eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
     shell.numberSetting = 9
     eq(numberField.field.text, "9", "shows the saved value")
@@ -631,8 +726,18 @@ ShellRoot {
     key(Qt.Key_Return)
     eq(shell.numberCommits, [9, 17], "Enter commits the stepped draft once")
     longField.focusInput()
-    numberField.field.editingFinished()
     eq(shell.numberCommits, [9, 17], "focus-out after Enter doesn't commit it again")
+    numberField.field.focusInput()
+    key(Qt.Key_Up)
+    longField.focusInput()
+    check(!numberField.editing && numberField.field.text === "22", "focus-out ends the stepped draft: " + [numberField.editing, numberField.field.text])
+    eq(shell.numberCommits, [9, 17, 22], "focus-out commits a valid changed draft once")
+    numberField.field.focusInput()
+    numberField.field.selectAll()
+    type("500")
+    longField.focusInput()
+    check(numberField.field.text === "12" && !numberField.editing && numberField.error !== "", "focus-out on an out-of-range draft restores the value and says why: " + [numberField.field.text, numberField.editing, numberField.error])
+    eq(shell.numberCommits, [9, 17, 22], "an out-of-range draft never commits on focus-out")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
@@ -671,6 +776,20 @@ ShellRoot {
     check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === textBacks, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks - textBacks])
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
+    textSetting.field.focusInput()
+    textSetting.field.selectAll()
+    type("new2")
+    longField.focusInput()
+    check(!textSetting.editing && textSetting.field.text === "new2", "focus-out ends the text draft: " + [textSetting.editing, textSetting.field.text])
+    eq(shell.textCommits, ["new", "new2"], "focus-out commits a valid changed text draft once")
+    shell.textSetting = "new2"
+    textSetting.field.focusInput()
+    textSetting.field.selectAll()
+    type("toolong")
+    longField.focusInput()
+    check(textSetting.field.text === "new2" && !textSetting.editing && textSetting.error === "Too long", "focus-out on an invalid text draft restores the value and says why: " + [textSetting.field.text, textSetting.editing, textSetting.error])
+    eq(shell.textCommits, ["new", "new2"], "an invalid text draft never commits on focus-out")
+    textSetting.cancelEdit()
 
     // --- FoamyPrefsQueue with a synchronously reflecting host (4.5) ---------------------------
     syncQueue.save("a", "one")
@@ -864,6 +983,52 @@ ShellRoot {
       shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
       shell.done("long field")
     }, "long text scrolls to the caret")
+  }
+
+  // Gives the tooltip of `item` a long path whose last name has no break,
+  // hovers `item` and checks that the tooltip stays in its box, a few lines
+  // high, and keeps the text's last line.
+  function longTip(item, setText, label, then) {
+    setText("Open /home/test/" + "Sync/Folder-with-a-long-name/".repeat(140) + "X".repeat(512) + "\nFolder ID: abcde-fghij")
+    wait.waitFor(function () {
+      if (window.visible)
+        ev.mouseMove(item, 5, 5, -1, Qt.NoButton, Qt.NoModifier)
+      var tip = shell.toolTipOf(item)
+      return tip !== null && tip.opened
+    }, 3000, function (opened) {
+      var tip = shell.toolTipOf(item)
+      var cap = Style.space(320)
+      wait.waitFor(function () {
+        var text = tip.contentItem
+        return tip.width <= cap + 0.5 && text.contentWidth + text.leftPadding + text.rightPadding <= tip.width + 0.5 && tip.height < window.height / 3
+      }, 2000, function (inside) {
+        var lines = tip ? String(tip.text).split("\n") : []
+        shell.check(opened && inside && lines.length === 2 && lines[0].slice(-1) === "\u2026" && lines[1] === "Folder ID: abcde-fghij", label + ": a long tooltip stays in its " + cap + " px box, a few lines high, with its last line: " + (tip ? tip.width + "x" + tip.height + ", " + tip.contentItem.contentWidth + " px of text, " + lines.length + " lines" : "none"))
+        then()
+      })
+    }, label + ": the tooltip opens")
+  }
+  // The first item named `name` under `item`, depth first.
+  function findNamed(item, name) {
+    for (var i = 0; i < item.children.length; i++) {
+      var child = item.children[i]
+      if (child.objectName === name)
+        return child
+      var found = shell.findNamed(child, name)
+      if (found)
+        return found
+    }
+    return null
+  }
+
+  // The PanelToolTip inside a FoamyAction (a Popup, so not among its children).
+  function toolTipOf(action) {
+    for (var i = 0; i < action.data.length; i++) {
+      var d = action.data[i]
+      if (d && d.delay !== undefined && d.text !== undefined)
+        return d
+    }
+    return null
   }
 
   function checkUnitStack(label) {

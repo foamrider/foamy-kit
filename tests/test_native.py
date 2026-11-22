@@ -588,13 +588,11 @@ def pin_problem_tests(plugin, base):
     with open(extra / "native/native.pin", "a") as stream:
         stream.write(f"{'0' * 64}  bin/riscv64/{BINARY}\n")
     code, out = sh(CHECK, "--no-lint", extra)
-    # The generated kit-check.sh fails this pin through its notices check
-    # (every checksum line must be in THIRD_PARTY_NOTICES.md) but does not
-    # name the extra file, so only its verdict is checked.
     kit_code, kit_out = kit_check(extra)
+    fragment = f"native/native.pin lists unexpected file bin/riscv64/{BINARY}"
     ok &= report(
         "check.sh and kit-check fail a pin that lists an unexpected file",
-        code != 0 and f"native/native.pin lists unexpected file bin/riscv64/{BINARY}" in out and kit_code != 0,
+        code != 0 and fragment in out and kit_code != 0 and fragment in kit_out,
         f"check.sh: {out.strip()}; kit-check exit {kit_code}: {kit_out.strip()}",
     )
     unsynced = base / "pin-unsynced" / plugin.name

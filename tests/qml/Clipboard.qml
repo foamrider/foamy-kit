@@ -296,13 +296,15 @@ ShellRoot {
           read: "folder"
         }
       ]), "the new read gets its own result: " + JSON.stringify(outcomes))
-      setMode("stall")
+      setMode("loaded")
       next()
       return
     case 19:
       // A reader destroyed mid-read (a closed field, a reload): Quickshell
-      // kills clipboard.sh without the TERM its trap catches, so the
-      // separate 2 s watchdog must still end the read, producer included.
+      // kills clipboard.sh with SIGKILL, which no trap sees, and the read
+      // must still end at once, producer included: before the "loaded"
+      // producer would end by itself at 2.5 s (the stand-in timeout gives
+      // it 60 s).
       if (!fixture.done)
         return
       // The normal read above wrote its pid last; wait for this read's own.
@@ -323,7 +325,7 @@ ShellRoot {
     case 21:
       if (!exited(shell.cancelledPid) && elapsed() < 4000)
         return
-      check(exited(shell.cancelledPid) && elapsed() < 3500, "a destroyed reader's read still ends at the 2 s deadline (pid " + shell.cancelledPid + "), after " + elapsed() + " ms")
+      check(exited(shell.cancelledPid) && elapsed() < 1500, "a destroyed reader's read ends at once (pid " + shell.cancelledPid + "), after " + elapsed() + " ms")
       shell.finish()
       return
     }

@@ -13,7 +13,8 @@ import "plugin/kit"
 // through kit/clipboard.sh `multiline` and the fake wl-paste (line breaks
 // kept, NUL and oversized text refused, cut at maximumLength, a late result
 // dropped after newer typing, clear(), focus loss, hiding or disabling;
-// hiding clears a paste error; middle-click pastes the primary
+// hiding clears a paste error and takes the keys of a focused area or
+// field, ending its edit once; middle-click pastes the primary
 // selection), never Qt's own clipboard; typing at maximumLength drops the
 // key instead of the text's end; the height grows from minimumHeight to
 // maximumHeight and then scrolls to the caret; accessibility and the menu;
@@ -35,6 +36,9 @@ ShellRoot {
   property int finished: 0
   property int fieldFinished: 0
   property int saves: 0
+  // inputActiveFocus as each field's editingFinished handler reads it.
+  property var areaFocusAtFinish: null
+  property var fieldFocusAtFinish: null
 
   // A hint tone: between the background and the text, clearly apart from
   // both (a placeholder must not read as typed text in either theme).
@@ -102,11 +106,15 @@ ShellRoot {
           width: parent.width
           placeholderText: "Description"
           Accessible.name: "Description"
+          Accessible.description: "What happened"
           translate: function (key) {
             return "«" + key + "»"
           }
           onTextEdited: shell.edits++
-          onEditingFinished: shell.finished++
+          onEditingFinished: {
+            shell.finished++
+            shell.areaFocusAtFinish = inputActiveFocus
+          }
           onKeyPressed: function (event) {
             if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & Qt.ControlModifier)) {
               shell.saves++
@@ -117,7 +125,10 @@ ShellRoot {
         SafeTextField {
           id: after
           width: parent.width
-          onEditingFinished: shell.fieldFinished++
+          onEditingFinished: {
+            shell.fieldFinished++
+            shell.fieldFocusAtFinish = inputActiveFocus
+          }
         }
         // Qt's own (offscreen, in-process) clipboard, as a native TextEdit reads it.
         TextEdit {
@@ -229,6 +240,10 @@ ShellRoot {
     var editor = area.editorItem
     check(editor.Accessible.role === Accessible.EditableText && editor.Accessible.multiLine === true, "accessible as a multi-line edit")
     eq(editor.Accessible.name, "Description", "the editor carries the field's name")
+    eq(editor.Accessible.description, "What happened", "the editor carries the field's description")
+    area.Accessible.description = ""
+    eq(editor.Accessible.description, "Description", "an area with a placeholder and no description has the placeholder as its editor's description")
+    area.Accessible.description = "What happened"
     check(near(area.height, area.minimumHeight), "empty: minimumHeight " + area.height)
     area.focusInput()
     check(editor.activeFocus, "the field takes focus")
@@ -244,7 +259,9 @@ ShellRoot {
     key(Qt.Key_Tab)
     check(after.inputActiveFocus, "Tab moves the focus to the next field")
     eq(shell.finished, 1, "editingFinished when the field loses the focus")
+    eq(shell.areaFocusAtFinish, false, "the area's editingFinished handler reads inputActiveFocus as false")
     area.focusInput()
+    eq([shell.fieldFinished, shell.fieldFocusAtFinish], [1, false], "the field's editingFinished handler reads inputActiveFocus as false")
     key(Qt.Key_Tab, Qt.ShiftModifier)
     check(!editor.activeFocus, "Shift+Tab moves the focus back")
     eq(area.text, "ab\nc\nd", "Tab types nothing")
@@ -321,6 +338,14 @@ ShellRoot {
       eq(area.text, "/home/test/Blåbær x", "typing at the limit drops the key, never the text's end")
       area.maximumLength = 10
       eq(area.text, "/home/test", "lowering maximumLength cuts the end")
+      // A cut never keeps half of a surrogate pair (the emoji is two units).
+      area.maximumLength = 5
+      area.text = "abcd\uD83D\uDE00"
+      eq([area.text, area.length], ["abcd", 4], "a longer text is cut by whole code point (text, UTF-16 units)")
+      area.maximumLength = 32767
+      area.text = "abc\uD83D\uDE00"
+      area.maximumLength = 4
+      eq([area.text, area.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
       area.maximumLength = 32767
       shell.late()
     })
@@ -360,9 +385,34 @@ ShellRoot {
 
   // Hiding or disabling the field drops a paste in flight, even when the
   // field is shown, enabled and focused again before the read ends; hiding
-  // also clears a shown paste error.
+  // also clears a shown paste error. A hidden field keeps no keys: hiding
+  // a focused field ends its edit once, and typing then edits nothing.
   function hiding() {
     area.clear()
+    area.focusInput()
+    var ended = shell.finished
+    area.visible = false
+    check(!area.inputActiveFocus, "hiding the area drops the keys")
+    eq(shell.finished, ended + 1, "hiding the focused area ends its edit once")
+    type("x")
+    eq(area.text, "", "keys typed while the area is hidden never reach it")
+    area.visible = true
+    eq([shell.finished, area.inputActiveFocus], [ended + 1, false], "showing the area again ends nothing and takes no keys")
+    after.text = ""
+    after.focusInput()
+    var fieldEnded = shell.fieldFinished
+    after.visible = false
+    check(!after.inputActiveFocus, "hiding the text field drops the keys")
+    eq(shell.fieldFinished, fieldEnded + 1, "hiding the focused text field ends its edit once")
+    type("x")
+    eq(after.text, "", "keys typed while the text field is hidden never reach it")
+    after.visible = true
+    // Hidden with its parent: the same.
+    area.focusInput()
+    ended = shell.finished
+    column.visible = false
+    eq([area.inputActiveFocus, shell.finished], [false, ended + 1], "hiding the area's parent drops the keys and ends the edit once")
+    column.visible = true
     area.focusInput()
     setClipboard("delayed", function () {
       key(Qt.Key_V, Qt.ControlModifier)
@@ -417,7 +467,15 @@ ShellRoot {
         }, "area", function () {
           shell.contextMenu(after, function () {
             return shell.fieldFinished
-          }, "field", shell.sizing)
+          }, "field", function () {
+            shell.menuHiding(area, function () {
+              return shell.finished
+            }, "area", function () {
+              shell.menuHiding(after, function () {
+                return shell.fieldFinished
+              }, "field", shell.sizing)
+            })
+          })
         })
       })
     })
@@ -485,6 +543,34 @@ ShellRoot {
         }, label + ": the menu's Paste ends")
       }, label + ": a right-click opens the menu")
     })
+  }
+
+  // A field hidden while its context menu is open closes the menu, ends its
+  // edit once and takes no keys: neither Esc nor the menu gives the hidden
+  // field the focus back.
+  function menuHiding(field, count, label, then) {
+    var editor = field.editorItem
+    var menu = editor.Controls.ContextMenu.menu
+    field.clear()
+    field.focusInput()
+    type("ab")
+    var ended = count()
+    ev.mouseClick(editor, editor.width / 2, editor.height / 2, Qt.RightButton, Qt.NoModifier, -1)
+    wait.waitFor(function () {
+      return menu.opened
+    }, 3000, function () {
+      field.visible = false
+      wait.waitFor(function () {
+        return !menu.visible
+      }, 3000, function () {
+        key(Qt.Key_Escape)
+        type("z")
+        eq([field.text, count(), field.inputActiveFocus], ["ab", ended + 1, false], label + ": hidden with its menu open, the field ends its edit once and takes no keys")
+        field.visible = true
+        field.clear()
+        then()
+      }, label + ": hiding the field closes its menu")
+    }, label + ": a right-click opens the menu")
   }
 
   // The height follows the text up to maximumHeight, then the field scrolls

@@ -14,7 +14,7 @@ import "plugin/kit"
 // Backspace/Delete (and the word variants), Enter, keyboard navigation in
 // step with a normal field, mouse selection, paste (Ctrl+V, Shift+Insert,
 // middle-click) through kit/clipboard.sh and the fake wl-paste within
-// maximumLength, copy/cut/undo that do nothing and leave Qt's (offscreen,
+// maximumLength (a normal field's paste too, by whole code point), copy/cut/undo that do nothing and leave Qt's (offscreen,
 // in-process) clipboard alone, accessibility and input-method hints, the
 // drawn caret on the dots, `text` writes and `masked` changes that clear,
 // and RTL alignment. FOAMY_RTL=1 mirrors. Field shots go to FOAMY_OUT.
@@ -107,6 +107,7 @@ ShellRoot {
           id: plain
           width: parent.width
           Accessible.name: "Plain label"
+          Accessible.description: "Plain help"
           onTextEdited: shell.plainEdits++
         }
         SafeTextField {
@@ -402,9 +403,29 @@ ShellRoot {
           masks(secret, "ab" + "x".repeat(62), "middle-click pastes the primary selection at the click, cut at maximumLength")
           secret.maximumLength = 20
           masks(secret, "ab" + "x".repeat(18), "lowering maximumLength trims the value")
-          shell.clearing()
+          shell.plainPasteLimit()
         })
       })
+    })
+  }
+
+  // A normal field cuts a paste at maximumLength by whole code point too.
+  function plainPasteLimit() {
+    plain.text = ""
+    plain.maximumLength = 19
+    plain.focusInput()
+    setClipboard("unicode", function () {
+      key(Qt.Key_V, Qt.ControlModifier)
+      check(plain.pasteRunning, "a normal field's paste at the limit runs out of process")
+      wait.waitFor(function () {
+        return !plain.pasteRunning
+      }, 10000, function () {
+        // 18 units before the emoji: its two units do not fit, nor half of it.
+        eq([plain.text, plain.text.length], ["/home/test/Blåbær ", 18], "a normal field's paste stops at maximumLength, by whole code point (text, UTF-16 units)")
+        plain.maximumLength = 32767
+        plain.text = ""
+        shell.clearing()
+      }, "the normal field's paste at the limit ends")
     })
   }
 
@@ -494,6 +515,20 @@ ShellRoot {
     var plainRight = plain.editorItem.positionToRectangle(12).x
     check(shell.rtl ? near(plainRight, right, 1.5) : near(plainLeft, left, 1.5), "aligned like a normal field " + [plainLeft, plainRight, left, right])
     eq(plain.editorItem.Accessible.name, "Plain label", "a normal field keeps its label")
+    eq(plain.editorItem.Accessible.description, "Plain help", "a normal field's description reaches its editor")
+    // With a screen reader running, Qt reads a field's placeholder out as its
+    // description, but only while the description was never set.
+    plain.Accessible.description = ""
+    plain.placeholderText = "Search"
+    toggled.placeholderText = "PIN"
+    eq([plain.editorItem.Accessible.description, toggled.editorItem.Accessible.description], ["Search", "PIN"], "a field with a placeholder and no description has the placeholder as its editor's description (normal, masked)")
+    plain.placeholderText = ""
+    toggled.placeholderText = ""
+    plain.Accessible.description = "Plain help"
+    // Qt 6.12 reports no name for a password edit; the label must still
+    // reach assistive tools, as the name or the description.
+    var secretA11y = [secret.editorItem.Accessible.name, secret.editorItem.Accessible.description]
+    check(secretA11y.indexOf("API token") !== -1, "a masked field's label reaches its editor (name, description): " + JSON.stringify(secretA11y))
     // The editor is the field's tab stop: an accessibility check needs a role on it.
     eq(plain.editorItem.Accessible.role, Accessible.EditableText, "a normal field's editor is an editable text")
     eq([secret.editorItem.Accessible.role, secret.editorItem.Accessible.passwordEdit], [Accessible.EditableText, true], "a masked field's editor is an editable password text (role, passwordEdit)")

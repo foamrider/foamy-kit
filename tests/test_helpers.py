@@ -367,6 +367,35 @@ def main():
             except AssertionError:
                 failures += 1
         ok &= report("check() fails when a host bin is on PATH or a host script ran", failures == 2)
+        # OMARCHY_PATH/bin is the stub dir only inside the private tree's
+        # parent: a sibling dir that shares its name as a prefix is outside.
+        (base / "hostile/bin").mkdir(parents=True)
+        (base / "host/linked-tree").mkdir()
+        (base / "host/linked-tree/bin").symlink_to(base / "hostile/bin", target_is_directory=True)
+        try:
+            hostenv.check({**env, "OMARCHY_PATH": str(base / "host/linked-tree")})
+            message = "accepted"
+        except AssertionError as error:
+            message = str(error)
+        ok &= report(
+            "check() fails when OMARCHY_PATH/bin links to a sibling dir that shares the parent's name as a prefix",
+            message == "OMARCHY_PATH/bin must be the stub directory",
+            message,
+        )
+        # A test that only isolate()s its env keeps the session's
+        # OMARCHY_PATH (the installed tree in an Omarchy session); check()
+        # pairs with isolate() and passes for it, as it always did.
+        session = hostenv.isolate(
+            {"PATH": "/usr/bin:/bin", "OMARCHY_PATH": str(Path(hostenv.INSTALLED_BIN).parent)}, base
+        )
+        try:
+            hostenv.check(session)
+            message = "accepted"
+        except AssertionError as error:
+            message = str(error)
+        ok &= report(
+            "check() passes for an isolate()d env with the session's OMARCHY_PATH", message == "accepted", message
+        )
     finally:
         run.cleanup()
 

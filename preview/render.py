@@ -53,6 +53,7 @@ def render(
     bus="private",
     lenient=False,
     scale=1.0,
+    log=None,
 ):
     plugin = Path(plugin).resolve()
     preview = Path(preview).resolve() if preview else plugin / "preview/Preview.qml"
@@ -80,6 +81,7 @@ def render(
     )
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    log = Path(log) if log else out / "render.log"
     shots = []
     try:
         run.run(timeout=timeout)
@@ -89,16 +91,16 @@ def render(
                 target = out / path.name
                 shutil.copyfile(path, target)
                 shots.append((target, line.split("FOAMY SHOT ", 1)[1][len(str(path)) :].strip()))
-        (out / "render.log").write_text(run.log)
+        log.write_text(run.log)
         if lenient and not run.ok and shots and "FOAMY DONE" in run.log and "FOAMY FAIL" not in run.log:
             print(
-                f"note: {host} render finished with {len(run.failures())} QML error line(s) (old code); see {out / 'render.log'}",
+                f"note: {host} render finished with {len(run.failures())} QML error line(s) (old code); see {log}",
                 file=sys.stderr,
             )
             return shots
         if not run.ok:
             print("\n".join(run.failures() or run.log.splitlines()[-40:]), file=sys.stderr)
-            print(f"render failed on {host}; log at {out / 'render.log'}", file=sys.stderr)
+            print(f"render failed on {host}; log at {log}", file=sys.stderr)
             return None
         return shots
     finally:
@@ -176,7 +178,8 @@ def dev_copy(plugin, ref, before_preview):
 
 def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, theme="dark", url_prefix="", timeout=120):
     """Render <view>-before.png (dev), <view>-after-4.5.png and trio.md (a
-    PR-body table). Returns (rows, before_label)."""
+    PR-body table), with each render's log (render-before.log,
+    render-after-4.5.log). Returns (rows, before_label)."""
     plugin = Path(plugin).resolve()
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -185,7 +188,15 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
     after_hosts = harness.available_hosts(harness.KNOWN_HOSTS, what="trio after")
     try:
         for host in after_hosts:
-            shots = render(plugin, host, work / f"after-{host}", states=states, theme=theme, timeout=timeout)
+            shots = render(
+                plugin,
+                host,
+                work / f"after-{host}",
+                states=states,
+                theme=theme,
+                timeout=timeout,
+                log=out / f"render-after-{host}.log",
+            )
             after[host] = {}
             for path, _ in shots or []:
                 if not path.name.endswith("-screen.png"):
@@ -204,7 +215,15 @@ def trio(plugin, out, dev_ref="origin/dev", before_preview=None, states=None, th
             if not preview.is_file():
                 before_label = "Before (dev: no preview/Before.qml)"
             elif shots := render(
-                copy, "4.5", work / "before", preview=preview, states=states, theme=theme, timeout=timeout, lenient=True
+                copy,
+                "4.5",
+                work / "before",
+                preview=preview,
+                states=states,
+                theme=theme,
+                timeout=timeout,
+                lenient=True,
+                log=out / "render-before.log",
             ):
                 for path, _ in shots:
                     if not path.name.endswith("-screen.png"):

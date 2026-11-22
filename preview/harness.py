@@ -549,7 +549,8 @@ class Run:
 
     def _start_bus(self, kind="session"):
         """A private dbus-daemon (`kind` session or system); its process, or
-        None when dbus-daemon is missing (the address stays dead)."""
+        None when dbus-daemon is missing (the address stays dead). A daemon
+        that exits or does not listen within 2 s stops the run (SystemExit)."""
         name = "bus" if kind == "session" else "system-bus"
         config = self.base / f"{name}.conf"
         socket = self.sockets / name
@@ -577,11 +578,15 @@ class Run:
             preexec_fn=_die_with_parent,
         )
         variable = "DBUS_SESSION_BUS_ADDRESS" if kind == "session" else "DBUS_SYSTEM_BUS_ADDRESS"
-        for _ in range(100):
-            if socket.exists():
-                self.env[variable] = f"unix:path={socket}"
-                break
-            time.sleep(0.02)
+        if not wait_for(socket.exists, 2, interval=0.02, stop=lambda: process.poll() is not None):
+            # A started daemon without its socket is a dead bus: stop it and
+            # fail here, not later with an unrelated D-Bus error in a test.
+            code = process.poll()
+            _kill_group(process)
+            if code is not None:
+                raise SystemExit(f"harness: the private {kind} bus did not start: dbus-daemon exited with {code}")
+            raise SystemExit(f"harness: the private {kind} bus socket {socket} did not appear within 2 s")
+        self.env[variable] = f"unix:path={socket}"
         return process
 
     @property

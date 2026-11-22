@@ -127,6 +127,43 @@ ShellRoot { Component.onCompleted: { console.warn("Failed to start IPC server on
     return ok
 
 
+def bus_start_tests():
+    """A private session bus that never listens stops start() with the
+    reason, before qs runs, and its daemon does not outlive the failure."""
+    ok = True
+    fakes = Path(tempfile.mkdtemp(prefix="foamy-kit-fake-dbus-"))
+    pidfile = fakes / "daemon.pid"
+    saved = os.environ["PATH"]
+    for name, script, expected in (
+        ("exits at once", "#!/bin/sh\nexit 3\n", "dbus-daemon exited with 3"),
+        ("never creates its socket", f'#!/bin/sh\necho $$ >"{pidfile}"\nexec sleep 60\n', "did not appear"),
+    ):
+        (fakes / "dbus-daemon").write_text(script)
+        (fakes / "dbus-daemon").chmod(0o755)
+        run = harness.Run("4.5", HANG, prefix="foamy-kit-dead-bus-")
+        # The harness finds dbus-daemon on this process's PATH; run.env keeps its own.
+        os.environ["PATH"] = f"{fakes}:{saved}"
+        try:
+            run.start()
+            message = "started"
+        except SystemExit as error:
+            message = str(error)
+        finally:
+            os.environ["PATH"] = saved
+        pid = int(pidfile.read_text()) if pidfile.exists() else None
+        ok &= report(
+            f"a session bus that {name} stops start() with the reason",
+            expected in message
+            and run.process is None
+            and "no-session-bus" in run.env["DBUS_SESSION_BUS_ADDRESS"]
+            and (pid is None or not Path(f"/proc/{pid}").exists()),
+            f"{message}; daemon pid {pid}",
+        )
+        run.cleanup()
+    shutil.rmtree(fakes, ignore_errors=True)
+    return ok
+
+
 def main():
     ok = True
     # 1. Timeout: the run is killed, its bus too, and cleanup removes the dir.
@@ -240,6 +277,7 @@ def main():
     # past the unix socket limit: qs then only logs "Failed to start IPC
     # server", and `qs ipc` finds no instance.
     ok &= long_tmpdir()
+    ok &= bus_start_tests()
 
     # 6. Hosts: 4.5 only, the installed shell by default; 4.0 is retired with a clear message.
     probe = (
