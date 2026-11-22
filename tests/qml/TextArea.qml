@@ -332,6 +332,14 @@ ShellRoot {
       eq(area.text, "/home/test/Blåbær x", "typing at the limit drops the key, never the text's end")
       area.maximumLength = 10
       eq(area.text, "/home/test", "lowering maximumLength cuts the end")
+      // A cut never keeps half of a surrogate pair (the emoji is two units).
+      area.maximumLength = 5
+      area.text = "abcd\uD83D\uDE00"
+      eq([area.text, area.length], ["abcd", 4], "a longer text is cut by whole code point (text, UTF-16 units)")
+      area.maximumLength = 32767
+      area.text = "abc\uD83D\uDE00"
+      area.maximumLength = 4
+      eq([area.text, area.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
       area.maximumLength = 32767
       shell.late()
     })

@@ -88,6 +88,7 @@ Flickable {
   property color accent: Commons.Color.accent
   property string clipboardScript: "clipboard.sh"
   // Longest text the field keeps (typing and paste), like TextField.maximumLength.
+  // A cut to fit never splits a surrogate pair.
   property int maximumLength: 32767
   // Password-style entry, set at creation (header: "Masked contract").
   property bool masked: false
@@ -209,7 +210,7 @@ Flickable {
       if (value === "" && pasteStart === pasteEnd)
         return
       // Keep maximumLength (TextInput's 32767 by default), including repeated pastes.
-      value = value.slice(0, Math.max(0, root.maximumLength - editor.length + pasteEnd - pasteStart))
+      value = value.slice(0, _cutAt(value, Math.max(0, root.maximumLength - editor.length + pasteEnd - pasteStart)))
       if (value === "" && pasteStart === pasteEnd)
         return
       // These fields are not file-backed. Reset the document's modified
@@ -226,6 +227,16 @@ Flickable {
   }
   function focusInput() {
     editor.forceActiveFocus()
+  }
+  // Where to cut `text` so it keeps at most `limit` UTF-16 units without
+  // splitting a surrogate pair. No JS globals (see onMaximumLengthChanged).
+  function _cutAt(text, limit) {
+    if (limit >= text.length)
+      return text.length
+    if (limit <= 0)
+      return 0
+    var code = text.charCodeAt(limit - 1)
+    return code >= 0xd800 && code < 0xdc00 ? limit - 1 : limit
   }
   // The masked value split into code points (a surrogate pair stays whole),
   // one per mask glyph. No JS globals (see onMaximumLengthChanged).
@@ -637,7 +648,7 @@ Flickable {
       var wanted = root.maximumLength
       var limit = wanted > 32767 ? 32767 : (wanted > 0 ? wanted : 0)
       if (length > limit)
-        remove(limit, length)
+        remove(root._cutAt(text, limit), length)
       root.revision++
       root.pasteError = ""
     }
@@ -805,7 +816,7 @@ Flickable {
       return
     }
     if (editor.length > limit)
-      editor.remove(limit, editor.length)
+      editor.remove(_cutAt(editor.text, limit), editor.length)
   }
   Component.onDestruction: cancelPaste()
   onActiveFocusChanged: if (activeFocus)

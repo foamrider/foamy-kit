@@ -14,7 +14,7 @@ import "plugin/kit"
 // Backspace/Delete (and the word variants), Enter, keyboard navigation in
 // step with a normal field, mouse selection, paste (Ctrl+V, Shift+Insert,
 // middle-click) through kit/clipboard.sh and the fake wl-paste within
-// maximumLength, copy/cut/undo that do nothing and leave Qt's (offscreen,
+// maximumLength (a normal field's paste too, by whole code point), copy/cut/undo that do nothing and leave Qt's (offscreen,
 // in-process) clipboard alone, accessibility and input-method hints, the
 // drawn caret on the dots, `text` writes and `masked` changes that clear,
 // and RTL alignment. FOAMY_RTL=1 mirrors. Field shots go to FOAMY_OUT.
@@ -402,9 +402,29 @@ ShellRoot {
           masks(secret, "ab" + "x".repeat(62), "middle-click pastes the primary selection at the click, cut at maximumLength")
           secret.maximumLength = 20
           masks(secret, "ab" + "x".repeat(18), "lowering maximumLength trims the value")
-          shell.clearing()
+          shell.plainPasteLimit()
         })
       })
+    })
+  }
+
+  // A normal field cuts a paste at maximumLength by whole code point too.
+  function plainPasteLimit() {
+    plain.text = ""
+    plain.maximumLength = 19
+    plain.focusInput()
+    setClipboard("unicode", function () {
+      key(Qt.Key_V, Qt.ControlModifier)
+      check(plain.pasteRunning, "a normal field's paste at the limit runs out of process")
+      wait.waitFor(function () {
+        return !plain.pasteRunning
+      }, 10000, function () {
+        // 18 units before the emoji: its two units do not fit, nor half of it.
+        eq([plain.text, plain.text.length], ["/home/test/Blåbær ", 18], "a normal field's paste stops at maximumLength, by whole code point (text, UTF-16 units)")
+        plain.maximumLength = 32767
+        plain.text = ""
+        shell.clearing()
+      }, "the normal field's paste at the limit ends")
     })
   }
 

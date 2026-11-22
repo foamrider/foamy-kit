@@ -570,6 +570,14 @@ ShellRoot {
     eq(field.text, "abcde", "maximumLength trims typed text")
     field.maximumLength = 3
     eq(field.text, "abc", "lowering maximumLength trims")
+    // A cut never keeps half of a surrogate pair (the emoji is two units).
+    field.maximumLength = 5
+    field.text = "abcd\uD83D\uDE00"
+    eq([field.text, field.text.length], ["abcd", 4], "a longer text is cut by whole code point (text, UTF-16 units)")
+    field.text = "abc\uD83D\uDE00"
+    field.maximumLength = 4
+    eq([field.text, field.text.length], ["abc", 3], "lowering maximumLength cuts by whole code point (text, UTF-16 units)")
+    field.maximumLength = 3
 
     // --- FoamyDropdown keeps the caller's value binding ----------------------------------
     dropdown.select("b")
