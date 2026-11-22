@@ -1048,7 +1048,13 @@ import harness, hostenv
     `notify-send`): no Omarchy bin dir or `$APPDIR` on
     `PATH`/`LD_LIBRARY_PATH`, dead audio, system-bus and session-bus
     addresses, and no `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` or
-    `DISPLAY`. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
+    `DISPLAY`. No host command runs, by name or through `OMARCHY_PATH`:
+    `OMARCHY_PATH` is a private tree in `base` (the host's `shell/` and
+    `default/` only, as `make()`'s), and every `omarchy`/`omarchy-*`
+    command left on `PATH` (`/usr/bin`, a wrapper in `~/.local/bin`) or in
+    Omarchy's bin dirs is a stub in its `bin/`, first on `PATH`, that logs
+    the call to `<base>/host-commands.log` and exits 127; `make()` puts its
+    own stubs in front. A test on its own bus names it (`session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"]`
     inside `dbus-run-session`); one that runs on the live compositor on
     purpose passes `display=True`, which raises RuntimeError unless the user
     set `FOAMY_TEST_DESKTOP=1`. Set `QT_QPA_PLATFORMTHEME` (`basic`) for
@@ -1060,8 +1066,10 @@ import harness, hostenv
     `<base>/omarchy-calls.log` and succeed; `omarchy-shell` reaches the test's
     own shell (`qs ipc -n -p <app>`), never the live one. `stubs` replaces or
     adds scripts; `calls(base)` reads the log.
-  - `check(env, *outputs)`: fails when a host bin dir is on `PATH` or a host
-    script's path shows up in the outputs.
+  - `check(env, *outputs)`: fails when a host bin dir is on `PATH`,
+    `OMARCHY_PATH` is a host tree (the session's `/usr/share/omarchy`: its
+    `bin/` is not the stubs), or a host script's path shows up in the
+    outputs.
   - `fake_helper_plugin(plugin, dest, helper, script)`: a copy of the plugin
     whose `bin/<arch>/<helper>` is a script, so `FoamyNative` launches the
     fake.

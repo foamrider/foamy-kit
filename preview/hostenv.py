@@ -86,6 +86,17 @@ def isolated_path(value=None, *extra_bins):
 # What isolate() drops unless display=True: the live compositor, Hyprland
 # and X11.
 DISPLAY_VARIABLES = ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "DISPLAY")
+# isolate(): the private Omarchy tree in `base` (OMARCHY_PATH), and the log
+# of the host commands its stubs refused.
+_ISOLATED_TREE = "omarchy-isolated"
+_REFUSED_LOG = "host-commands.log"
+# A host command isolate() shadows: it logs the call and exits 127, as a
+# missing command would (harness.Run's stubs do the same).
+_REFUSING_STUB = """#!/bin/sh
+printf '%s\\n' "${0##*/} $*" >> "@LOG@"
+echo "foamy-kit hostenv: ${0##*/} is a host command; give the test a stand-in" >&2
+exit 127
+"""
 # Tests never show anything on the live desktop unless the user sets this to
 # 1 for the run: a validate run used to put test surfaces on the user's screen.
 DESKTOP_OPT_IN = "FOAMY_TEST_DESKTOP"
@@ -118,14 +129,39 @@ def isolate(env, base, session_bus=None, display=False):
     media players. WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and DISPLAY
     leave unless `display=True` (a test that runs on the live compositor
     on purpose), which raises RuntimeError unless FOAMY_TEST_DESKTOP=1 is
-    set."""
+    set.
+
+    No host command runs, by name or through OMARCHY_PATH: OMARCHY_PATH is
+    a private tree in `base` (`omarchy-isolated`: the host's shell/ and
+    default/ only, as make()'s), and every `omarchy`/`omarchy-*` command
+    left on PATH (/usr/bin, a wrapper in ~/.local/bin) or in the host's bin
+    directories is a stub in its bin/, first on PATH, that logs the call to
+    <base>/host-commands.log and exits 127. make() puts its own stubs in
+    front."""
     if session_bus is not None and not str(session_bus).startswith("unix:"):
         raise ValueError(f"session_bus must be a unix: address, not {session_bus!r}")
     if display:
         problem = desktop_problem(env, "hostenv.isolate(display=True)")
         if problem:
             raise RuntimeError(problem)
-    env["PATH"] = isolated_path(env.get("PATH", "/usr/bin:/bin"))
+    base, host = Path(base), root()
+    tree = base / _ISOLATED_TREE
+    # The caller's OMARCHY_PATH is a host tree too (the session's), also when
+    # it is not this process's.
+    omarchy_bin = [Path(env["OMARCHY_PATH"]) / "bin"] if env.get("OMARCHY_PATH") else []
+    path = [p for p in isolated_path(env.get("PATH", "/usr/bin:/bin"), *omarchy_bin).split(":") if p]
+    names = {n for b in host_bins(*omarchy_bin) if os.path.isdir(b) for n in os.listdir(b) if n.startswith("omarchy-")}
+    for folder in path:
+        try:
+            names |= {n for n in os.listdir(folder) if n == "omarchy" or n.startswith("omarchy-")}
+        except OSError:
+            continue
+    write_commands(tree / "bin", dict.fromkeys(names, _REFUSING_STUB.replace("@LOG@", str(base / _REFUSED_LOG))))
+    for name in ("shell", "default"):
+        if (host / name).is_dir() and not (tree / name).is_symlink():
+            (tree / name).symlink_to(host / name, target_is_directory=True)
+    env["PATH"] = ":".join([str(tree / "bin"), *path])
+    env["OMARCHY_PATH"] = str(tree)
     libraries = library_path(env.get("LD_LIBRARY_PATH", ""))
     if libraries:
         env["LD_LIBRARY_PATH"] = libraries
@@ -208,14 +244,15 @@ def calls(base):
 
 def check(env, *outputs):
     """Fails (AssertionError) when a host script could run (the host's bin
-    directories on PATH, OMARCHY_PATH/bin not the stubs) or did (its path in
-    one of `outputs`)."""
+    directories on PATH, OMARCHY_PATH/bin not the stubs: a host tree such
+    as the session's /usr/share/omarchy) or did (its path in one of
+    `outputs`)."""
     bins = host_bins()
     assert not any(os.path.realpath(p) in bins for p in env["PATH"].split(":") if p), env["PATH"]
     if env.get("OMARCHY_PATH"):
         tree = Path(env["OMARCHY_PATH"])
         bin_dir = os.path.realpath(tree / "bin")
-        assert Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)), (
+        assert bin_dir not in bins and Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)), (
             "OMARCHY_PATH/bin must be the stub directory"
         )
     named = bins | {str(root() / "bin"), INSTALLED_BIN}

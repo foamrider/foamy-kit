@@ -231,7 +231,7 @@ def main():
         )
         ok &= report(
             "isolate() drops host bins and $APPDIR, names no audio server or system bus",
-            env["PATH"] == "/usr/bin"
+            env["PATH"].split(":") == [str(Path(env.get("OMARCHY_PATH", "")) / "bin"), "/usr/bin"]
             and "LD_LIBRARY_PATH" not in env
             and env["PULSE_SERVER"] == f"unix:{base}/no-pulse"
             and env["PIPEWIRE_REMOTE"] == f"{base}/no-pipewire"
@@ -239,6 +239,56 @@ def main():
             and env["DBUS_SYSTEM_BUS_ADDRESS"] == f"unix:path={base}/no-system-bus",
             str(env),
         )
+        # No host command runs, by name or through OMARCHY_PATH: a host tree
+        # (the session's OMARCHY_PATH) and a wrapper on PATH (~/.local/bin)
+        # whose commands would leave a marker. /usr/bin holds more of them.
+        host_tree = base / "host-tree"
+        user_bin = base / "user-bin"
+        marker = base / "a host command ran"
+        for folder, name in ((host_tree / "bin", "omarchy-probe-tool"), (user_bin, "omarchy")):
+            hostenv.write_commands(folder, {name: f"#!/bin/sh\necho {name} >> '{marker}'\n"})
+        os.environ["OMARCHY_PATH"] = str(host_tree)
+        env = hostenv.isolate(
+            {"PATH": f"{user_bin}:{host_tree}/bin:/usr/bin:/bin", "OMARCHY_PATH": str(host_tree)}, base
+        )
+        tree = Path(env["OMARCHY_PATH"])
+        script = 'omarchy ping; echo $?; omarchy-probe-tool path; echo $?; "$OMARCHY_PATH/bin/omarchy-probe-tool" tree; echo $?'
+        probe = subprocess.run(
+            ["sh", "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        refused = (base / "host-commands.log").read_text().splitlines() if (base / "host-commands.log").exists() else []
+        ok &= report(
+            "isolate(): no host command runs, on PATH or under OMARCHY_PATH; the stubs refuse (127) and log each call",
+            not marker.exists()
+            and probe.stdout.split() == ["127", "127", "127"]
+            and refused == ["omarchy ping", "omarchy-probe-tool path", "omarchy-probe-tool tree"],
+            marker.read_text().strip() if marker.exists() else f"{probe.stdout.split()} {refused}",
+        )
+        ok &= report(
+            "isolate(): OMARCHY_PATH is a private tree with the host's shell/ and default/",
+            tree.resolve().is_relative_to(base.resolve())
+            and os.path.realpath(tree / "shell") == os.path.realpath(hostenv.root() / "shell")
+            and os.path.realpath(tree / "default") == os.path.realpath(hostenv.root() / "default"),
+            str(tree),
+        )
+        messages = []
+        for omarchy_path in (None, str(host_tree), str(Path(hostenv.INSTALLED_BIN).parent)):
+            try:
+                hostenv.check(env if omarchy_path is None else {**env, "OMARCHY_PATH": omarchy_path})
+                messages.append("accepted")
+            except AssertionError as error:
+                messages.append(str(error))
+        refusal = "OMARCHY_PATH/bin must be the stub directory"
+        ok &= report(
+            "check() passes for an isolate()d env and fails for one whose OMARCHY_PATH is a host tree",
+            messages == ["accepted", refusal, refusal],
+            str(messages),
+        )
+        os.environ["OMARCHY_PATH"] = "/usr/share/omarchy"
         # The desktop's session bus and display stay out unless the test
         # names its own bus or asks for the display.
         live = {
@@ -399,20 +449,6 @@ def main():
             "check() fails when OMARCHY_PATH/bin links to a sibling dir that shares the parent's name as a prefix",
             message == "OMARCHY_PATH/bin must be the stub directory",
             message,
-        )
-        # A test that only isolate()s its env keeps the session's
-        # OMARCHY_PATH (the installed tree in an Omarchy session); check()
-        # pairs with isolate() and passes for it, as it always did.
-        session = hostenv.isolate(
-            {"PATH": "/usr/bin:/bin", "OMARCHY_PATH": str(Path(hostenv.INSTALLED_BIN).parent)}, base
-        )
-        try:
-            hostenv.check(session)
-            message = "accepted"
-        except AssertionError as error:
-            message = str(error)
-        ok &= report(
-            "check() passes for an isolate()d env with the session's OMARCHY_PATH", message == "accepted", message
         )
     finally:
         run.cleanup()

@@ -231,9 +231,24 @@
   `tests/test_helpers.py`.
 - `preview/hostenv.py` `check()` (since 0.9.0) fails when `OMARCHY_PATH/bin`
   resolves outside the private tree's parent as a path. Before, a string
-  prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
-  session's `OMARCHY_PATH` (a test that only calls `hostenv.isolate()`)
-  passes as before. No plugin change is needed. `tests/test_helpers.py`.
+  prefix let `/tmp/xy/bin` pass for `/tmp/x`. No plugin change is needed.
+  `tests/test_helpers.py`.
+- `preview/hostenv.py` `isolate()` (since 0.9.0): a test that isolates
+  its environment with `isolate()` alone can no longer run a host
+  command. It kept the caller's `OMARCHY_PATH` (the installed
+  `/usr/share/omarchy` in an Omarchy session) and the `omarchy-*` commands
+  in `/usr/bin`, so a host script reached through `OMARCHY_PATH` or by
+  name ran for real (`/usr/bin/omarchy-shell` finds the live shell from
+  `OMARCHY_PATH` and `XDG_RUNTIME_DIR`), and `check()` passed such an env
+  although it is documented to fail when `OMARCHY_PATH/bin` is not the
+  stubs. Now `OMARCHY_PATH` is a private tree in `base` (the host's
+  `shell/` and `default/` only, as `make()`'s), every `omarchy`/`omarchy-*`
+  command on `PATH` or in Omarchy's bin dirs is a stub in its `bin/`,
+  first on `PATH`, that logs the call to `<base>/host-commands.log` and
+  exits 127, and `check()` fails for an env whose `OMARCHY_PATH` is a host
+  tree. A test that needs a host command gives it a stand-in (`make()`, or
+  its own directory in front of `PATH`). No plugin change is needed.
+  README.md: Test helpers for plugins. `tests/test_helpers.py`.
 - `preview/hostenv.py` `clipboard_fakes()` (since 0.9.0): the stand-in
   `timeout` changes only clipboard.sh's read. Before, it turned every
   `timeout --signal=KILL 2s …` on the test's `PATH` into 60 s, so a
