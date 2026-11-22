@@ -738,6 +738,23 @@ ShellRoot {
     longField.focusInput()
     check(numberField.field.text === "12" && !numberField.editing && numberField.error !== "", "focus-out on an out-of-range draft restores the value and says why: " + [numberField.field.text, numberField.editing, numberField.error])
     eq(shell.numberCommits, [9, 17, 22], "an out-of-range draft never commits on focus-out")
+    // The field hides (its settings page closes) during an invalid draft:
+    // shown again, it looks as if nothing was typed.
+    numberField.field.focusInput()
+    numberField.field.selectAll()
+    type("500")
+    numberField.visible = false
+    numberField.visible = true
+    check(numberField.field.text === "12" && !numberField.editing && numberField.error === "", "an out-of-range draft ended by hiding the field is gone when it shows again, with no error: " + [numberField.field.text, numberField.editing, numberField.error])
+    numberField.field.focusInput()
+    numberField.field.selectAll()
+    type("500")
+    longField.focusInput()
+    check(numberField.error !== "", "after a focus-out on an out-of-range draft the error shows: " + numberField.error)
+    numberField.visible = false
+    numberField.visible = true
+    eq(numberField.error, "", "and is gone when the field shows again")
+    eq(shell.numberCommits, [9, 17, 22], "a hidden out-of-range draft never commits")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
@@ -789,6 +806,16 @@ ShellRoot {
     longField.focusInput()
     check(textSetting.field.text === "new2" && !textSetting.editing && textSetting.error === "Too long", "focus-out on an invalid text draft restores the value and says why: " + [textSetting.field.text, textSetting.editing, textSetting.error])
     eq(shell.textCommits, ["new", "new2"], "an invalid text draft never commits on focus-out")
+    textSetting.visible = false
+    textSetting.visible = true
+    eq(textSetting.error, "", "the focus-out error is gone when the text field shows again")
+    textSetting.field.focusInput()
+    textSetting.field.selectAll()
+    type("toolong")
+    textSetting.visible = false
+    textSetting.visible = true
+    check(textSetting.field.text === "new2" && !textSetting.editing && textSetting.error === "", "an invalid text draft ended by hiding the field is gone when it shows again, with no error: " + [textSetting.field.text, textSetting.editing, textSetting.error])
+    eq(shell.textCommits, ["new", "new2"], "a hidden invalid text draft never commits")
     textSetting.cancelEdit()
 
     // --- FoamyPrefsQueue with a synchronously reflecting host (4.5) ---------------------------

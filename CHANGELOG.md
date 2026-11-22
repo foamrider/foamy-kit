@@ -23,8 +23,14 @@
   was a binding that still read true inside that handler. It is now an
   alias of the editor's `activeFocus` (same name, type and change signal),
   so a focus move commits a valid changed draft once and restores `value`
-  with the error for an invalid one. `SafeTextArea.inputActiveFocus` had
-  the same lag and is an alias too. No plugin change is needed; a plugin
+  with the error for an invalid one. A field that hides (a settings page
+  that closes while kept alive) ends its edit the same way, since
+  `SafeTextField` now gives up the focus when it hides: a valid changed
+  draft is committed and an invalid one is put back. When the field shows
+  again it shows `value` with no error line, also after a focus-out left
+  one, so a page the user comes back to shows no error for text that is
+  gone. `SafeTextArea.inputActiveFocus` had the same lag and is an alias
+  too. No plugin change is needed; a plugin
   that reads `inputActiveFocus` in its own `onEditingFinished` now gets
   false there. `tests/test_features.py`, `tests/test_text_area.py`.
 - `SafeTextField` (since 0.2.0) and `SafeTextArea` (since 0.13.0) never

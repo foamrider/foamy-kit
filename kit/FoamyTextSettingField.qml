@@ -14,8 +14,9 @@ import QtQuick
 // Not editing: shows `value`, following external changes. Editing: keeps a
 // draft. Enter or focus-out: commits a valid, changed draft once (trimmed
 // unless `trim: false`); invalid → `validate`'s message, Enter keeps the
-// draft, focus-out restores `value`. Escape restores `value` and is
-// consumed (the page stays).
+// draft, focus-out restores `value`. Hiding the field is a focus-out; shown
+// again, it has no error. Escape restores `value` and is consumed (the page
+// stays).
 Item {
   id: root
 
@@ -108,6 +109,11 @@ Item {
     if (!dirty)
       show()
   }
+  // Hiding the field ends its edit (SafeTextField drops the focus), which
+  // puts an invalid draft back. Its error was about text that is gone: a
+  // field shown again (a settings page opened again) starts without it.
+  onVisibleChanged: if (visible)
+    errorText = ""
   Component.onCompleted: show()
 
   Column {
