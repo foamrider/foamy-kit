@@ -6,13 +6,20 @@
 - `FoamyDropdown.saveFailed()`: tells the dropdown that its last pick was
   not saved, so it shows `value` again at once, as
   `FoamyNumberField.saveFailed()` does for a field. Call it when a save
-  fails without changing `value`; a `FoamyPrefsQueue` caller needs no
-  change, since its rollback changes `value`. Plugin change: foamy-power's
-  default profile dropdowns (a failed `PowerService.setDefault()` leaves
-  `value` as it was) call `saveFailed()` on the dropdown whose save failed,
-  and only when the failed value equals its `pickedValue`: the function
-  takes no argument, so after two quick picks a failure of the first must
-  not drop the second. DESIGN.md: Choices. `tests/test_features.py`.
+  fails without changing `value`. With `FoamyPrefsQueue` that is a save
+  that `save()` refuses before any value is pending: it returns false (a
+  value the schema rejects, a kept invalid stored array, a widget with no
+  bar entry), e.g. `onChanged: function (v) { if (!prefs.save("mode", v))
+  modeDropdown.saveFailed() }`. A CLI save that fails later rolls `value`
+  back, which ends the pick by itself. A queue caller whose dropdown
+  offers only valid values of a non-array field, in a widget with its bar
+  entry, cannot get such a refusal and needs no change. Plugin change:
+  foamy-power's default profile dropdowns (a failed
+  `PowerService.setDefault()` leaves `value` as it was) call `saveFailed()`
+  on the dropdown whose save failed, and only when the failed value equals
+  its `pickedValue`: the function takes no argument, so after two quick
+  picks a failure of the first must not drop the second. DESIGN.md:
+  Choices. `tests/test_features.py`.
 
 ### Fixed
 - `FoamyNumberField` and `FoamyTextSettingField` commit on focus-out
@@ -112,8 +119,9 @@
   leaves the unsaved pick on show. Before (since 0.2.0), the trigger kept
   showing the pick (`shownValue`) for up to `pickHoldMs` (10 s) next to
   the save's error, and the caller had no way to drop it. A caller whose
-  failed save does not change `value` (foamy-power's default profiles)
-  calls the new `saveFailed()` on the failure (see Added).
+  failed save does not change `value` (foamy-power's default profiles, a
+  `FoamyPrefsQueue` save that `save()` refuses) calls the new
+  `saveFailed()` on the failure (see Added).
   `tests/test_features.py`.
 - `FoamyAction`, `FoamyButton` and `FoamyPanelFooter` tooltips (the
   footer's `statusTooltip`): at most `Style.space(320)` wide, as the host

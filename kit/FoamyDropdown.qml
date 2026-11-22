@@ -15,9 +15,16 @@ import qs.Ui
 // opens, later changes to the setting would stop showing). Until the
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
 // as soon as `value` changes, the list is reopened, saveFailed() is called,
-// or after pickHoldMs. When the save fails without changing `value` (a
-// FoamyPrefsQueue rollback changes it), call saveFailed() so the saved value
-// shows again at once. A caller that wants an uncontrolled dropdown handles
+// or after pickHoldMs. When the save fails without changing `value`, call
+// saveFailed() so the saved value shows again at once. With a
+// FoamyPrefsQueue that is a save it refuses before any value is pending (a
+// value the schema rejects, a kept invalid stored array, a widget with no
+// bar entry): save() returns false.
+//   onChanged: function (v) { if (!prefs.save("mode", v)) modeDropdown.saveFailed() }
+// A queued save is checked again when it runs, and a refusal then comes only
+// through failed() (the bar entry, the schema or the stored list changed
+// while it waited). A CLI save that fails later rolls `value` back, which ends the
+// hold by itself. A caller that wants an uncontrolled dropdown handles
 // changed() itself.
 //
 // Compact form (`compact: true`), for short choices in settings (enums,
