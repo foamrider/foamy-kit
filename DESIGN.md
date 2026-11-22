@@ -176,7 +176,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   has no overflow menu, so keep the labels short. Bind `value`, change it
   in `onActivated`. One cursor stop: ←/→ move between tabs, Enter activates
   (the file header shows the key catcher wiring). Settings choices stay
-  `FoamyDropdown`.
+  `FoamyDropdown`. One exception: a footer row that switches the popup's
+  source and shows each source's brand glyph (foamy-media's Spotify and
+  YouTube tabs, with the glyph and the equalizer, which FoamyTabs cannot
+  draw). It keeps the rules screen readers and the keyboard need: the row
+  is an `Accessible.PageTabList`, each tab an `Accessible.PageTab` with
+  `Accessible.selected` on the open one, and each tab is one stop of the
+  panel cursor (←/→ along the row, Enter activates). Every other tab row is
+  `FoamyTabs`.
 - **Short values use the row form** (settings): any control whose value is
   short (a number, an enum choice, an interval, a count, a percentage) is one
   row: label (subtitle, normal weight) and an optional `description`

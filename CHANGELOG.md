@@ -2,6 +2,18 @@
 
 ## 0.14.0 — 2026-11-22
 
+### Changed
+- DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
+  footer row that switches the popup's source and shows each source's
+  brand glyph (foamy-media's Spotify and YouTube tabs, with the glyph and
+  the equalizer, which FoamyTabs cannot draw). Such a row is an
+  `Accessible.PageTabList`, each tab an `Accessible.PageTab` with
+  `Accessible.selected` on the open one, and each tab is one stop of the
+  panel cursor. Plugin change: foamy-media gives its footer row the
+  `PageTabList` role (its tabs are `PageTab`s already); foamy-syncthing's
+  Folders / Devices row and foamy-monitor's Display / Advanced / Wireless
+  row move to `FoamyTabs`. No kit code changes.
+
 ## 0.13.1 — 2026-11-22
 
 ### Added
