@@ -259,12 +259,14 @@ esac
 """
 # Modes whose outcome is clipboard.sh's own 2 s deadline.
 CLIPBOARD_DEADLINE_MODES = ("stall", "slow", "ignore")
-# timeout(1) in front of clipboard.sh: the deadline modes keep the real 2 s,
-# every other mode (it ends by itself) gets 60 s.
+# timeout(1) on the test's PATH. Only clipboard.sh's read (`timeout
+# --signal=KILL 2s bash <clipboard.sh> _read …`) changes: the deadline modes
+# keep the real 2 s, every other mode (it ends by itself) gets 60 s. Any other
+# command, also one with the same 2 s, keeps its own deadline.
 CLIPBOARD_TIMEOUT = r"""#!/bin/bash
 case $(<"$TEST_CLIPBOARD_STATE") in
   stall | slow | ignore) ;;
-  *) [[ $1 == --signal=KILL && $2 == 2s ]] && set -- "$1" 60s "${@:3}" ;;
+  *) [[ $1 == --signal=KILL && $2 == 2s && $3 == bash && $5 == _read ]] && set -- "$1" 60s "${@:3}" ;;
 esac
 exec @TIMEOUT@ "$@"
 """
@@ -289,7 +291,9 @@ def clipboard_fakes(folder, env=None):
     The stand-in timeout keeps clipboard.sh's 2 s for the deadline modes,
     whose outcome is that deadline, and gives every other mode 60 s, so a
     loaded machine (the paste is six processes) can't turn a paste that
-    works into a timeout. clipboard.sh itself is unchanged."""
+    works into a timeout. It changes clipboard.sh's read only: any other
+    command the test runs under timeout keeps its deadline. clipboard.sh
+    itself is unchanged."""
     folder = Path(folder)
     path = (env if env is not None else os.environ).get("PATH", "/usr/bin:/bin")
     real = shutil.which("timeout", path=path)

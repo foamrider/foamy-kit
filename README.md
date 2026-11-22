@@ -1075,7 +1075,10 @@ import harness, hostenv
     for the modes whose outcome is that deadline (`CLIPBOARD_DEADLINE_MODES`:
     stall, slow, ignore) and gives every other mode 60 s: a paste through
     six processes on a loaded machine no longer fails a test that is
-    otherwise right. clipboard.sh itself is unchanged. Modes and the files
+    otherwise right. It changes only clipboard.sh's read (`timeout
+    --signal=KILL 2s bash <clipboard.sh> _read …`): any other command under
+    `timeout`, also one with the same 2 s, keeps its own deadline.
+    clipboard.sh itself is unchanged. Modes and the files
     each paste writes (`<state>.args`, `<state>.pid`) are in the docstring;
     `tests/test_clipboard.py` is a full example.
   - `ProcessGroup(argv, **popen)`: a `qs` (or service) the test starts

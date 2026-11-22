@@ -257,6 +257,22 @@ def main():
                 f"exit {result.returncode} after {seconds:.1f}s",
             )
 
+        # The stand-in stretches only clipboard.sh's own read: another command
+        # under the same deadline (a plugin's probe, `bash -lc …`) keeps 2 s.
+        # At its deadline `timeout --signal=KILL` kills its whole group,
+        # itself included, so it ends by SIGKILL.
+        Path(state).write_text("normal")
+        started = time.monotonic()
+        other = subprocess.run(
+            ["timeout", "--signal=KILL", "2s", "bash", "-c", "sleep 3"], env=env, capture_output=True, timeout=90
+        )
+        seconds = time.monotonic() - started
+        ok &= report(
+            "the stand-in timeout keeps another command's 2 s deadline",
+            other.returncode == -signal.SIGKILL,
+            f"exit {other.returncode} after {seconds:.1f}s",
+        )
+
         # The caller stops a read (Quickshell sends TERM): the whole read
         # ends at once, producer included, with exit 143 and no output.
         for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):

@@ -234,6 +234,16 @@
   prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
   session's `OMARCHY_PATH` (a test that only calls `hostenv.isolate()`)
   passes as before. No plugin change is needed. `tests/test_helpers.py`.
+- `preview/hostenv.py` `clipboard_fakes()` (since 0.9.0): the stand-in
+  `timeout` changes only clipboard.sh's read. Before, it turned every
+  `timeout --signal=KILL 2s …` on the test's `PATH` into 60 s, so a
+  plugin command with the same deadline (foamy-menu's launcher probe,
+  `timeout --signal=KILL 2s bash -lc …`) passed when it was too slow, and
+  a test of that deadline waited 60 s. Now only `timeout --signal=KILL 2s
+  bash <clipboard.sh> _read …` gets 60 s (outside the deadline modes);
+  every other call keeps its own deadline. A plugin test that works
+  around it (foamy-menu's guard probe uses 3 s) can use 2 s again.
+  README.md: Test helpers for plugins. `tests/test_clipboard.py`.
 - `preview/compare.py` (since 0.5.2) exits 2 ("unreadable") with the reason
   for a damaged PNG: a header cut short, a chunk that runs past the end of
   the file, image data shorter than its rows, or a row filter type above 4.
