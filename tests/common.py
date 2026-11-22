@@ -62,11 +62,14 @@ def run_shell(
     suffix="",
     notes=False,
     theme="dark",
+    clipboard=False,
 ):
     """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
     shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
     <name>-<suffix>.png. `theme` is a preview/themes name or a colors.toml
-    path. Returns True when it passed."""
+    path. `clipboard` puts the hostenv.clipboard_fakes() stand-ins in front
+    of the run's PATH, so a paste never reads the real clipboard. Returns
+    True when it passed."""
     r = harness.Run(
         host,
         (KIT_ROOT / "tests/qml" / qml_name).read_text(),
@@ -75,6 +78,8 @@ def run_shell(
         theme=theme,
         prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-",
     )
+    if clipboard:
+        r.env.update(harness.hostenv.clipboard_fakes(r.base / "clipboard", env=r.env))
     r.env.update(env or {})
     r.run(timeout=timeout)
     detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")

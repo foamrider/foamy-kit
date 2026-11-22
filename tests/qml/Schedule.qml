@@ -1,13 +1,16 @@
 import QtQuick
 import QtTest
 import Quickshell
+import Quickshell.Io
 import "harness"
 import "plugin/kit"
 
 // FoamyScheduleDay (kit 0.9.0, moved from foamy-train and foamy-zendesk):
 // the default and an injected label component, and through real keys and a
 // pointer: the switch (Space, a click), committing on Enter and on focus
-// loss, rejecting, and restoring the time fields on Escape.
+// loss, rejecting, restoring the time fields on Escape, and a refused paste
+// (Ctrl+V through kit/clipboard.sh and the hostenv.clipboard_fakes()
+// stand-ins) shown under the row.
 ShellRoot {
   id: shell
   property int checks: 0
@@ -84,6 +87,12 @@ ShellRoot {
           shell.changes = shell.changes.concat(["wed " + range])
         }
       }
+      FoamyScheduleDay {
+        id: thursday
+        width: parent.width
+        label: "Thursday"
+        value: "08:00-16:00"
+      }
     }
     Item {
       TestEvent {
@@ -94,6 +103,26 @@ ShellRoot {
 
   FoamyWait {
     id: wait
+  }
+  // What the stand-in wl-paste does on the next paste (hostenv.clipboard_fakes()).
+  Process {
+    id: fixture
+  }
+  function setClipboard(mode, then) {
+    fixture.command = ["clipboard-fixture", mode]
+    fixture.running = true
+    wait.waitFor(function () {
+      return !fixture.running
+    }, 5000, then, "clipboard-fixture " + mode)
+  }
+  // Ctrl+V into `input`, then `then` once the paste has ended.
+  function paste(input, then) {
+    input.focusInput()
+    ev.keyClick(Qt.Key_V, Qt.ControlModifier, -1)
+    check(input.pasteRunning, input.objectName + ": the paste runs out of process")
+    wait.waitFor(function () {
+      return !input.pasteRunning
+    }, 10000, then, input.objectName + ": the paste ends")
   }
   Component.onCompleted: wait.waitFor(function () {
     return monday.labelItem !== null && tuesday.labelItem !== null && win.visible
@@ -170,9 +199,31 @@ ShellRoot {
     eq(wedFrom.text, "09:00", "typing gives the same text again")
     ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
     eq(changes.slice(before), ["wed 09:00-16:00", "wed 09:00-16:00"], "after an edit, Enter sends the same range again")
+    pastes()
+  }
 
-    console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
-    console.log("FOAMY DONE")
-    Qt.quit()
+  // A refused paste into a time field says why under the row (the field
+  // itself draws no message), until that field's next edit.
+  function pastes() {
+    var line = find(thursday, "schedulePasteError")
+    var thuFrom = find(thursday, "fromTime"), thuTo = find(thursday, "toTime")
+    check(line !== null && !line.visible, "no paste message at rest")
+    setClipboard("large", function () {
+      paste(thuFrom, function () {
+        check(line !== null && line.visible && line.text === "Clipboard text is too large or contains invalid characters.", "a too large paste into From says why under the row: " + (line ? [line.visible, line.text] : "no line"))
+        eq(thuFrom.text, "08:00", "and pastes nothing")
+        setClipboard("failure", function () {
+          paste(thuTo, function () {
+            check(line !== null && line.visible && line.text === "Could not paste clipboard text. Copy plain text and try again.", "a failed paste into To then shows its own reason, the newest: " + (line ? [line.visible, line.text] : "no line"))
+            ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+            ev.keyClick(Qt.Key_Backspace, Qt.NoModifier, -1)
+            check(line !== null && !line.visible && thuTo.text === "16:0", "that field's next edit clears the message: " + (line ? [line.visible, thuTo.text] : "no line"))
+            console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
+            console.log("FOAMY DONE")
+            Qt.quit()
+          })
+        })
+      })
+    })
   }
 }

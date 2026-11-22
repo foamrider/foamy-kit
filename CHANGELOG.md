@@ -108,6 +108,15 @@
   time field or a change of `value`. Callers that reflect the value at
   once (`FoamyPrefsQueue`) see no change. No plugin change is needed.
   `tests/test_schedule.py`.
+- `FoamyScheduleDay` (since 0.9.0) says why a paste into a From or To
+  field was refused (too large, timed out, not plain text: the field's
+  `pasteError`), through `FoamyI18n.t`, in an error line under the row,
+  as `FoamyNumberField` does. The newest refused paste shows, until that
+  field's next edit. Before, the paste just did nothing. The row's root
+  is now a `ColumnLayout` (the row, then the line), so its `spacing` is
+  the gap above the line; no plugin sets it. No plugin change is needed:
+  foamy-train and foamy-zendesk have the three messages in both
+  catalogs. `tests/test_schedule.py`.
 - `FoamyWheelScroll.ensureVisible` (and `FoamySettingsPage.ensureVisible`)
   shows all of a section that unfolds at the end of the content. Before
   (since 0.4.0), it placed the section when the section's height changed,
