@@ -118,9 +118,9 @@
 - `FoamyText.cap()` and `tooltip()` cut a line where a reader sees a
   character end. Before, they cut by code point (as documented), so the
   letter at the cut could lose its accent or vowel sign (an Arabic letter
-  kept without its fatha), an emoji its skin tone, a ZWJ sequence could end
-  in a joiner, and a flag show half (one regional indicator). The cut now drops
-  the whole cluster before the "…", with foamy-media's rules: the
+  kept without its fatha), an emoji its skin tone, a ZWJ sequence could
+  end in a joiner, and a flag show half (one regional indicator). The cut
+  now drops the whole cluster before the "…", with foamy-media's rules: the
   Unicode 16 combining marks, Hangul jamo, the Thai and Lao vowel sign AM,
   the halfwidth kana voiced sound marks, joiners, variation selectors,
   skin tones, tags and flag pairs (Unicode's other grapheme rules, a
