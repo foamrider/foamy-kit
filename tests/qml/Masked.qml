@@ -516,6 +516,15 @@ ShellRoot {
     check(shell.rtl ? near(plainRight, right, 1.5) : near(plainLeft, left, 1.5), "aligned like a normal field " + [plainLeft, plainRight, left, right])
     eq(plain.editorItem.Accessible.name, "Plain label", "a normal field keeps its label")
     eq(plain.editorItem.Accessible.description, "Plain help", "a normal field's description reaches its editor")
+    // With a screen reader running, Qt reads a field's placeholder out as its
+    // description, but only while the description was never set.
+    plain.Accessible.description = ""
+    plain.placeholderText = "Search"
+    toggled.placeholderText = "PIN"
+    eq([plain.editorItem.Accessible.description, toggled.editorItem.Accessible.description], ["Search", "PIN"], "a field with a placeholder and no description has the placeholder as its editor's description (normal, masked)")
+    plain.placeholderText = ""
+    toggled.placeholderText = ""
+    plain.Accessible.description = "Plain help"
     // Qt 6.12 reports no name for a password edit; the label must still
     // reach assistive tools, as the name or the description.
     var secretA11y = [secret.editorItem.Accessible.name, secret.editorItem.Accessible.description]

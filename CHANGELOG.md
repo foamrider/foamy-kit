@@ -41,8 +41,12 @@
   editors of `SafeTextField` and `SafeTextArea` also pass the field's
   `Accessible.description` on (it never reached them, so
   `FoamyNumberField`'s `description` was not read out); a masked field
-  uses its description for the name instead. No plugin change is needed.
-  DESIGN.md: Inputs. `tests/test_masked.py`, `tests/test_text_area.py`.
+  uses its description for the name instead. A field or area with no
+  `Accessible.description` gives its `placeholderText` as the description,
+  as Qt does while nothing sets one, so a screen reader still reads out a
+  placeholder hint (a search field labelled only "Search"). No plugin
+  change is needed. DESIGN.md: Inputs. `tests/test_masked.py`,
+  `tests/test_text_area.py`.
 - `SafeTextField` (since 0.5.2) and `SafeTextArea` (since 0.13.0) give up
   the keyboard focus when they hide (their own `visible` or a parent's).
   Qt keeps the active focus on a hidden item, so keys typed after a

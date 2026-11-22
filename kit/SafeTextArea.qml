@@ -285,7 +285,9 @@ Flickable {
     objectName: "safeEditor"
 
     Accessible.name: root.Accessible.name
-    Accessible.description: root.Accessible.description
+    // Setting the description stops Qt from showing the placeholder as the
+    // description, so the placeholder is the fallback here.
+    Accessible.description: root.Accessible.description !== "" ? root.Accessible.description : root.placeholderText
     Accessible.role: Accessible.EditableText
     Accessible.multiLine: true
     activeFocusOnTab: true

@@ -241,6 +241,9 @@ ShellRoot {
     check(editor.Accessible.role === Accessible.EditableText && editor.Accessible.multiLine === true, "accessible as a multi-line edit")
     eq(editor.Accessible.name, "Description", "the editor carries the field's name")
     eq(editor.Accessible.description, "What happened", "the editor carries the field's description")
+    area.Accessible.description = ""
+    eq(editor.Accessible.description, "Description", "an area with a placeholder and no description has the placeholder as its editor's description")
+    area.Accessible.description = "What happened"
     check(near(area.height, area.minimumHeight), "empty: minimumHeight " + area.height)
     area.focusInput()
     check(editor.activeFocus, "the field takes focus")
