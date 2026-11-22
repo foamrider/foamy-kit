@@ -442,12 +442,13 @@ def workflow_job_blocks(lines):
 
 
 def workflow_permission_tests():
-    """The workflows every plugin carries (the files are the thing checked):
-    actions pinned to a full commit, read-only by default, and only
-    verify-native.yml's attest job may sign, never on a pull request and
-    never after building anything itself."""
+    """The workflows every plugin carries, and foamy-kit's own crate
+    workflow (the files are the thing checked): actions pinned to a full
+    commit, read-only by default, no write grant but verify-native.yml's
+    attest job's, which may sign, never on a pull request and never after
+    building anything itself."""
     ok = True
-    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml"):
+    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml", ".github/workflows/foamy-helper.yml"):
         lines = (KIT_ROOT / rel).read_text().splitlines()
         problems = []
         uses = [line.split("#")[0].strip() for line in lines if re.match(r"\s*(- )?uses:", line)]
@@ -463,9 +464,13 @@ def workflow_permission_tests():
             problems.append(f"default permissions are {default}")
         jobs = workflow_job_blocks(lines)
         attest = jobs.get("attest")
-        for grant in ("id-token: write", "attestations: write"):
-            outside = sum(grant in line for line in lines) - sum(grant in line for line in attest or [])
-            if outside:
+
+        def grants(block):
+            return [line.split("#")[0].strip() for line in block if re.search(r":\s*write\s*$", line.split("#")[0])]
+
+        inside = grants(attest or [])
+        for grant in sorted(set(grants(lines))):
+            if grants(lines).count(grant) > inside.count(grant):
                 problems.append(f"{grant} outside the attest job")
         if rel.endswith("verify-native.yml"):
             if attest is None:
@@ -479,7 +484,7 @@ def workflow_permission_tests():
                     if any(word in line for line in attest)
                 ]
         ok &= report(
-            f"{rel}: actions pinned, read-only default, only the attest job signs",
+            f"{rel}: actions pinned, read-only default, only the attest job writes or signs",
             bool(uses) and not problems,
             "; ".join(problems),
         )

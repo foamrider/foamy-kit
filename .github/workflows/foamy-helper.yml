@@ -1,0 +1,64 @@
+# Formats, lints and tests the shared Rust crate kit/rust/foamy-helper on a
+# GitHub-hosted runner, with the toolchain kit/rust/rust-toolchain.toml
+# pins: cargo fmt --check, Clippy with warnings as errors for each feature
+# set the kit's own tests/test_native.py checks, and cargo test with every
+# feature. foamy-kit's own CI only: sync copies checks.yml into plugins (a
+# tooling file) and verify-native.yml (FoamyNative), never this file. A
+# plugin's verify-native.yml tests its own helper crate.
+#
+# A crate test that needs a tool the runner lacks (sqlite3, bwrap,
+# Landlock, git, ionice) passes after printing a "SKIP ..." line, which
+# the test step lists again at its end.
+name: foamy-helper crate
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crate:
+    name: fmt, clippy and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        # bash with pipefail, so a failing cargo test fails its step.
+        shell: bash
+        working-directory: kit/rust/foamy-helper
+    steps:
+      - name: Check out the commit under review
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          channel=$(python3 -I -c 'import tomllib; print(tomllib.load(open("../rust-toolchain.toml", "rb"))["toolchain"]["channel"])')
+          rustup toolchain install "$channel" --profile minimal --component clippy,rustfmt
+          rustup run "$channel" rustc --version
+          echo "RUSTUP_TOOLCHAIN=$channel" >>"$GITHUB_ENV"
+          # Cargo's output stays outside the checkout, as everywhere in the kit.
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/foamy-helper-target" >>"$GITHUB_ENV"
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: Clippy, warnings as errors
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo clippy --locked --all-targets --features favicon -- -D warnings
+          cargo clippy --locked --all-targets --features sandbox -- -D warnings
+          cargo clippy --locked --all-targets --features tls -- -D warnings
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: cargo test --all-features
+        run: |
+          cargo test --locked --all-features -- --show-output | tee "$RUNNER_TEMP/test.log"
+          grep '^SKIP ' "$RUNNER_TEMP/test.log" || echo "no test skipped"

@@ -276,6 +276,15 @@ permission and no secrets; actions/checkout and jdx/mise-action are pinned by
 commit. It sits beside verify-native.yml, which still rebuilds and attests
 native helpers.
 
+foamy-kit's own CI also runs `.github/workflows/foamy-helper.yml`, which sync
+never copies: `cargo fmt --check`, Clippy with warnings as errors for each
+feature set (none, favicon, sandbox, tls, all) and `cargo test
+--all-features` of `kit/rust/foamy-helper`, with the toolchain
+`kit/rust/rust-toolchain.toml` pins, read-only contents permission and
+actions pinned by commit (`tests/test_sync_check.py` checks both). A crate
+test that needs a tool the runner lacks prints a `SKIP` line, which the job
+lists. A plugin's verify-native.yml tests its own helper crate.
+
 The design lint and the kit's test helpers (`preview/hostenv.py`,
 `harness.py`) are not synced, so in a plugin the job first fetches
 foamy-kit over public https at the commit `foamy-kit.lock`'s `source` line

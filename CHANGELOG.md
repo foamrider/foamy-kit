@@ -16,6 +16,16 @@
   arguments. `kit/rust/foamy-helper/src/json.rs` (tests
   `run_bytes_prints_the_line_or_one_reply`,
   `a_panic_while_run_bytes_writes_its_line_waits_for_it`).
+- `.github/workflows/foamy-helper.yml`, foamy-kit's own CI job for the
+  shared crate: `cargo fmt --check`, Clippy with warnings as errors for
+  each feature set and `cargo test --all-features` of
+  `kit/rust/foamy-helper`, with the toolchain `kit/rust/rust-toolchain.toml`
+  pins and read-only contents permission. Before, the crate's tests ran
+  only locally (`tests/test_native.py`). Sync never copies this file:
+  `checks.yml` is the workflow plugins get, so the job is not in it. No
+  plugin change. README.md: Tooling. `tests/test_sync_check.py` now checks
+  this workflow too (actions pinned by commit, read-only by default) and
+  fails any write permission outside verify-native.yml's attest job.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
