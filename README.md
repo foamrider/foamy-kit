@@ -1230,6 +1230,9 @@ pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
 light in both directions), and wheel scrolling and the settings page's focus
 follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
 notch).
+A plain SafeTextField through real keys, the mouse and real pastes
+(`test_text_field.py`: paste races and refusals, undo and redo, scrolling, the
+primary selection, maximumLength, Shift+Insert, Tab and Return).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 FoamyNative (0.5.0): `native.test.cjs` (command builder and the real `bash
 exec` launch: arguments verbatim, exit 126/127) and `test_native.py` (subdirectory

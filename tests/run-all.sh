@@ -47,6 +47,7 @@ run python3 -I test_components.py
 run python3 -I test_rows.py
 run python3 -I test_tabs.py
 run python3 -I test_masked.py
+run python3 -I test_text_field.py
 run python3 -I test_text_runs.py
 run python3 -I test_text_area.py
 run python3 -I test_schedule.py

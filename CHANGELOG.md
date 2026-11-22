@@ -194,6 +194,18 @@
   "That value isn't allowed." and "Couldn't save the setting." (monitor,
   notification-center); FoamyNative's "This plugin's helper isn't
   available for this CPU." (lock).
+- `tests/test_text_field.py` (new, `tests/qml/TextField.qml`) tests a
+  plain SafeTextField through real keys, the mouse and real pastes: the
+  13 cases foamy-bolt's and foamy-weather's `tests/tst_clipboard.qml`
+  kept because the kit had no such test (a paste dropped when the field
+  hides or is disabled, a late result after a caret move or typing, undo
+  and redo of a paste, the caret in a 34 px field, a long paste's scroll,
+  middle-click, maximumLength across pastes, refused pastes keeping the
+  selection, a second Ctrl+V, Shift+Insert of an empty clipboard, typing
+  after a paste as its own undo step, Tab, Shift+Tab and Return). No kit
+  code changed. Plugin change: foamy-bolt and foamy-weather delete
+  `tests/tst_clipboard.qml`, `tests/test_clipboard.py` and their suite and
+  README lines at their next sync.
 
 ## 0.13.1 — 2026-11-22
 
