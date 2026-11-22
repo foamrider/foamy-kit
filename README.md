@@ -1120,7 +1120,8 @@ and their own `anchors { }` blocks are rewritten — and bare `Color.` qualified
 own `preview/Preview.qml` is used. When dev's popup fork is clipped on 4.5
 (the 120 px card the kit fixed) or dev doesn't render, the column header says
 so. Card images only;
-`--states` limits the views.
+`--states` limits the views. Each render's log stays beside the images
+(`render-before.log`, `render-after-4.5.log`).
 
 `publish-screenshots.sh` commits PNGs to the plugin's orphan `pr-assets`
 branch through a temporary worktree (the working tree is untouched), prints

@@ -367,6 +367,26 @@ def main():
             except AssertionError:
                 failures += 1
         ok &= report("check() fails when a host bin is on PATH or a host script ran", failures == 2)
+        # OMARCHY_PATH/bin is the stub dir only inside the private tree's
+        # parent: a sibling dir that shares its name as a prefix is outside,
+        # and the installed tree's bin is never the stub dir.
+        (base / "hostile/bin").mkdir(parents=True)
+        (base / "host/linked-tree").mkdir()
+        (base / "host/linked-tree/bin").symlink_to(base / "hostile/bin", target_is_directory=True)
+        for name, omarchy_path in (
+            ("links to a sibling dir that shares the parent's name as a prefix", base / "host/linked-tree"),
+            ("is the installed Omarchy tree's", Path(hostenv.INSTALLED_BIN).parent),
+        ):
+            try:
+                hostenv.check({**env, "OMARCHY_PATH": str(omarchy_path)})
+                message = "accepted"
+            except AssertionError as error:
+                message = str(error)
+            ok &= report(
+                f"check() fails when OMARCHY_PATH/bin {name}",
+                message == "OMARCHY_PATH/bin must be the stub directory",
+                message,
+            )
     finally:
         run.cleanup()
 
