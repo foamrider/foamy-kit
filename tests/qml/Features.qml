@@ -21,7 +21,7 @@ ShellRoot {
   property int checks: 0
   property int failures: 0
   // The checks that end later; the run reports only after all of them ran.
-  readonly property var laterChecks: ["dropdown", "long field", "unit stack", "state switches", "covers", "expiry"]
+  readonly property var laterChecks: ["dropdown", "tooltip", "long field", "unit stack", "state switches", "covers", "expiry"]
   property var finished: []
   function done(name) {
     finished = finished.concat([name])
@@ -226,6 +226,14 @@ ShellRoot {
           shell.dropdownChanges = shell.dropdownChanges.concat([v])
         }
       }
+    }
+    // An action whose tooltip is app text of any length (a folder's name).
+    FoamyAction {
+      id: tipAction
+      x: 700
+      y: 540
+      iconName: "folder"
+      tooltipText: "Pause synchronization for " + "A folder name with words ".repeat(20)
     }
   }
 
@@ -588,6 +596,25 @@ ShellRoot {
     dropdown.select("a")
     dropdownRevert.start()
 
+    // --- FoamyAction: a long tooltip wraps in a capped width ---------------------------
+    wait.waitFor(function () {
+      if (window.visible && !tipAction.hovered)
+        ev.mouseMove(tipAction, 5, 5, -1, Qt.NoButton, Qt.NoModifier)
+      var tip = shell.toolTipOf(tipAction)
+      return tip !== null && tip.opened
+    }, 3000, function (ok) {
+      var tip = shell.toolTipOf(tipAction)
+      var cap = Style.space(320)
+      shell.check(ok && tip.width <= cap + 0.5 && tip.height < window.height / 2, "a long tooltip wraps within " + cap + " px instead of covering the window: " + (tip ? tip.width + "x" + tip.height : "none"))
+      tipAction.tooltipText = "Refresh"
+      wait.waitFor(function () {
+        return tip.width < cap / 2
+      }, 2000, function () {
+        shell.check(Math.abs(tip.width - (tip.implicitContentWidth + tip.leftPadding + tip.rightPadding)) < 0.5, "a short tooltip keeps its own width: " + tip.width)
+        shell.done("tooltip")
+      }, "a short tooltip is narrow")
+    }, "the action's tooltip opens")
+
     // --- FoamyNumberField: binding-safe numeric settings ------------------------------------
     eq(numberField.field.text, "5", "shows the bound value")
     shell.numberSetting = 7
@@ -868,6 +895,16 @@ ShellRoot {
       shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
       shell.done("long field")
     }, "long text scrolls to the caret")
+  }
+
+  // The PanelToolTip inside a FoamyAction (a Popup, so not among its children).
+  function toolTipOf(action) {
+    for (var i = 0; i < action.data.length; i++) {
+      var d = action.data[i]
+      if (d && d.delay !== undefined && d.text !== undefined)
+        return d
+    }
+    return null
   }
 
   function checkUnitStack(label) {
