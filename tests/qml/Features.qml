@@ -207,6 +207,19 @@ ShellRoot {
         width: 120
         text: "a long value that cannot fit in the field at all"
       }
+      // A caller that shows its value whenever the field has no focus
+      // (foamy-lock's step field) still reads the typed text when the edit
+      // ends.
+      SafeTextField {
+        id: idleShown
+        property string seen: ""
+        width: 120
+        Binding on text {
+          value: "shown"
+          when: !idleShown.inputActiveFocus
+        }
+        onEditingFinished: seen = text
+      }
       // Switching between settings states (train: settings -> settings-schedule)
       // destroys and builds pages with text and number fields.
       Loader {
@@ -570,6 +583,11 @@ ShellRoot {
     eq(field.text, "abcde", "maximumLength trims typed text")
     field.maximumLength = 3
     eq(field.text, "abc", "lowering maximumLength trims")
+    idleShown.focusInput()
+    idleShown.selectAll()
+    type("typed")
+    longField.focusInput()
+    eq([idleShown.seen, idleShown.text], ["typed", "shown"], "editingFinished reads the typed text before a focus-bound Binding shows the value again")
     // A cut never keeps half of a surrogate pair (the emoji is two units).
     field.maximumLength = 5
     field.text = "abcd\uD83D\uDE00"
