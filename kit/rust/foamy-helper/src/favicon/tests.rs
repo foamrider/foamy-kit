@@ -678,6 +678,37 @@ fn empty_journal_is_allowed_but_a_wal_header_and_corruption_are_not() {
     assert!(locked_favicon(&path, "example.com", later()).is_err());
 }
 
+#[test]
+fn only_a_cached_icon_younger_than_a_day_is_reused() {
+    let s = setup("favicon-age");
+    fs::create_dir_all(&s.dirs.cache).unwrap();
+    let target = s
+        .dirs
+        .cache
+        .join("61400a381a3bc23c14ba54c1a8543f9241ae78f58115e77d7c6f0450467a14b9.png");
+    let minute = Duration::from_secs(60);
+    let now = SystemTime::now();
+    // (modification time, reply). No browser data, so a stale copy gives
+    // "not-found". A time in the future (the clock was set back) is stale.
+    for (modified, status) in [
+        (now - minute, "cached"),
+        (now - CACHE_MAX_AGE + minute, "cached"),
+        (now - CACHE_MAX_AGE - minute, "not-found"),
+        (now + minute, "not-found"),
+        (now + CACHE_MAX_AGE * 2, "not-found"),
+    ] {
+        fs::write(&target, png(32, 100)).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&target)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let reply = resolve(&request("example.com"), &s.dirs).unwrap();
+        assert_eq!(reply.status, status, "{modified:?}, now {now:?}");
+    }
+}
+
 /// [`xdg_dirs_must_be_absolute`]'s child: the whole helper contract, with
 /// the environment its parent gives. Run normally it does nothing.
 #[test]

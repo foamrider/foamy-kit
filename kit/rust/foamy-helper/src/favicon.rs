@@ -659,14 +659,16 @@ fn os_failure(error: io::Error) -> Failure {
 }
 
 /// A fresh cached icon at `target`: a regular file (not a symlink) younger
-/// than [`CACHE_MAX_AGE`] that is a [`valid_png`].
+/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified in the
+/// future (the clock was set back) is not fresh: its age is unknown.
 fn cached(target: &Path) -> bool {
     let fresh = fs::symlink_metadata(target).is_ok_and(|meta| {
         let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
-        meta.file_type().is_file() && now - modified < CACHE_MAX_AGE.as_secs_f64()
+        let age = now - modified;
+        meta.file_type().is_file() && (0.0..CACHE_MAX_AGE.as_secs_f64()).contains(&age)
     });
     fresh
         && crate::fs::read_file_limited(target, MAX_ICON_BYTES as u64 + 1)
