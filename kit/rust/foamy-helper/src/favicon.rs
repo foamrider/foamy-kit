@@ -583,15 +583,20 @@ fn unsafe_zeroed_passwd() -> libc::passwd {
 
 impl Dirs {
     /// From `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `HOME` (or the passwd
-    /// entry), as the Python helper: a variable that is set is used as is,
-    /// even when empty or relative.
+    /// entry). An empty or relative XDG variable counts as unset, as the
+    /// XDG Base Directory spec says.
     pub fn from_env() -> Result<Dirs, Failure> {
-        let config = match std::env::var_os("XDG_CONFIG_HOME") {
-            Some(dir) => PathBuf::from(dir),
+        let xdg = |name: &str| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .filter(|dir| dir.is_absolute())
+        };
+        let config = match xdg("XDG_CONFIG_HOME") {
+            Some(dir) => dir,
             None => home()?.join(".config"),
         };
-        let cache = match std::env::var_os("XDG_CACHE_HOME") {
-            Some(dir) => PathBuf::from(dir),
+        let cache = match xdg("XDG_CACHE_HOME") {
+            Some(dir) => dir,
             None => home()?.join(".cache"),
         };
         Ok(Dirs {
@@ -721,9 +726,12 @@ fn resolve_with(
     let digest = crate::hash::sha256(format!("{browser}\n{host}").as_bytes());
     let name: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     let target = dirs.cache.join(format!("{name}.png"));
+    // A relative cache (from a relative HOME) has no URI: refuse it before
+    // anything is read or written relative to the working directory.
+    let source = file_uri(&target)?;
     if cached(&target) {
         return Ok(Reply {
-            source: file_uri(&target)?,
+            source,
             status: "cached",
         });
     }
@@ -749,7 +757,7 @@ fn resolve_with(
     // file expires.
     prune(&dirs.cache);
     Ok(Reply {
-        source: file_uri(&target)?,
+        source,
         status: "found",
     })
 }

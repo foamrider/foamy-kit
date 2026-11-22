@@ -4,6 +4,7 @@
 //! skipped with a message.
 
 use super::*;
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, Command, Stdio};
 
@@ -675,6 +676,122 @@ fn empty_journal_is_allowed_but_a_wal_header_and_corruption_are_not() {
     wal[18..20].copy_from_slice(&[2, 2]);
     fs::write(&path, &wal).unwrap();
     assert!(locked_favicon(&path, "example.com", later()).is_err());
+}
+
+/// [`xdg_dirs_must_be_absolute`]'s child: the whole helper contract, with
+/// the environment its parent gives. Run normally it does nothing.
+#[test]
+fn run_child() {
+    if std::env::var_os("FOAMY_FAVICON_TEST").is_none() {
+        return;
+    }
+    let _ = run();
+}
+
+/// Files and directories under `dir`, relative to it, sorted.
+fn tree(dir: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(next) = pending.pop() {
+        for entry in fs::read_dir(&next).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path.clone());
+            }
+            found.push(path.strip_prefix(dir).unwrap().to_path_buf());
+        }
+    }
+    found.sort();
+    found
+}
+
+#[test]
+fn xdg_dirs_must_be_absolute() {
+    if !python() {
+        return;
+    }
+    let dir = TempDir::new("favicon-xdg");
+    let home = dir.0.join("home");
+    let work = dir.0.join("work");
+    let icon = png(32, 3000);
+    let mappings = [("https://example.com/", 1)];
+    let bitmaps = [(1, icon.clone(), 32, 100)];
+    database(
+        &home.join(".config/vivaldi/Default/Favicons"),
+        TEST_SCHEMA,
+        &mappings,
+        &bitmaps,
+    );
+    // A relative HOME names this one, relative to the working directory.
+    database(
+        &work.join("home/.config/vivaldi/Default/Favicons"),
+        TEST_SCHEMA,
+        &mappings,
+        &bitmaps,
+    );
+    let before = tree(&work);
+    let cached = home.join(".cache/foamy/browser-favicons");
+    let name = "61400a381a3bc23c14ba54c1a8543f9241ae78f58115e77d7c6f0450467a14b9.png";
+    let found = Reply {
+        source: file_uri(&cached.join(name)).unwrap(),
+        status: "found",
+    }
+    .to_line();
+    let error = Reply {
+        source: String::new(),
+        status: "error",
+    }
+    .to_line();
+    // (HOME, XDG_CONFIG_HOME, XDG_CACHE_HOME, reply): an empty or relative
+    // XDG variable counts as unset, as the XDG Base Directory spec says.
+    let absolute = home.as_os_str();
+    let rows: [(&OsStr, Option<&str>, Option<&str>, &str); 5] = [
+        (absolute, None, Some(""), &found),
+        (absolute, Some(""), None, &found),
+        (absolute, Some("config"), Some("cache"), &found),
+        (absolute, Some(""), Some(""), &found),
+        (OsStr::new("home"), None, None, &error),
+    ];
+    for (home_var, config, cache, reply) in rows {
+        let _ = fs::remove_dir_all(home.join(".cache"));
+        let mut helper = crate::child::Bounded::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "favicon::tests::run_child",
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env_clear()
+            .env("FOAMY_FAVICON_TEST", "1")
+            .env("HOME", home_var)
+            .current_dir(&work)
+            .stdin(request("example.com").to_string())
+            .timeout(Duration::from_secs(30));
+        for (name, value) in [("XDG_CONFIG_HOME", config), ("XDG_CACHE_HOME", cache)] {
+            if let Some(value) = value {
+                helper = helper.env(name, value);
+            }
+        }
+        let output = helper.run().unwrap();
+        let stdout = output.stdout_lossy();
+        let replies: Vec<&str> = stdout.lines().filter(|l| l.starts_with('{')).collect();
+        let row = (home_var, config, cache);
+        assert_eq!(
+            replies,
+            [reply.trim_end()],
+            "{row:?} {stdout} {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            tree(&work),
+            before,
+            "{row:?}: nothing is written in the working directory"
+        );
+        if reply == &found {
+            assert_eq!(fs::read(cached.join(name)).unwrap(), icon, "{row:?}");
+        }
+    }
 }
 
 #[test]
