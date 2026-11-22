@@ -739,9 +739,16 @@ fn resolve_with(
     let digest = crate::hash::sha256(format!("{browser}\n{host}").as_bytes());
     let name: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     let target = dirs.cache.join(format!("{name}.png"));
-    // A relative cache (from a relative HOME) has no URI: refuse it before
+    // A relative cache (from a relative HOME) has no URI, and a relative
+    // HOME also makes the browser profiles relative: refuse both before
     // anything is read or written relative to the working directory.
     let source = file_uri(&target)?;
+    if !dirs.config.is_absolute() {
+        return Err(Failure::coded(
+            "ValueError",
+            "the browser profile directory is relative",
+        ));
+    }
     if cached(&target) {
         return Ok(Reply {
             source,

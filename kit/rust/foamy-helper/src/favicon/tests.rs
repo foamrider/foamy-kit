@@ -836,13 +836,18 @@ fn xdg_dirs_must_be_absolute() {
     .to_line();
     // (HOME, XDG_CONFIG_HOME, XDG_CACHE_HOME, reply): an empty or relative
     // XDG variable counts as unset, as the XDG Base Directory spec says.
+    // A relative HOME also names relative browser profiles: refused, also
+    // with an absolute cache.
     let absolute = home.as_os_str();
-    let rows: [(&OsStr, Option<&str>, Option<&str>, &str); 5] = [
+    let absolute_cache = home.join(".cache");
+    let absolute_cache = absolute_cache.to_str().unwrap();
+    let rows: [(&OsStr, Option<&str>, Option<&str>, &str); 6] = [
         (absolute, None, Some(""), &found),
         (absolute, Some(""), None, &found),
         (absolute, Some("config"), Some("cache"), &found),
         (absolute, Some(""), Some(""), &found),
         (OsStr::new("home"), None, None, &error),
+        (OsStr::new("home"), None, Some(absolute_cache), &error),
     ];
     for (home_var, config, cache, reply) in rows {
         let _ = fs::remove_dir_all(home.join(".cache"));

@@ -138,9 +138,10 @@
   browser profiles relative to the working directory. `Dirs::from_env` now
   treats an empty or relative XDG variable as unset, as the XDG Base
   Directory spec says (`~/.cache`, `~/.config`), and `resolve` refuses a
-  relative cache directory (a relative `HOME`, or a caller's `Dirs`) with
-  the same `error` reply before it reads or writes anything. No plugin
-  change is needed. `kit/rust/foamy-helper/src/favicon/tests.rs` (test
+  relative cache or browser profile directory (a relative `HOME`, or a
+  caller's `Dirs`) with the same `error` reply before it reads or writes
+  anything. No plugin change is needed.
+  `kit/rust/foamy-helper/src/favicon/tests.rs` (test
   `xdg_dirs_must_be_absolute`).
 - `foamy_helper::favicon` cache (since 0.5.2): a cached icon with a
   modification time in the future counted as fresh, so after the clock was
