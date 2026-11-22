@@ -248,6 +248,24 @@ ShellRoot {
       iconName: "folder"
       tooltipText: "Pause synchronization for " + "A folder name with words ".repeat(20)
     }
+    // A form button and a footer status whose tooltips are app text too.
+    FoamyButton {
+      id: tipButton
+      x: 620
+      y: 540
+      text: "Open"
+      tooltipText: "Open"
+    }
+    FoamyPanelFooter {
+      id: tipFooter
+      x: 380
+      y: 530
+      width: 220
+      divider: false
+      showRefresh: false
+      status: "Sync failed"
+      statusTooltip: "Sync failed"
+    }
   }
 
   FoamyCursor {
@@ -652,7 +670,15 @@ ShellRoot {
             return tip.width < cap / 2
           }, 2000, function () {
             shell.check(Math.abs(tip.width - (tip.implicitContentWidth + tip.leftPadding + tip.rightPadding)) < 0.5 && tip.text === "Refresh", "a short tooltip keeps its own width and text: " + tip.width)
-            shell.done("tooltip")
+            shell.longTip(tipButton, function (text) {
+              tipButton.tooltipText = text
+            }, "FoamyButton", function () {
+              shell.longTip(shell.findNamed(tipFooter, "foamyFooterStatus"), function (text) {
+                tipFooter.statusTooltip = text
+              }, "FoamyPanelFooter status", function () {
+                shell.done("tooltip")
+              })
+            })
           }, "a short tooltip is narrow")
         })
       })
@@ -957,6 +983,42 @@ ShellRoot {
       shell.check(longField.contentX > 0 && cursor > 0 && cursor <= longField.width, "long text still scrolls to keep the cursor visible " + longField.contentX + " " + cursor)
       shell.done("long field")
     }, "long text scrolls to the caret")
+  }
+
+  // Gives the tooltip of `item` a long path whose last name has no break,
+  // hovers `item` and checks that the tooltip stays in its box, a few lines
+  // high, and keeps the text's last line.
+  function longTip(item, setText, label, then) {
+    setText("Open /home/test/" + "Sync/Folder-with-a-long-name/".repeat(140) + "X".repeat(512) + "\nFolder ID: abcde-fghij")
+    wait.waitFor(function () {
+      if (window.visible)
+        ev.mouseMove(item, 5, 5, -1, Qt.NoButton, Qt.NoModifier)
+      var tip = shell.toolTipOf(item)
+      return tip !== null && tip.opened
+    }, 3000, function (opened) {
+      var tip = shell.toolTipOf(item)
+      var cap = Style.space(320)
+      wait.waitFor(function () {
+        var text = tip.contentItem
+        return tip.width <= cap + 0.5 && text.contentWidth + text.leftPadding + text.rightPadding <= tip.width + 0.5 && tip.height < window.height / 3
+      }, 2000, function (inside) {
+        var lines = tip ? String(tip.text).split("\n") : []
+        shell.check(opened && inside && lines.length === 2 && lines[0].slice(-1) === "\u2026" && lines[1] === "Folder ID: abcde-fghij", label + ": a long tooltip stays in its " + cap + " px box, a few lines high, with its last line: " + (tip ? tip.width + "x" + tip.height + ", " + tip.contentItem.contentWidth + " px of text, " + lines.length + " lines" : "none"))
+        then()
+      })
+    }, label + ": the tooltip opens")
+  }
+  // The first item named `name` under `item`, depth first.
+  function findNamed(item, name) {
+    for (var i = 0; i < item.children.length; i++) {
+      var child = item.children[i]
+      if (child.objectName === name)
+        return child
+      var found = shell.findNamed(child, name)
+      if (found)
+        return found
+    }
+    return null
   }
 
   // The PanelToolTip inside a FoamyAction (a Popup, so not among its children).
