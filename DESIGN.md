@@ -154,7 +154,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   Coloured tokens in a field (Quick Add) use its `runs`. Multi-line text
   (a description) is `SafeTextArea`, for the same clipboard reason.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
-  `onChanged`; it never assigns `value` itself. **Toggles**: `FoamyToggle`
+  `onChanged`; it never assigns `value` itself. When a save fails without
+  changing `value`, call its `saveFailed()` so it shows the saved choice
+  again at once. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
 - **Tab row** (`FoamyTabs`): a few views of one panel (Inbox / Today /
   Upcoming), at the top of the popup body directly under the hero band, the
