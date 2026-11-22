@@ -691,8 +691,10 @@ subdirectory. Helpers never exit 126 or 127 themselves.
 ### Panics and arguments
 
 The release profile has `panic = "abort"`, so a panic would end in
-`SIGABRT` and a core dump. `json::run` and `json::serve` install the kit's
-panic hook (a reply where there is one, then exit 101); **every helper that
+`SIGABRT` and a core dump. `json::run`, `json::run_bytes` and `json::serve`
+install the kit's panic hook (a reply where there is one, then exit 101); a
+one-shot helper that encodes its reply line itself passes the bytes to
+`json::run_bytes` instead of keeping a hook of its own. **Every helper that
 runs its own loop or protocol calls `foamy_helper::process::exit_on_panic(101)`
 first thing in `main`**. Read argv with `std::env::args_os()` inside the
 `json::run` closure (or after the hook), never `std::env::args()` before it:
@@ -715,7 +717,7 @@ fn main() -> ExitCode {
 |---|---|
 | `hash` | `sha256`, `sha256_hex` (plain Rust, `hashlib.sha256` compatible; cache names and content hashes, not for secrets) |
 | `io` | `read_limited`, `read_stdin_limited`, `LineReader` (max line length; an overlong line is reported and skipped, the next one still reads) |
-| `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
+| `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `run_bytes` (the same for a reply line the helper encodes itself: its finished bytes go out under `run`'s reply lock and panic hook), `Failure` (code, message, exit code), `error_reply` |
 | `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign-owned targets and directories, and directories that are world-writable without the sticky bit; group-writable own directories, as with umask 002, are fine), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
 | `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`; a missing lock file is created 0600, an existing one keeps its mode; owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700; `NotFound` when `XDG_RUNTIME_DIR` is unset or not the user's own private directory, as `/tmp` is not), `try_runtime_lock` |
 | `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default; `stdin_fd` (standard input straight from an open file, still seekable), `nice`, `io_idle`; `pipe_into` → `Pipeline` (one child's standard output into another's input, moved with `splice` and counted: `run`, `run_with_progress`, `PipelineOutput`; see [Two-stage jobs](#two-stage-jobs)) |

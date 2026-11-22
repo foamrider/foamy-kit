@@ -2,6 +2,21 @@
 
 ## 0.14.0 — 2026-11-22
 
+### Added
+- `foamy_helper::json::run_bytes(main, render)`: `json::run` for a
+  one-shot helper that encodes its reply line itself (foamy-vitals' sample
+  line). `main` returns the finished bytes, which go to standard output
+  under `run`'s reply lock and panic hook: a panic in another thread waits
+  until the whole line is out, a later one prints no second reply, one
+  before it prints `render` of an `INTERNAL` failure, and the process ends
+  in 101 for a panic. An `Err` from `main` prints `render(&failure)` with
+  its exit code, as `run` does. Every existing function keeps its meaning.
+  Plugin change: foamy-vitals passes its sample line to `run_bytes` and
+  drops its own panic hook. README.md: The shared crate, Panics and
+  arguments. `kit/rust/foamy-helper/src/json.rs` (tests
+  `run_bytes_prints_the_line_or_one_reply`,
+  `a_panic_while_run_bytes_writes_its_line_waits_for_it`).
+
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
   footer row that switches the popup's source and shows each source's
@@ -13,6 +28,23 @@
   `PageTabList` role (its tabs are `PageTab`s already); foamy-syncthing's
   Folders / Devices row and foamy-monitor's Display / Advanced / Wireless
   row move to `FoamyTabs`. No kit code changes.
+
+### Fixed
+- `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
+  whose clock runs a little ahead of this one (NFS, SMB) reuses its icons
+  again. 0.13.1 made every file time in the future stale, so there each
+  new icon looked stale at once and every request looked it up and wrote
+  it again (up to 2 s). A time up to 60 s ahead now counts as age 0; one
+  further ahead (the clock was set back) is still stale. No source change
+  is needed. `kit/rust/foamy-helper/src/favicon/tests.rs` (test
+  `only_a_cached_icon_younger_than_a_day_is_reused`).
+
+### Upgrading
+- `kit/rust` changed (`json::run_bytes`, the favicon cache): a plugin with
+  a native helper rebuilds it after the sync (`kit/native/build-native.sh
+  .`) and commits the new binaries and `native.pin`; until then `check.sh`,
+  `tests/kit-check.sh` and `--verify` report the binaries stale.
+  `foamy-helper`'s version stays 0.1.2, so no plugin `Cargo.lock` changes.
 
 ## 0.13.1 — 2026-11-22
 
