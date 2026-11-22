@@ -842,7 +842,10 @@ screen; its geometry and motion code is the host's. The bar window spans the
 screen, like the real 4.5 bar. Each run gets a
 private D-Bus session (no service activation: the desktop's MPRIS players
 and notifications are invisible), and `qs` dies with the render, even when
-the render itself is killed; the temp dir is removed (`--keep` keeps it).
+the render itself is killed; `Run.stop()` also ends what is left of qs's
+session, so a helper that a plugin runs under coreutils `timeout` (a
+process group of its own) ends with the run; the temp dir is removed
+(`--keep` keeps it).
 
 What a run's processes (qs, the plugin's `Process`es, the host QML) can
 reach is isolated by default (0.9.0):
@@ -1082,8 +1085,10 @@ import harness, hostenv
     started go too; `Popen.terminate()` stopped qs alone and left their
     children running. `wait(timeout)` returns the exit status, or None while
     it runs; wait through it, not `.process.wait()`, so the group id stays
-    reserved until `stop()`. A child that makes its own session or group
-    (`setsid`, coreutils `timeout`) is outside it.
+    reserved until `stop()`. A child that leads a group of its own
+    (coreutils `timeout`) stays in the leader's session, and `stop()` kills
+    what is left of it too; only a child that makes its own session
+    (`setsid`) is outside it.
 
     ```python
     with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:

@@ -155,6 +155,24 @@ def process_group(base):
         exited == 0 and pid is not None and harness.wait_for(lambda: not alive(pid), 5) is not None,
         f"exit {exited}, child {pid}",
     )
+
+    # A child under coreutils timeout leads a process group of its own, so a
+    # signal to the group misses it; it ignores SIGTERM, so only a SIGKILL
+    # ends it before its 300 s.
+    marker = base / "own-group"
+    script = base / "own-group.sh"
+    script.write_text(f"timeout 300 sh -c 'trap \"\" TERM; echo $$ > {marker}; exec sleep 300' &\nwait\n")
+    group = hostenv.ProcessGroup(["sh", str(script)])
+    pid = child_pid(marker, 10)
+    group.stop(grace=0.5)
+    left = pid is not None and alive(pid)
+    ok &= report(
+        "stop() ends a child that leads its own process group (coreutils timeout)",
+        pid is not None and not left,
+        f"child {pid} still runs after stop()" if left else f"child {pid}",
+    )
+    if left:
+        os.kill(pid, signal.SIGKILL)
     return ok
 
 

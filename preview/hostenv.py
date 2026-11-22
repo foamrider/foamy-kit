@@ -314,16 +314,62 @@ def die_with_parent():
         _LIBC.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
 
 
+def _session_of(pid):
+    """(state, session id) of `pid` from /proc, or None once it is gone."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        return fields[0], int(fields[3])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def _kill_session(sid, timeout=5.0):
+    """SIGKILL what is left of session `sid` (a process the caller started
+    with start_new_session) until no live member remains, or `timeout`
+    seconds. A child that leads a process group of its own (coreutils
+    timeout, and the helper under it) is outside the group that a stop
+    signals, but still in this session; only setsid leaves it. harness.Run
+    uses this too."""
+    deadline = time.monotonic() + timeout
+    while True:
+        members = []
+        for entry in Path("/proc").iterdir():
+            info = _session_of(entry.name) if entry.name.isdigit() else None
+            if info and info[1] == sid and info[0] != "Z":
+                members.append(int(entry.name))
+        if not members or time.monotonic() >= deadline:
+            return
+        for pid in members:
+            # The pidfd holds the process the pid names now; it is checked
+            # again through /proc, so a pid reused since the scan above never
+            # gets the signal (at worst it goes to a process already gone).
+            try:
+                fd = os.pidfd_open(pid)
+            except OSError:
+                continue
+            try:
+                info = _session_of(pid)
+                if info and info[1] == sid:
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+            except OSError:
+                pass
+            finally:
+                os.close(fd)
+        time.sleep(0.02)
+
+
 class ProcessGroup:
     """`argv` (a qs or service a test starts itself) as the leader of its own
     process group; `popen` goes to subprocess.Popen. stop() signals the
     whole group, so the scripts a shell's `Process`es started go with it:
     Popen.terminate() reaches qs alone, and a `sh -c` child's own children
-    outlived it. The leader also dies with the Python process (its children
-    then don't). A child that makes its own group or session (setsid,
-    coreutils timeout) leaves this one. Wait through wait(), not
-    `.process.wait()`: the leader stays unreaped until stop(), so its pid,
-    the group id, can't name another group while stop() signals it.
+    outlived it. A child that leads a group of its own (coreutils timeout)
+    stays in the leader's session, and stop() kills what is left of that
+    too; only a child that makes its own session (setsid) leaves. The leader
+    also dies with the Python process (its children then don't). Wait
+    through wait(), not `.process.wait()`: the leader stays unreaped until
+    stop(), so its pid, the group and session id, can't name another group
+    or session while stop() signals it.
 
       with hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log) as shell:
           shell.wait(60)       # None while it still runs
@@ -380,6 +426,9 @@ class ProcessGroup:
         self.wait(grace)
         # Members that ignored SIGTERM, and children the leader left behind.
         self._signal(signal.SIGKILL)
+        # Children that lead a group of their own (coreutils timeout). The
+        # leader is still unreaped, so the session id names no other session.
+        _kill_session(self.pid)
         self.returncode = self.process.wait()
         return self.returncode
 

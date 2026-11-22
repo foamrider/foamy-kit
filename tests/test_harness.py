@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The harness never leaks: a timed-out run and a killed parent leave no qs or
-dbus-daemon behind, and cleanup removes the temp dir."""
+dbus-daemon behind, stop() ends a helper qs ran under coreutils timeout, and
+cleanup removes the temp dir."""
 
 import os
 import shutil
@@ -17,6 +18,20 @@ from common import KIT_ROOT, harness, report  # noqa: E402
 HANG = """import QtQuick
 import Quickshell
 ShellRoot { Component.onCompleted: console.log("FOAMY UP") }
+"""
+
+# A helper the way a plugin runs one under coreutils timeout: timeout leads a
+# process group of its own, outside qs's. The helper ignores SIGTERM, so only
+# a SIGKILL ends it before its 300 s.
+OWN_GROUP = """import QtQuick
+import Quickshell
+import Quickshell.Io
+ShellRoot {
+  Process {
+    running: true
+    command: ["timeout", "300", "sh", "-c", "trap '' TERM; echo $$ > \\"$FOAMY_CHILD\\"; exec sleep 300"]
+  }
+}
 """
 
 CHILD = f"""
@@ -38,6 +53,37 @@ def gone(base, seconds=5):
             return True
         time.sleep(0.1)
     return False
+
+
+def alive(pid):
+    """True while `pid` runs (a zombie counts as gone)."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (FileNotFoundError, ProcessLookupError, IndexError):
+        return False
+
+
+def own_group_helper():
+    """Run.stop() ends a helper that qs started under coreutils timeout."""
+    run = harness.Run("4.5", OWN_GROUP, prefix="foamy-kit-own-group-")
+    marker = run.base / "helper"
+    run.env["FOAMY_CHILD"] = str(marker)
+    pid = None
+    try:
+        run.start()
+        text = harness.wait_for(lambda: marker.read_text().strip() if marker.exists() else "", 30)
+        pid = int(text) if text else None
+        run.stop()
+        left = pid is not None and alive(pid)
+        return report(
+            "Run.stop() ends a helper that qs runs under coreutils timeout (its own process group)",
+            pid is not None and not left,
+            f"helper {pid} still runs after stop()" if left else f"helper {pid}",
+        )
+    finally:
+        run.cleanup()
+        if pid is not None and alive(pid):
+            os.kill(pid, signal.SIGKILL)
 
 
 def ipc_reachable(run):
@@ -181,6 +227,7 @@ def main():
     ok &= report("a timed-out run leaves no qs or dbus-daemon", gone(base), str(harness.processes_under(base)))
     run.cleanup()
     ok &= report("cleanup removes the temp dir", not base.exists())
+    ok &= own_group_helper()
 
     # 2. The Python parent is SIGKILLed mid-run (no finally, no atexit).
     # Its TMPDIR is long, so _socket_dir() puts the socket dir in /tmp and

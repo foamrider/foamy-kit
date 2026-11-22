@@ -218,6 +218,17 @@
   stopped. Before, the run went on with a dead bus address and a later
   D-Bus step failed with an unrelated error. A missing `dbus-daemon` still
   leaves the dead address, as documented. `tests/test_harness.py`.
+- `preview/harness.py` `Run.stop()` (since 0.1.0) and
+  `hostenv.ProcessGroup.stop()` (since 0.9.0) also end a helper that leads
+  a process group of its own. A helper that a plugin runs under coreutils
+  `timeout` (FoamyNative's documented call) is outside qs's group, and
+  Quickshell does not end it when qs stops, so it ran on after the test
+  until its own deadline (30 s in FoamyNative's example). Now `stop()`
+  also kills every process left in qs's session (the leader's, for
+  `ProcessGroup`) and returns once none is left; only a child that makes
+  its own session (`setsid`) is outside it. No plugin change is needed.
+  README.md: Preview, Test helpers for plugins. `tests/test_harness.py`,
+  `tests/test_helpers.py`.
 - `preview/hostenv.py` `check()` (since 0.9.0) fails when `OMARCHY_PATH/bin`
   resolves outside the private tree's parent as a path. Before, a string
   prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
