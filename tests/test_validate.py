@@ -188,13 +188,32 @@ def main():
     )
     (plugin / ".ruff.toml").unlink()
     (plugin / "tool.py").unlink()
-    (lint / "oxlintrc.json").write_text('{"rules": {}}\n')
-    code, out = validate(plugin, "--only", "oxlint")
-    ok &= report(
-        "a tests/lint/oxlintrc.json that does not extend the kit's config fails",
-        code != 0 and "must extend the kit's config" in out,
-        summary(out),
-    )
+    # Only an "extends" list that names the kit's config counts; the name
+    # elsewhere in the text (another key, a comment, a string) does not.
+    extend = "must extend the kit's config"
+    for name, text, expected in (
+        ("has no extends", '{"rules": {}}\n', extend),
+        (
+            "names the kit's config in ignorePatterns",
+            '{"extends": [], "ignorePatterns": ["../../.oxlintrc.json"]}\n',
+            extend,
+        ),
+        ("names it only in a comment", '{\n  // "extends": ["../../.oxlintrc.json"],\n  "rules": {}\n}\n', extend),
+        ("has extends as a string", '{"extends": "../../.oxlintrc.json"}\n', extend),
+        ("is not a JSON object", '["../../.oxlintrc.json"]\n', extend),
+        ("is not JSON", '{"extends": ["../../.oxlintrc.json"]\n', "oxlintrc.json is not JSON"),
+        (
+            "extends it, with comments and trailing commas",
+            '// Plugin rules.\n{\n  "extends": ["../../.oxlintrc.json",],\n  /* why */ "rules": {"no-console": "off",},\n}\n',
+            None,
+        ),
+    ):
+        (lint / "oxlintrc.json").write_text(text)
+        code, out = validate(plugin, "--only", "oxlint")
+        passed = code == 0 and "PASS  oxlint" in out if expected is None else code != 0 and expected in out
+        ok &= report(
+            f"a tests/lint/oxlintrc.json that {name} {'passes' if expected is None else 'fails'}", passed, summary(out)
+        )
     (lint / "oxlintrc.json").unlink()
 
     # A missing pinned tool is a failure that says what to do.
