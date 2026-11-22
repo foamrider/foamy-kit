@@ -190,7 +190,8 @@
   for a damaged PNG: a header cut short, a chunk that runs past the end of
   the file, image data shorter than its rows, or a row filter type above 4.
   Before, these ended in a traceback with exit 1 ("different"), or a filter
-  type 5-255 was decoded as no filter. `tests/test_compare.py`.
+  type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
+  ignored, as before. No plugin change is needed. `tests/test_compare.py`.
 
 ## 0.13.0 — 2026-11-19
 

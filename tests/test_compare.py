@@ -203,6 +203,14 @@ def main():
                 damaged.returncode == 2 and "truncated chunk" in damaged.stderr,
                 f"exit {damaged.returncode}: {(damaged.stdout + damaged.stderr).strip()[-200:]}",
             )
+        # Bytes after IEND are not part of the picture (decoders ignore them).
+        (base / "trailing.png").write_bytes(p("a.png").read_bytes() + bytes(8))
+        trailing = run(p("a.png"), base / "trailing.png")
+        ok &= report(
+            "CLI: a PNG with bytes after IEND compares as identical",
+            trailing.returncode == 0 and "identical" in trailing.stdout,
+            f"exit {trailing.returncode}: {(trailing.stdout + trailing.stderr).strip()[-200:]}",
+        )
     finally:
         shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1

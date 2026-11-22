@@ -34,7 +34,11 @@ def image_data(path, data, height, stride):
         length = struct.unpack(">I", data[offset : offset + 4])[0]
         if offset + 12 + length > len(data):
             raise ValueError(f"{path}: truncated chunk at byte {offset}")
-        if data[offset + 4 : offset + 8] == b"IDAT":
+        kind = data[offset + 4 : offset + 8]
+        if kind == b"IEND":
+            # The picture ends here; decoders ignore bytes after it.
+            break
+        if kind == b"IDAT":
             chunks += data[offset + 8 : offset + 8 + length]
         offset += 12 + length
     raw = zlib.decompress(chunks)
