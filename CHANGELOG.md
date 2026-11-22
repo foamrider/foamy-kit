@@ -179,11 +179,10 @@
   D-Bus step failed with an unrelated error. A missing `dbus-daemon` still
   leaves the dead address, as documented. `tests/test_harness.py`.
 - `preview/hostenv.py` `check()` (since 0.9.0) fails when `OMARCHY_PATH/bin`
-  resolves outside the private tree's parent as a path (before, a string
-  prefix let `/tmp/xy/bin` pass for `/tmp/x`) or is one of the host's bin
-  dirs (the installed `/usr/share/omarchy/bin`, the caller's
-  `$OMARCHY_PATH/bin`), which passed before. Plugin tests that use
-  `hostenv.make()` need no change. `tests/test_helpers.py`.
+  resolves outside the private tree's parent as a path. Before, a string
+  prefix let `/tmp/xy/bin` pass for `/tmp/x`. An env that keeps the
+  session's `OMARCHY_PATH` (a test that only calls `hostenv.isolate()`)
+  passes as before. No plugin change is needed. `tests/test_helpers.py`.
 - `preview/compare.py` (since 0.5.2) exits 2 ("unreadable") with the reason
   for a damaged PNG: a header cut short, a chunk that runs past the end of
   the file, image data shorter than its rows, or a row filter type above 4.

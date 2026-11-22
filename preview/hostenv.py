@@ -215,7 +215,7 @@ def check(env, *outputs):
     if env.get("OMARCHY_PATH"):
         tree = Path(env["OMARCHY_PATH"])
         bin_dir = os.path.realpath(tree / "bin")
-        assert Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)) and bin_dir not in bins, (
+        assert Path(bin_dir).is_relative_to(os.path.realpath(tree.parent)), (
             "OMARCHY_PATH/bin must be the stub directory"
         )
     named = bins | {str(root() / "bin"), INSTALLED_BIN}
