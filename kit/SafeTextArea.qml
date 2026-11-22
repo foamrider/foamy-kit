@@ -89,7 +89,8 @@ Flickable {
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
   property alias horizontalAlignment: editor.horizontalAlignment
-  readonly property bool inputActiveFocus: editor.activeFocus
+  // An alias (see SafeTextField): current inside editingFinished.
+  readonly property alias inputActiveFocus: editor.activeFocus
   // The editor itself (tests, glyph geometry).
   readonly property Item editorItem: editor
   readonly property int length: editor.length

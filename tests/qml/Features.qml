@@ -598,12 +598,7 @@ ShellRoot {
     eq(shell.numberCommits, [9], "Enter commits a valid changed draft once")
     // The focus goes to a plain field, not to another settings field, so the
     // text field's own focus-out checks below still start without the focus.
-    // A real focus move ends the edit while the editor still has the focus,
-    // so it does not reach the commit today. The field's context menu that
-    // closes without giving the focus back does: editingFinished() without
-    // the focus, as emitted here.
     longField.focusInput()
-    numberField.field.editingFinished()
     eq(shell.numberCommits, [9], "focus-out after Enter doesn't commit twice")
     shell.numberSetting = 9
     eq(numberField.field.text, "9", "shows the saved value")
@@ -631,8 +626,18 @@ ShellRoot {
     key(Qt.Key_Return)
     eq(shell.numberCommits, [9, 17], "Enter commits the stepped draft once")
     longField.focusInput()
-    numberField.field.editingFinished()
     eq(shell.numberCommits, [9, 17], "focus-out after Enter doesn't commit it again")
+    numberField.field.focusInput()
+    key(Qt.Key_Up)
+    longField.focusInput()
+    check(!numberField.editing && numberField.field.text === "22", "focus-out ends the stepped draft: " + [numberField.editing, numberField.field.text])
+    eq(shell.numberCommits, [9, 17, 22], "focus-out commits a valid changed draft once")
+    numberField.field.focusInput()
+    numberField.field.selectAll()
+    type("500")
+    longField.focusInput()
+    check(numberField.field.text === "12" && !numberField.editing && numberField.error !== "", "focus-out on an out-of-range draft restores the value and says why: " + [numberField.field.text, numberField.editing, numberField.error])
+    eq(shell.numberCommits, [9, 17, 22], "an out-of-range draft never commits on focus-out")
     numberField.cancelEdit()
     eq([numberField.parse("٤٢"), numberField.parse("42"), numberField.parse("1.5")], [42, 42, NaN], "language digits parse; integers only when decimals is 0")
     eq([decimalField.parse("2,5"), decimalField.parse("2.56")], [2.5, 2.6], "decimal comma accepted, rounded to decimals")
@@ -671,6 +676,20 @@ ShellRoot {
     check(textSetting.field.text === "other" && !textSetting.editing && shell.pageBacks === textBacks, "Escape restores the bound value and the page stays: " + [textSetting.field.text, textSetting.editing, shell.pageBacks - textBacks])
     shell.textSetting = "later"
     eq(textSetting.field.text, "later", "binding intact after Escape")
+    textSetting.field.focusInput()
+    textSetting.field.selectAll()
+    type("new2")
+    longField.focusInput()
+    check(!textSetting.editing && textSetting.field.text === "new2", "focus-out ends the text draft: " + [textSetting.editing, textSetting.field.text])
+    eq(shell.textCommits, ["new", "new2"], "focus-out commits a valid changed text draft once")
+    shell.textSetting = "new2"
+    textSetting.field.focusInput()
+    textSetting.field.selectAll()
+    type("toolong")
+    longField.focusInput()
+    check(textSetting.field.text === "new2" && !textSetting.editing && textSetting.error === "Too long", "focus-out on an invalid text draft restores the value and says why: " + [textSetting.field.text, textSetting.editing, textSetting.error])
+    eq(shell.textCommits, ["new", "new2"], "an invalid text draft never commits on focus-out")
+    textSetting.cancelEdit()
 
     // --- FoamyPrefsQueue with a synchronously reflecting host (4.5) ---------------------------
     syncQueue.save("a", "one")

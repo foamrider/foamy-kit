@@ -35,6 +35,9 @@ ShellRoot {
   property int finished: 0
   property int fieldFinished: 0
   property int saves: 0
+  // inputActiveFocus as each field's editingFinished handler reads it.
+  property var areaFocusAtFinish: null
+  property var fieldFocusAtFinish: null
 
   // A hint tone: between the background and the text, clearly apart from
   // both (a placeholder must not read as typed text in either theme).
@@ -106,7 +109,10 @@ ShellRoot {
             return "«" + key + "»"
           }
           onTextEdited: shell.edits++
-          onEditingFinished: shell.finished++
+          onEditingFinished: {
+            shell.finished++
+            shell.areaFocusAtFinish = inputActiveFocus
+          }
           onKeyPressed: function (event) {
             if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & Qt.ControlModifier)) {
               shell.saves++
@@ -117,7 +123,10 @@ ShellRoot {
         SafeTextField {
           id: after
           width: parent.width
-          onEditingFinished: shell.fieldFinished++
+          onEditingFinished: {
+            shell.fieldFinished++
+            shell.fieldFocusAtFinish = inputActiveFocus
+          }
         }
         // Qt's own (offscreen, in-process) clipboard, as a native TextEdit reads it.
         TextEdit {
@@ -244,7 +253,9 @@ ShellRoot {
     key(Qt.Key_Tab)
     check(after.inputActiveFocus, "Tab moves the focus to the next field")
     eq(shell.finished, 1, "editingFinished when the field loses the focus")
+    eq(shell.areaFocusAtFinish, false, "the area's editingFinished handler reads inputActiveFocus as false")
     area.focusInput()
+    eq([shell.fieldFinished, shell.fieldFocusAtFinish], [1, false], "the field's editingFinished handler reads inputActiveFocus as false")
     key(Qt.Key_Tab, Qt.ShiftModifier)
     check(!editor.activeFocus, "Shift+Tab moves the focus back")
     eq(area.text, "ab\nc\nd", "Tab types nothing")

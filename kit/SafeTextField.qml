@@ -124,7 +124,9 @@ Flickable {
   property alias cursorPosition: editor.cursorPosition
   property alias font: editor.font
   property alias horizontalAlignment: editor.horizontalAlignment
-  readonly property bool inputActiveFocus: editor.activeFocus
+  // An alias, not a binding: editingFinished is emitted from the editor's
+  // focus change, before a binding on activeFocus would have updated.
+  readonly property alias inputActiveFocus: editor.activeFocus
   // The editor itself (tests, glyph geometry).
   readonly property Item editorItem: editor
   property alias padding: editor.padding
