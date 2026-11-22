@@ -23,28 +23,46 @@ import zlib
 from pathlib import Path
 
 
+def image_data(path, data, height, stride):
+    """The inflated IDAT data of a PNG's bytes, holding `height` rows of
+    `stride` bytes and a filter byte each. Raises ValueError when a chunk
+    runs past the end of the file or the data is short."""
+    offset, chunks = 8, b""
+    while offset < len(data):
+        if offset + 8 > len(data):
+            raise ValueError(f"{path}: truncated chunk at byte {offset}")
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        if offset + 12 + length > len(data):
+            raise ValueError(f"{path}: truncated chunk at byte {offset}")
+        if data[offset + 4 : offset + 8] == b"IDAT":
+            chunks += data[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+    raw = zlib.decompress(chunks)
+    if len(raw) < height * (stride + 1):
+        raise ValueError(f"{path}: image data is {len(raw)} bytes, {height} rows need {height * (stride + 1)}")
+    return raw
+
+
 def read_png(path):
     """(width, height, rows) for an 8-bit RGB/RGBA/grey/grey-alpha PNG; rows
     are lists of (r, g, b, a) tuples. Raises ValueError for anything else."""
     data = Path(path).read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError(f"{path}: not a PNG")
+    if len(data) < 29:
+        raise ValueError(f"{path}: truncated PNG header")
     width, height, depth, colour, _, _, interlace = struct.unpack(">IIBBBBB", data[16:29])
     if depth != 8 or interlace != 0 or colour not in (0, 2, 4, 6):
         raise ValueError(f"{path}: only 8-bit non-interlaced grey/RGB(A) PNGs are supported")
     channels = {0: 1, 2: 3, 4: 2, 6: 4}[colour]
-    offset, chunks = 8, b""
-    while offset < len(data):
-        length = struct.unpack(">I", data[offset : offset + 4])[0]
-        if data[offset + 4 : offset + 8] == b"IDAT":
-            chunks += data[offset + 8 : offset + 8 + length]
-        offset += 12 + length
-    raw = zlib.decompress(chunks)
     stride = width * channels
+    raw = image_data(path, data, height, stride)
     rows, previous = [], bytearray(stride)
     for row in range(height):
         start = row * (stride + 1)
         kind, line = raw[start], bytearray(raw[start + 1 : start + 1 + stride])
+        if kind > 4:
+            raise ValueError(f"{path}: row {row} has unknown filter type {kind}")
         for i in range(stride):
             left = line[i - channels] if i >= channels else 0
             up = previous[i]

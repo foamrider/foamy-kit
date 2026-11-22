@@ -169,6 +169,40 @@ def main():
         (base / "bad.png").write_bytes(b"nope")
         bad = run(p("a.png"), base / "bad.png")
         ok &= report("CLI: unreadable input exits 2", bad.returncode == 2)
+        # A damaged PNG is unreadable (exit 2 with the reason), never a
+        # traceback (exit 1, "different") or a guessed picture.
+        header = (8).to_bytes(4, "big") + (6).to_bytes(4, "big") + bytes([8, 6, 0, 0, 0])
+        signature = b"\x89PNG\r\n\x1a\n"
+
+        def chunk(kind, data):
+            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+        whole = b"".join(b"\x00" + bytes(8 * 4) for _ in range(6))
+        for name, data, reason in (
+            ("image data shorter than its rows", whole[:-10], "image data"),
+            ("an unknown filter type", b"\x05" + whole[1:], "filter type 5"),
+            ("a header cut short", b"", "truncated"),
+        ):
+            png = signature + chunk(b"IHDR", header)
+            png = png[:20] if reason == "truncated" else png + chunk(b"IDAT", zlib.compress(data)) + chunk(b"IEND", b"")
+            (base / "damaged.png").write_bytes(png)
+            damaged = run(p("a.png"), base / "damaged.png")
+            ok &= report(
+                f"CLI: a PNG with {name} exits 2 and says why",
+                damaged.returncode == 2 and "unreadable" in damaged.stderr and reason in damaged.stderr,
+                f"exit {damaged.returncode}: {(damaged.stdout + damaged.stderr).strip()[-200:]}",
+            )
+        for name, tail in (
+            ("cut inside a chunk's length", b"\x00\x00"),
+            ("with a chunk longer than the file", chunk(b"IDAT", zlib.compress(whole))[:-8]),
+        ):
+            (base / "damaged.png").write_bytes(signature + chunk(b"IHDR", header) + tail)
+            damaged = run(p("a.png"), base / "damaged.png")
+            ok &= report(
+                f"CLI: a PNG {name} exits 2 and says why",
+                damaged.returncode == 2 and "truncated chunk" in damaged.stderr,
+                f"exit {damaged.returncode}: {(damaged.stdout + damaged.stderr).strip()[-200:]}",
+            )
     finally:
         shutil.rmtree(base, ignore_errors=True)
     return 0 if ok else 1
