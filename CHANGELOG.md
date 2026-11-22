@@ -50,7 +50,9 @@
 - `SafeTextField` (since 0.5.2) and `SafeTextArea` (since 0.13.0) give up
   the keyboard focus when they hide (their own `visible` or a parent's).
   Qt keeps the active focus on a hidden item, so keys typed after a
-  focused field was hidden still edited text the user could not see.
+  focused field was hidden still edited text the user could not see. A
+  field hidden while its context menu is open closes the menu, so Esc or
+  the menu's Paste no longer gives the hidden field the focus back.
   Losing the focus ends the edit as any focus loss does: `editingFinished`
   comes once, when the field hides, instead of at the next focus move. A
   plugin that saves on `editingFinished` now saves a hidden field's draft

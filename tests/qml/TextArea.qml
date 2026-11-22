@@ -467,7 +467,15 @@ ShellRoot {
         }, "area", function () {
           shell.contextMenu(after, function () {
             return shell.fieldFinished
-          }, "field", shell.sizing)
+          }, "field", function () {
+            shell.menuHiding(area, function () {
+              return shell.finished
+            }, "area", function () {
+              shell.menuHiding(after, function () {
+                return shell.fieldFinished
+              }, "field", shell.sizing)
+            })
+          })
         })
       })
     })
@@ -535,6 +543,34 @@ ShellRoot {
         }, label + ": the menu's Paste ends")
       }, label + ": a right-click opens the menu")
     })
+  }
+
+  // A field hidden while its context menu is open closes the menu, ends its
+  // edit once and takes no keys: neither Esc nor the menu gives the hidden
+  // field the focus back.
+  function menuHiding(field, count, label, then) {
+    var editor = field.editorItem
+    var menu = editor.Controls.ContextMenu.menu
+    field.clear()
+    field.focusInput()
+    type("ab")
+    var ended = count()
+    ev.mouseClick(editor, editor.width / 2, editor.height / 2, Qt.RightButton, Qt.NoModifier, -1)
+    wait.waitFor(function () {
+      return menu.opened
+    }, 3000, function () {
+      field.visible = false
+      wait.waitFor(function () {
+        return !menu.visible
+      }, 3000, function () {
+        key(Qt.Key_Escape)
+        type("z")
+        eq([field.text, count(), field.inputActiveFocus], ["ab", ended + 1, false], label + ": hidden with its menu open, the field ends its edit once and takes no keys")
+        field.visible = true
+        field.clear()
+        then()
+      }, label + ": hiding the field closes its menu")
+    }, label + ": a right-click opens the menu")
   }
 
   // The height follows the text up to maximumHeight, then the field scrolls

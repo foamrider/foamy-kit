@@ -592,7 +592,9 @@ Flickable {
 
         onTriggered: {
           editMenu.close()
-          root.focusInput()
+          // A hidden field takes no keys, also from a menu still closing.
+          if (root.visible)
+            root.focusInput()
           root.requestPaste(false)
         }
       }
@@ -839,6 +841,8 @@ Flickable {
     pasteError = ""
     // Qt keeps the active focus on a hidden item, so keys would still edit
     // text the user cannot see. Losing it ends the edit (editingFinished).
+    // An open menu would give the focus back on Esc or Paste: close it first.
+    editMenu.close()
     editor.focus = false
   }
 
