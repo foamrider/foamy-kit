@@ -148,7 +148,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   true`: no fill or border at rest, the usual field on hover, under the
   cursor and with the focus. Secrets (API tokens,
   passwords) use `masked: true` and read `secretText`, never `text`. Label
-  the field with visible text: Qt gives a password edit no accessible name.
+  the field with visible text and set its `Accessible.name`: Qt gives a
+  password edit no accessible name, so the field passes the name on as the
+  editor's description.
   Coloured tokens in a field (Quick Add) use its `runs`. Multi-line text
   (a description) is `SafeTextArea`, for the same clipboard reason.
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in

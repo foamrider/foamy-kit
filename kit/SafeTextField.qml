@@ -75,7 +75,9 @@ import qs.Ui
 //   swallowed); nothing is written to the clipboard or the primary
 //   selection (the editor is read-only and selects nothing itself), nor to
 //   logs. Input methods are off (read-only editor, hidden-text hints).
-//   Accessibility reports a password edit whose value is the mask.
+//   Accessibility reports a password edit whose value is the mask; the
+//   field's Accessible.name is its description too (Qt hides a password
+//   edit's name).
 // - Only the field writes the editor: assigning `text`, or a change made by
 //   an assistive tool, clears the field. Changing `masked` after creation
 //   clears it too (nothing typed in one mode shows in the other).
@@ -517,8 +519,11 @@ Flickable {
     id: editor
     objectName: "safeEditor"
 
-    // The editor is the tab stop: it carries the field's name and its role.
+    // The editor is the tab stop: it carries the field's name, description
+    // and role. Qt reports no name for a password edit (Qt 6.12), so a
+    // masked editor gives the name as its description, which Qt keeps.
     Accessible.name: root.Accessible.name
+    Accessible.description: root.masked ? root.Accessible.name : root.Accessible.description
     Accessible.role: Accessible.EditableText
     Accessible.passwordEdit: root.masked
     activeFocusOnTab: true

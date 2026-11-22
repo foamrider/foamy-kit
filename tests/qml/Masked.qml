@@ -107,6 +107,7 @@ ShellRoot {
           id: plain
           width: parent.width
           Accessible.name: "Plain label"
+          Accessible.description: "Plain help"
           onTextEdited: shell.plainEdits++
         }
         SafeTextField {
@@ -514,6 +515,11 @@ ShellRoot {
     var plainRight = plain.editorItem.positionToRectangle(12).x
     check(shell.rtl ? near(plainRight, right, 1.5) : near(plainLeft, left, 1.5), "aligned like a normal field " + [plainLeft, plainRight, left, right])
     eq(plain.editorItem.Accessible.name, "Plain label", "a normal field keeps its label")
+    eq(plain.editorItem.Accessible.description, "Plain help", "a normal field's description reaches its editor")
+    // Qt 6.12 reports no name for a password edit; the label must still
+    // reach assistive tools, as the name or the description.
+    var secretA11y = [secret.editorItem.Accessible.name, secret.editorItem.Accessible.description]
+    check(secretA11y.indexOf("API token") !== -1, "a masked field's label reaches its editor (name, description): " + JSON.stringify(secretA11y))
     // The editor is the field's tab stop: an accessibility check needs a role on it.
     eq(plain.editorItem.Accessible.role, Accessible.EditableText, "a normal field's editor is an editable text")
     eq([secret.editorItem.Accessible.role, secret.editorItem.Accessible.passwordEdit], [Accessible.EditableText, true], "a masked field's editor is an editable password text (role, passwordEdit)")

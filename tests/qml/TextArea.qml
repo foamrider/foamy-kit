@@ -105,6 +105,7 @@ ShellRoot {
           width: parent.width
           placeholderText: "Description"
           Accessible.name: "Description"
+          Accessible.description: "What happened"
           translate: function (key) {
             return "«" + key + "»"
           }
@@ -238,6 +239,7 @@ ShellRoot {
     var editor = area.editorItem
     check(editor.Accessible.role === Accessible.EditableText && editor.Accessible.multiLine === true, "accessible as a multi-line edit")
     eq(editor.Accessible.name, "Description", "the editor carries the field's name")
+    eq(editor.Accessible.description, "What happened", "the editor carries the field's description")
     check(near(area.height, area.minimumHeight), "empty: minimumHeight " + area.height)
     area.focusInput()
     check(editor.activeFocus, "the field takes focus")

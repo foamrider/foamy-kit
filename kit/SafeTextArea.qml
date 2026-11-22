@@ -284,6 +284,7 @@ Flickable {
     objectName: "safeEditor"
 
     Accessible.name: root.Accessible.name
+    Accessible.description: root.Accessible.description
     Accessible.role: Accessible.EditableText
     Accessible.multiLine: true
     activeFocusOnTab: true
