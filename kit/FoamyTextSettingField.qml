@@ -38,7 +38,8 @@ Item {
   property bool hasCommitted: false
 
   // A refused paste (too large, timed out, not plain text): shown in the
-  // field's error line and emitted for callers with their own error area.
+  // field's error line, in place of the draft's error, and emitted for
+  // callers with their own error area.
   signal pasteFailed(string message)
   signal committed(string value)
 
@@ -145,6 +146,12 @@ Item {
         root.dirty = true
         root.errorText = ""
       }
+      // The newest news replaces the draft's error in the line (Enter with
+      // the draft still invalid shows that error again).
+      onPasteErrorChanged: if (pasteError !== "") {
+        root.errorText = ""
+        root.pasteFailed(FoamyI18n.t(pasteError))
+      }
       onAccepted: root.commitEdit(false)
       onEditingFinished: if (!field.inputActiveFocus)
         root.commitEdit(true)
@@ -156,6 +163,7 @@ Item {
 
     Text {
       readonly property string message: root.errorText !== "" ? root.errorText : (root.field.pasteError !== "" ? FoamyI18n.t(root.field.pasteError) : "")
+      objectName: "foamyFieldError"
       visible: message !== ""
       width: parent.width
       text: message

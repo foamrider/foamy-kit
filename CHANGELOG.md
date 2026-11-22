@@ -108,6 +108,16 @@
   time field or a change of `value`. Callers that reflect the value at
   once (`FoamyPrefsQueue`) see no change. No plugin change is needed.
   `tests/test_schedule.py`.
+- `FoamyNumberField` and `FoamyTextSettingField` (since 0.3.4): a
+  refused paste (too large, timed out, not plain text) replaces the error
+  the line shows for the draft. Before, a field that already showed its
+  draft's error (a number out of range, a `validate` message, after Enter
+  or a focus-out) kept it, so the refused paste said nothing:
+  `SafeTextField` sets `pasteError` without a text change, and the line
+  put the draft's error first. Enter with the draft still invalid shows
+  that error again. `FoamyTextSettingField.pasteFailed`, documented since
+  0.3.4 but never emitted, now comes as `FoamyNumberField`'s does. No
+  plugin change is needed. `tests/test_features.py`.
 - `FoamyScheduleDay` (since 0.9.0) says why a paste into a From or To
   field was refused (too large, timed out, not plain text: the field's
   `pasteError`), through `FoamyI18n.t`, in an error line under the row,

@@ -4,7 +4,9 @@ arity, SafeTextField.maximumLength, FoamyPrefsQueue inline and CLI (fake
 omarchy / omarchy-shell on PATH, never the real ones), IPC
 prefer/others/call, FoamyIpcPreference, FoamyPeerIpc (with its failures:
 a missing target, the process limit) and FoamySettingsState, plus the
-expiry of a pending value the host never reflects."""
+expiry of a pending value the host never reflects, and a refused paste into
+the settings fields (through kit/clipboard.sh with the
+hostenv.clipboard_fakes() stand-ins, never the real clipboard)."""
 
 import shutil
 import sys
@@ -56,6 +58,7 @@ def run(host):
     )
     calls = r.base / "calls.log"
     calls.write_text("")
+    r.env.update(harness.hostenv.clipboard_fakes(r.base / "clipboard", env=r.env))
     r.env.update(
         {
             "FOAMY_CALLS": str(calls),

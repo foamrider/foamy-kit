@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtTest
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -151,6 +152,25 @@ ShellRoot {
         }
         onPasteFailed: function (message) {
           shell.pasteMessage = message
+        }
+      }
+      // Real pastes through kit/clipboard.sh (refusedPastes()).
+      FoamyNumberField {
+        id: pasteNumber
+        width: 300
+        value: 20
+        from: 1
+        to: 100
+      }
+      FoamyTextSettingField {
+        id: pasteText
+        width: 300
+        value: "short"
+        validate: function (text) {
+          return text.length <= 5 || "Too long"
+        }
+        onPasteFailed: function (message) {
+          shell.textPasteMessages = shell.textPasteMessages.concat([message])
         }
       }
       FoamyNumberField {
@@ -560,6 +580,56 @@ ShellRoot {
   }
   property var retryCommits: []
   property string pasteMessage: ""
+  property var textPasteMessages: []
+
+  // What the stand-in wl-paste does on the next paste (hostenv.clipboard_fakes()).
+  Process {
+    id: fixture
+  }
+  function setClipboard(mode, then) {
+    fixture.command = ["clipboard-fixture", mode]
+    fixture.running = true
+    wait.waitFor(function () {
+      return !fixture.running
+    }, 5000, then, "clipboard-fixture " + mode)
+  }
+  // Ctrl+V into `input` (a SafeTextField), then `then` once the paste has ended.
+  function paste(input, then) {
+    input.focusInput()
+    ev.keyClick(Qt.Key_V, Qt.ControlModifier, -1)
+    check(input.pasteRunning, "the paste runs out of process")
+    wait.waitFor(function () {
+      return !input.pasteRunning
+    }, 10000, then, "the paste ends")
+  }
+  // A refused paste is the field's newest news: it replaces the error the
+  // field shows for its draft (a number out of range, a text too long).
+  function refusedPastes(then) {
+    var tooLarge = "Clipboard text is too large or contains invalid characters."
+    var numberLine = findNamed(pasteNumber, "foamyFieldError")
+    var textLine = findNamed(pasteText, "foamyFieldError")
+    pasteNumber.field.focusInput()
+    pasteNumber.field.selectAll()
+    type("500")
+    key(Qt.Key_Return)
+    check(numberLine !== null && numberLine.visible && numberLine.text === pasteNumber.invalidText, "an out-of-range number says why: " + (numberLine ? numberLine.text : "no error line"))
+    setClipboard("large", function () {
+      paste(pasteNumber.field, function () {
+        check(numberLine !== null && numberLine.visible && numberLine.text === tooLarge, "a refused paste into a number field replaces its range error: " + (numberLine ? numberLine.text : "no error line"))
+        pasteText.field.focusInput()
+        pasteText.field.selectAll()
+        type("toolong")
+        key(Qt.Key_Return)
+        check(textLine !== null && textLine.visible && textLine.text === "Too long", "a text too long says why: " + (textLine ? textLine.text : "no error line"))
+        paste(pasteText.field, function () {
+          check(textLine !== null && textLine.visible && textLine.text === tooLarge, "a refused paste into a text field replaces its validation error: " + (textLine ? textLine.text : "no error line"))
+          eq(shell.textPasteMessages, [tooLarge], "a text field reports a refused paste (pasteFailed)")
+          longField.focusInput()
+          then()
+        })
+      })
+    })
+  }
 
   QtObject {
     id: fakePanel
@@ -1266,9 +1336,12 @@ ShellRoot {
       return unfinished().length === 0
     }, 5000, function () {
       shell.eq(unfinished(), [], "every later check ran")
-      console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-      console.log("FOAMY DONE")
-      Qt.quit()
+      // Last, so no other check types meanwhile.
+      shell.refusedPastes(function () {
+        console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+        console.log("FOAMY DONE")
+        Qt.quit()
+      })
     })
   }
 }
