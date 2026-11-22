@@ -187,8 +187,10 @@ fn reply_once(reply: &Value) -> Option<io::Result<()>> {
 /// 101 straight from the panic hook (the panic message still goes to
 /// standard error), so a helper bug never ends in `SIGABRT` and a core dump
 /// under the kit's `panic = "abort"`. A panic in another thread after the
-/// reply exits 101 without a second one; one while the reply is written
-/// waits until the whole line is out.
+/// reply prints no second one. One while the reply is written waits until
+/// the whole line is out, and `run` then returns 101 too, so the process
+/// ends in 101 whether the hook or `main` ends it. A panic after `run` has
+/// returned ends in 101 only if the hook exits before `main` returns.
 ///
 /// When the caller wraps the helper in `timeout`, call
 /// [`crate::process::set_run_budget`] with less than that first, so every
@@ -215,6 +217,9 @@ where
     match reply_once(&reply) {
         // Another thread panicked: the hook printed and is exiting.
         None => ExitCode::from(101),
+        // A panic began while the reply was written: its hook exits 101
+        // once the line is out, and `main` returning this ends it the same.
+        Some(_) if crate::process::panicking() => ExitCode::from(101),
         Some(Ok(())) => ExitCode::from(exit),
         Some(Err(_)) => ExitCode::from(if exit == 0 { 1 } else { exit }),
     }
@@ -345,36 +350,44 @@ mod tests {
 
     /// [`a_panic_while_the_reply_is_written_waits_for_it`]'s child: a reply
     /// four times the size of the stdout pipe, and a thread that panics
-    /// once `run` is in the middle of writing it. Run normally it does
-    /// nothing.
+    /// once `run` is in the middle of writing it. It then exits with
+    /// `run`'s code at once, as a helper whose `main` returns it does. Run
+    /// normally it does nothing.
     #[test]
     fn panic_during_reply_child() {
         if std::env::var_os("FOAMY_JSON_TEST_DURING").is_none() {
             return;
         }
         let pipe = rustix::pipe::fcntl_getpipe_size(io::stdout()).unwrap();
-        let mut worker = None;
         let exit = run(
             || -> Result<Value, Failure> {
-                worker = Some(std::thread::spawn(move || {
+                std::thread::spawn(move || {
                     // The parent does not read yet, so more than half a
                     // pipe of data means `run` is writing the reply.
                     while (rustix::io::ioctl_fionread(io::stdout()).unwrap() as usize) <= pipe / 2 {
                         std::thread::yield_now();
                     }
                     panic!("a bug in a worker thread");
-                }));
+                });
                 Ok(json!({"text": "x".repeat(4 * pipe)}))
             },
             error_reply,
         );
-        assert_eq!(exit, ExitCode::SUCCESS);
-        // The worker's panic hook ends the process.
-        let _ = worker.unwrap().join();
+        // The worker's panic hook exits 101 at the same time; an assertion
+        // here would end in that hook too, so the code tells the parent.
+        std::process::exit(if exit == ExitCode::from(101) { 101 } else { 7 });
     }
 
     #[test]
     fn a_panic_while_the_reply_is_written_waits_for_it() {
+        // The child's own exit and the panic hook's race; three runs show
+        // that both end in 101.
+        for _ in 0..3 {
+            panic_during_reply_once();
+        }
+    }
+
+    fn panic_during_reply_once() {
         use std::io::Read;
         use std::sync::mpsc;
         use std::time::Duration;

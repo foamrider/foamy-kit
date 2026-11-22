@@ -4,6 +4,7 @@
 
 use std::io;
 use std::panic::{self, PanicHookInfo};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -19,6 +20,16 @@ type Hook = Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static>;
 /// default, which reports the panic on standard error).
 static REPORT: OnceLock<Hook> = OnceLock::new();
 
+/// Set first thing by the kit's panic hook, before it reports the panic, so
+/// [`crate::json::run`] can tell that a panic began while it wrote its
+/// reply.
+static PANICKING: AtomicBool = AtomicBool::new(false);
+
+/// Whether the kit's panic hook has started in any thread.
+pub(crate) fn panicking() -> bool {
+    PANICKING.load(Ordering::SeqCst)
+}
+
 /// Installs the kit's panic hook: report the panic as before (std's message
 /// on standard error, nothing on standard output), run `after`, then exit
 /// with `code`. Replaces an earlier kit hook instead of chaining it, so
@@ -26,6 +37,7 @@ static REPORT: OnceLock<Hook> = OnceLock::new();
 pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 'static) {
     let report = REPORT.get_or_init(panic::take_hook);
     panic::set_hook(Box::new(move |info| {
+        PANICKING.store(true, Ordering::SeqCst);
         report(info);
         // No unwinding follows (the release profile aborts on panic), so
         // the children's drops never run: end their process groups here.

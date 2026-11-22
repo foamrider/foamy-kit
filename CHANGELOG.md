@@ -125,8 +125,10 @@
   panic hook print nothing and exit 101 while the reply was still being
   written, so the caller got no JSON or a cut-off line. The mark and the
   write now share one lock with the panic hook: a panic during the write
-  waits until the whole line is out, then exits 101 without a second reply.
-  No plugin change is needed. `kit/rust/foamy-helper/src/json.rs` (test
+  waits until the whole line is out, and `run` then returns 101 too, so
+  the helper exits 101 without a second reply whether the hook or `main`
+  ends the process. No plugin change is needed.
+  `kit/rust/foamy-helper/src/json.rs` (test
   `a_panic_while_the_reply_is_written_waits_for_it`).
 - `foamy_helper::favicon` (since 0.5.2): a set but empty or relative
   `XDG_CACHE_HOME` was used as a relative cache directory, so the helper
