@@ -823,7 +823,7 @@ Flickable {
     // A maximumLength lowered while the page is created, after the editor
     // took its text and before this runs (Qt completes in reverse creation
     // order: a root's or a later sibling's Component.onCompleted comes
-    // first), found onMaximumLengthChanged not ready yet.
+    // first), was not applied: onMaximumLengthChanged waits for editorReady.
     var limit = maximumLength > 32767 ? 32767 : (maximumLength > 0 ? maximumLength : 0)
     if (editor.length > limit)
       editor.remove(_cutAt(editor.text, limit), editor.length)
