@@ -145,9 +145,15 @@
 - `foamy_helper::favicon` cache (since 0.5.2): a cached icon with a
   modification time in the future counted as fresh, so after the clock was
   set back an old icon stayed in use until the clock passed its time plus
-  24 hours. Such a file is now stale and the icon is looked up again. No
-  plugin change is needed. `kit/rust/foamy-helper/src/favicon/tests.rs`
-  (test `only_a_cached_icon_younger_than_a_day_is_reused`).
+  24 hours. Such a file is now stale and the icon is looked up again.
+  When the cache is full, such files are removed first and the icon just
+  written is always kept; before, a cache full of them made the helper
+  remove each new icon at once and reply `found` with a file that no
+  longer existed. No plugin change is needed.
+  `kit/rust/foamy-helper/src/favicon/tests.rs` (tests
+  `only_a_cached_icon_younger_than_a_day_is_reused`,
+  `a_new_icon_outlives_a_full_cache_of_files_from_the_future`,
+  `prune_keeps_the_icon_just_written`).
 - `tests/kit-check.sh` (generated from `tools/kit-check.sh.in`) names a
   `native.pin` checksum line for a file other than `bin/x86_64/<binary>`
   and `bin/aarch64/<binary>`: "`<crate>/native.pin lists unexpected file

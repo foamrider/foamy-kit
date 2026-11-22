@@ -675,17 +675,28 @@ fn cached(target: &Path) -> bool {
             .is_ok_and(|data| valid_png(&data))
 }
 
-/// Keeps the [`CACHE_ENTRIES`] newest `*.png` files in `cache`.
-fn prune(cache: &Path) {
+/// Keeps `keep` (the icon just written) and the [`CACHE_ENTRIES`] - 1
+/// newest other `*.png` files in `cache`. A file modified in the future
+/// (the clock was set back) counts as the oldest: its age is unknown.
+fn prune(cache: &Path, keep: &Path) {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64());
     let mut files: Vec<(f64, PathBuf)> = fs::read_dir(cache)
         .into_iter()
         .flatten()
         .flatten()
         .filter(|entry| entry.file_name().as_bytes().ends_with(b".png"))
+        .filter(|entry| entry.path() != keep)
         .filter_map(|entry| {
             let meta = fs::metadata(entry.path()).ok()?;
+            let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
             Some((
-                meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9,
+                if modified > now {
+                    f64::NEG_INFINITY
+                } else {
+                    modified
+                },
                 entry.path(),
             ))
         })
@@ -694,7 +705,7 @@ fn prune(cache: &Path) {
         b.0.total_cmp(&a.0)
             .then_with(|| b.1.as_os_str().as_bytes().cmp(a.1.as_os_str().as_bytes()))
     });
-    for (_, path) in files.iter().skip(CACHE_ENTRIES) {
+    for (_, path) in files.iter().skip(CACHE_ENTRIES - 1) {
         let _ = fs::remove_file(path);
     }
 }
@@ -757,7 +768,7 @@ fn resolve_with(
     crate::fs::write_atomic(&target, &found.data, 0o600).map_err(os_failure)?;
     // Bound the shared cache; each plugin falls back if an older displayed
     // file expires.
-    prune(&dirs.cache);
+    prune(&dirs.cache, &target);
     Ok(Reply {
         source,
         status: "found",

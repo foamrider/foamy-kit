@@ -709,6 +709,67 @@ fn only_a_cached_icon_younger_than_a_day_is_reused() {
     }
 }
 
+#[test]
+fn a_new_icon_outlives_a_full_cache_of_files_from_the_future() {
+    if !python() {
+        return;
+    }
+    let s = setup("favicon-prune");
+    let icon = png(32, 3000);
+    database(
+        &s.config.join("vivaldi/Profile 1/Favicons"),
+        TEST_SCHEMA,
+        &[("https://example.com/", 1)],
+        &[(1, icon.clone(), 32, 100)],
+    );
+    // Written before the clock was set back an hour.
+    fs::create_dir_all(&s.dirs.cache).unwrap();
+    let future = SystemTime::now() + Duration::from_secs(3600);
+    for i in 0..CACHE_ENTRIES {
+        let path = s.dirs.cache.join(format!("{i:064x}.png"));
+        fs::write(&path, png(32, 100)).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(future)
+            .unwrap();
+    }
+    let reply = resolve(&request("example.com"), &s.dirs).unwrap();
+    assert_eq!(reply.status, "found");
+    assert_eq!(source_bytes(&reply), icon, "the new icon is kept");
+    assert_eq!(fs::read_dir(&s.dirs.cache).unwrap().count(), CACHE_ENTRIES);
+}
+
+#[test]
+fn prune_keeps_the_icon_just_written() {
+    let s = setup("favicon-keep");
+    fs::create_dir_all(&s.dirs.cache).unwrap();
+    let past = SystemTime::now() - Duration::from_secs(60);
+    for i in 0..CACHE_ENTRIES {
+        let path = s.dirs.cache.join(format!("{i:064x}.png"));
+        fs::write(&path, png(32, 100)).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+    }
+    // A file system whose clock runs ahead dates the new icon in the future.
+    let kept = s.dirs.cache.join(format!("{:064x}.png", CACHE_ENTRIES));
+    fs::write(&kept, png(32, 100)).unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&kept)
+        .unwrap()
+        .set_modified(SystemTime::now() + Duration::from_secs(5))
+        .unwrap();
+    prune(&s.dirs.cache, &kept);
+    assert!(kept.exists(), "the icon just written is kept");
+    assert_eq!(fs::read_dir(&s.dirs.cache).unwrap().count(), CACHE_ENTRIES);
+}
+
 /// [`xdg_dirs_must_be_absolute`]'s child: the whole helper contract, with
 /// the environment its parent gives. Run normally it does nothing.
 #[test]
