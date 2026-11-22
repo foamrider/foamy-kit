@@ -490,6 +490,18 @@
 - The `omarchy-marketplace-plugin-update` skill, in `.agents/skills/` with a
   `.claude/skills/` link. Submissions target the `main` merge commit.
 
+### Changed
+- `REVIEW.md`, section 5 "Review security at the actual sink": never ship
+  an editable `TextInput`, or a `TextField` built on it. Qt reads the
+  whole clipboard text on the UI thread, with no byte cap or deadline, on
+  every clipboard change to update `canPaste`, with no paste gesture, so
+  a bounded paste alone does not protect the shell (the marketplace
+  review of Foamy Lock, cited in the guide's evidence table). Use
+  `SafeTextField`, or a read-only `TextInput` that the plugin edits
+  itself (foamy-lock's password field), and paste through
+  `FoamyClipboard`. The sync replaces `REVIEW.md` in each plugin; a
+  plugin that ships an editable Qt text input changes it.
+
 ## 0.12.0 — 2026-11-16
 
 ### Added
