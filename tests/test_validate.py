@@ -261,6 +261,30 @@ def main():
     code, out = validate(plugin, "--ci", "--only", "suite")
     ok &= report("a failing suite fails validate", code != 0 and "exit 3" in out, summary(out))
 
+    # A qmllint that leaves no readable report: the failure names its exit
+    # code and why the report could not be read (a full disk looks the same).
+    fake = Path(tempfile.mkdtemp(prefix="foamy-kit-fakeqt-"))
+    (fake / "bin").mkdir()
+    (fake / "shell/Commons").mkdir(parents=True)
+    qt_env = dict(os.environ, FOAMY_QT_BIN=str(fake / "bin"), FOAMY_HOST_45=str(fake / "shell"))
+    for name, script, expected in (
+        ("no report", "#!/bin/sh\nexit 5\n", ("exit 5", "No such file or directory")),
+        (
+            "a report that is not JSON",
+            '#!/bin/sh\nwhile [ "$1" != --json ]; do shift; done\necho broken >"$2"\nexit 0\n',
+            ("exit 0", "Expecting value"),
+        ),
+    ):
+        (fake / "bin/qmllint").write_text(script)
+        (fake / "bin/qmllint").chmod(0o755)
+        code, out = validate(plugin, "--only", "qmllint", env=qt_env)
+        ok &= report(
+            f"qmllint with {name} fails with its exit code and the read error",
+            code != 0 and "qmllint wrote no JSON report" in out and all(part in out for part in expected),
+            summary(out),
+        )
+    shutil.rmtree(fake, ignore_errors=True)
+
     # qmllint on the host: the real imports, unused imports are errors.
     if os.access("/usr/lib/qt6/bin/qmllint", os.X_OK) and Path("/usr/share/omarchy/shell/Commons").is_dir():
         (plugin / "Extra.qml").write_text(

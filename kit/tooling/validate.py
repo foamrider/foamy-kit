@@ -479,9 +479,9 @@ def check_qmllint(repo):
         result = subprocess.run(cmd, cwd=cwd, env=repo.env(), capture_output=True, text=True, timeout=900)
         try:
             data = json.loads(report.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
             show(result.stdout + result.stderr)
-            raise Failure("qmllint wrote no JSON report") from None
+            raise Failure(f"qmllint wrote no JSON report (exit {result.returncode}): {error}") from None
     entries = []
     for item in data.get("files", []):
         rel = os.path.relpath(item["filename"], cwd) if os.path.isabs(item["filename"]) else item["filename"]
