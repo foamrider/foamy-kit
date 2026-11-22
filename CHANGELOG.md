@@ -7,8 +7,12 @@
   not saved, so it shows `value` again at once, as
   `FoamyNumberField.saveFailed()` does for a field. Call it when a save
   fails without changing `value`; a `FoamyPrefsQueue` caller needs no
-  change, since its rollback changes `value`. DESIGN.md: Choices.
-  `tests/test_features.py`.
+  change, since its rollback changes `value`. Plugin change: foamy-power's
+  default profile dropdowns (a failed `PowerService.setDefault()` leaves
+  `value` as it was) call `saveFailed()` on the dropdown whose save failed,
+  and only when the failed value equals its `pickedValue`: the function
+  takes no argument, so after two quick picks a failure of the first must
+  not drop the second. DESIGN.md: Choices. `tests/test_features.py`.
 
 ### Fixed
 - `FoamyNumberField` and `FoamyTextSettingField` commit on focus-out
@@ -58,7 +62,10 @@
   plugin that saves on `editingFinished` now saves a hidden field's draft
   at once (foamy-clock's custom value already ignores a hidden field
   there); a plugin that shows the field again focuses it again
-  (`focusInput()`). `tests/test_text_area.py`.
+  (`focusInput()`). The focus goes to the field's nearest focus scope, not
+  to a `PanelKeyCatcher` in it: a plugin whose panel keys (Esc, arrows)
+  must work right after a field hides moves the focus itself, as
+  foamy-notification-center's search does. `tests/test_text_area.py`.
 - `clipboard.sh` (`FoamyClipboard`, `SafeTextField`, `SafeTextArea`): a
   read ends at once however its wrapper ends. Before (since 0.1.0), a
   `FoamyClipboard` destroyed during a read (a closed field, a reload) left
@@ -94,7 +101,8 @@
   showing the pick (`shownValue`) for up to `pickHoldMs` (10 s) next to
   the save's error, and the caller had no way to drop it. A caller whose
   failed save does not change `value` (foamy-power's default profiles)
-  calls the new `saveFailed()` on the failure. `tests/test_features.py`.
+  calls the new `saveFailed()` on the failure (see Added).
+  `tests/test_features.py`.
 - `FoamyAction`, `FoamyButton` and `FoamyPanelFooter` tooltips (the
   footer's `statusTooltip`): at most `Style.space(320)` wide, as the host
   caps its own long tooltips, and a few lines high. Before (since 0.1.0
@@ -116,7 +124,7 @@
   not tell "too large" from other read errors. The error now keeps the
   payload as its source and `io::is_over_limit` also looks at the source,
   so it is true; the message (`cannot read <path>: input is larger than N
-  bytes`) and the kind (`InvalidData`) are unchanged. No plugin change is
+  bytes`) and the kind (`InvalidData`) are unchanged. No source change is
   needed; a helper may now use `is_over_limit` on `read_file_limited`'s
   error. `kit/rust/foamy-helper/src/fs.rs` (test
   `bounded_file_reads_refuse_links_and_special_files`).
@@ -127,7 +135,7 @@
   write now share one lock with the panic hook: a panic during the write
   waits until the whole line is out, and `run` then returns 101 too, so
   the helper exits 101 without a second reply whether the hook or `main`
-  ends the process. No plugin change is needed.
+  ends the process. No source change is needed.
   `kit/rust/foamy-helper/src/json.rs` (test
   `a_panic_while_the_reply_is_written_waits_for_it`).
 - `foamy_helper::favicon` (since 0.5.2): a set but empty or relative
@@ -140,7 +148,7 @@
   Directory spec says (`~/.cache`, `~/.config`), and `resolve` refuses a
   relative cache or browser profile directory (a relative `HOME`, or a
   caller's `Dirs`) with the same `error` reply before it reads or writes
-  anything. No plugin change is needed.
+  anything. No source change is needed.
   `kit/rust/foamy-helper/src/favicon/tests.rs` (test
   `xdg_dirs_must_be_absolute`).
 - `foamy_helper::favicon` cache (since 0.5.2): a cached icon with a
@@ -150,7 +158,7 @@
   When the cache is full, such files are removed first and the icon just
   written is always kept; before, a cache full of them made the helper
   remove each new icon at once and reply `found` with a file that no
-  longer existed. No plugin change is needed.
+  longer existed. No source change is needed.
   `kit/rust/foamy-helper/src/favicon/tests.rs` (tests
   `only_a_cached_icon_younger_than_a_day_is_reused`,
   `a_new_icon_outlives_a_full_cache_of_files_from_the_future`,
@@ -201,6 +209,17 @@
   Before, these ended in a traceback with exit 1 ("different"), or a filter
   type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
   ignored, as before. No plugin change is needed. `tests/test_compare.py`.
+
+### Upgrading
+- `kit/rust` changed (the four `foamy_helper` items above): a plugin with a
+  native helper rebuilds it after the sync (`kit/native/build-native.sh .`)
+  and commits the new binaries and `native.pin`; until then `check.sh`,
+  `tests/kit-check.sh` and `--verify` report the binaries stale. No call
+  site changes, and `foamy-helper`'s version stays the same.
+- foamy-power calls `FoamyDropdown.saveFailed()` when a default profile
+  save fails (see Added). The text field items above ask a plugin to act
+  only in the cases they name (a hidden field shown again, panel keys
+  right after a field hides).
 
 ## 0.13.0 — 2026-11-19
 
