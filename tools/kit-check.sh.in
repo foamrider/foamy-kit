@@ -159,6 +159,10 @@ for pin in "${pins[@]}"; do
     [[ $info == *"ELF 64-bit LSB"* && $info == *"$want"* ]] || fail "$rel is not a 64-bit $arch ELF: $info"
     [[ $info == *"statically linked"* || $info == *"static-pie linked"* ]] || fail "$rel is not statically linked: $info"
   done
+  while read -r rel; do
+    [[ $rel == "bin/x86_64/$binary" || $rel == "bin/aarch64/$binary" ]] \
+      || fail "$crate/native.pin lists unexpected file $rel"
+  done < <(awk 'NF == 2 && length($1) == 64 && $1 ~ /^[0-9a-f]+$/ { print $2 }' "$pin" | LC_ALL=C sort -u)
   if [[ $(source_hash "$crate") != "$(value source)" ]]; then
     fail "$binary is stale: $crate/, kit/rust, Cargo.toml, Cargo.lock or rust-toolchain.toml changed since it was built (run kit/native/build-native.sh .)"
   elif [[ $(value kit) != "$version" ]]; then
