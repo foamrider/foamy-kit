@@ -105,11 +105,16 @@ Item {
   // popupOpen + open()/close()/toggle() let a parent panel know when the
   // dropdown owns keys (its embedded ListView is active) and suspend its
   // own keyCatcher so j/k inside the popup don't double-drive the panel
-  // cursor.
+  // cursor. A disabled dropdown (its own `enabled` or a parent's) closes its
+  // list and open() opens none: the list lives in the window's overlay, out
+  // of the disabled tree, and would still take keys and clicks.
   readonly property bool popupOpen: popup.opened
   function open() {
-    popup.open()
+    if (enabled)
+      popup.open()
   }
+  onEnabledChanged: if (!enabled)
+    popup.close()
   // Pick an option as the list does: show it and emit changed(), without
   // touching `value`.
   function select(v) {
@@ -130,7 +135,7 @@ Item {
     popup.close()
   }
   function toggle() {
-    popup.opened ? popup.close() : popup.open()
+    popup.opened ? popup.close() : open()
   }
 
   signal changed(string value)

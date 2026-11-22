@@ -266,6 +266,24 @@ ShellRoot {
         }
       }
     }
+    // A dropdown disabled while its list is open, itself or through its
+    // parent (disabledDropdown()); nothing lies under its list.
+    Item {
+      id: lockHolder
+      x: 560
+      y: 300
+      width: 160
+      height: 40
+      FoamyDropdown {
+        id: lockDropdown
+        width: 160
+        value: "x"
+        options: ["x", "y", "z"]
+        onChanged: function (v) {
+          shell.lockPicks = shell.lockPicks.concat([v])
+        }
+      }
+    }
     // An action whose tooltip is app text of any length (a folder's name).
     FoamyAction {
       id: tipAction
@@ -587,6 +605,51 @@ ShellRoot {
   property var retryCommits: []
   property string pasteMessage: ""
   property var textPasteMessages: []
+  property var lockPicks: []
+
+  // A dropdown disabled while its list is open (a settings page that starts
+  // saving) closes the list, and nothing there picks: a key or a click on the
+  // list would reach onChanged. A panel's open() on a disabled dropdown opens
+  // no list either.
+  function disabledDropdown(then) {
+    var trigger = lockDropdown.triggerItem
+    // Open the list, disable `target` (the dropdown or its parent), then
+    // `act` on where the list was.
+    function attempt(label, target, act, next) {
+      target.enabled = true
+      lockDropdown.open()
+      wait.waitFor(function () {
+        return lockDropdown.popupOpen
+      }, 3000, function (opened) {
+        check(opened, label + ": the dropdown's list opens")
+        target.enabled = false
+        wait.waitFor(function () {
+          return !lockDropdown.popupOpen
+        }, 3000, function (closed) {
+          check(closed, label + ": a dropdown disabled while its list is open closes the list")
+          act()
+          eq(shell.lockPicks, [], label + ": a dropdown disabled while its list is open takes no pick")
+          target.enabled = true
+          next()
+        })
+      })
+    }
+    attempt("keys, the dropdown disabled", lockDropdown, function () {
+      key(Qt.Key_Down)
+      key(Qt.Key_Return)
+    }, function () {
+      attempt("click, its parent disabled", lockHolder, function () {
+        // The list's first row, where it showed.
+        ev.mouseClick(trigger, 20, trigger.height + 12, Qt.LeftButton, Qt.NoModifier, -1)
+      }, function () {
+        lockDropdown.enabled = false
+        lockDropdown.open()
+        check(!lockDropdown.popupOpen, "open() on a disabled dropdown opens no list")
+        lockDropdown.enabled = true
+        then()
+      })
+    })
+  }
 
   // What the stand-in wl-paste does on the next paste (hostenv.clipboard_fakes()).
   Process {
@@ -1352,9 +1415,11 @@ ShellRoot {
       shell.eq(unfinished(), [], "every later check ran")
       // Last, so no other check types meanwhile.
       shell.refusedPastes(function () {
-        console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-        console.log("FOAMY DONE")
-        Qt.quit()
+        shell.disabledDropdown(function () {
+          console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+          console.log("FOAMY DONE")
+          Qt.quit()
+        })
       })
     })
   }

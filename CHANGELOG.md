@@ -166,6 +166,15 @@
   `FoamyPrefsQueue` save that `save()` refuses) calls the new
   `saveFailed()` on the failure (see Added).
   `tests/test_features.py`.
+- `FoamyDropdown` (since 0.1.0) closes its list when it is disabled (its
+  own `enabled` or a parent's), and `open()` and `toggle()` open no list
+  while it is disabled. The list lives in the window's overlay, outside
+  the disabled tree, so a list left open when the dropdown was disabled (a
+  settings page that starts saving, a panel busy with a drag) still took
+  Enter and a click, and the pick reached `onChanged`; a panel's `open()`
+  on a disabled dropdown opened a working list too. No plugin change is
+  needed; a plugin that refuses such a pick itself (foamy-monitor) can
+  drop that once it syncs. `tests/test_features.py`.
 - `FoamyAction`, `FoamyButton` and `FoamyPanelFooter` tooltips (the
   footer's `statusTooltip`): at most `Style.space(320)` wide, as the host
   caps its own long tooltips, and a few lines high. Before (since 0.1.0
