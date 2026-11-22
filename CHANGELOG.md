@@ -265,6 +265,16 @@
   Before, these ended in a traceback with exit 1 ("different"), or a filter
   type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
   ignored, as before. No plugin change is needed. `tests/test_compare.py`.
+- `preview/compare.py` (since 0.5.2) inflates no more image data than the
+  picture's rows need. Before, it inflated all of it before it checked
+  the length, and it trusted any width and height in the header, so a PNG
+  of a few hundred KiB could take gigabytes of memory. Now a PNG whose
+  image data runs on past its rows, or whose header declares more than a
+  4096 x 4096 RGBA picture (the kit's largest render, a 1920x1080 screen
+  at scale 2, is 3840 x 2160), is unreadable (exit 2) before the rest is
+  inflated; before, data past the rows was ignored. A stream that does
+  not end after the rows is unreadable, as before. No plugin change is
+  needed. README.md: Preview. `tests/test_compare.py`.
 
 ### Changed
 - `REVIEW.md`, section 6 "Test the behavior": it now says what a test must

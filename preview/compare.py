@@ -13,7 +13,8 @@ alone, and never drop alpha before comparing: a transparent corner and an
 opaque one are different pictures.
 
 Exit status: 0 identical, 1 different (or sizes differ, or a file is
-missing on one side), 2 unreadable input. Standard library only.
+missing on one side), 2 unreadable input (also a picture larger than 4096
+x 4096 RGBA). Standard library only.
 """
 
 import argparse
@@ -22,11 +23,21 @@ import sys
 import zlib
 from pathlib import Path
 
+# The most image data read_png() inflates: the rows of a 4096 x 4096 RGBA
+# picture. The kit's largest render, a 1920x1080 screen at scale 2, is 3840
+# x 2160. A header that declares more is refused before anything inflates.
+_MAX_IMAGE_DATA = 4096 * (4096 * 4 + 1)
+
 
 def image_data(path, data, height, stride):
-    """The inflated IDAT data of a PNG's bytes, holding `height` rows of
-    `stride` bytes and a filter byte each. Raises ValueError when a chunk
-    runs past the end of the file or the data is short."""
+    """The inflated IDAT data of a PNG's bytes: exactly `height` rows of
+    `stride` bytes and a filter byte each. Raises ValueError when the rows
+    are more than _MAX_IMAGE_DATA, a chunk runs past the end of the file,
+    or the data is short, runs on past the rows or its stream does not end."""
+    need = height * (stride + 1)
+    if need > _MAX_IMAGE_DATA:
+        size = f"{height} rows of {stride} bytes"
+        raise ValueError(f"{path}: the picture is larger than compare.py reads (4096 x 4096 RGBA): {size}")
     offset, chunks = 8, b""
     while offset < len(data):
         if offset + 8 > len(data):
@@ -41,9 +52,16 @@ def image_data(path, data, height, stride):
         if kind == b"IDAT":
             chunks += data[offset + 8 : offset + 8 + length]
         offset += 12 + length
-    raw = zlib.decompress(chunks)
-    if len(raw) < height * (stride + 1):
-        raise ValueError(f"{path}: image data is {len(raw)} bytes, {height} rows need {height * (stride + 1)}")
+    # At most one byte past the rows: a few KiB of zlib data can inflate to
+    # gigabytes. A whole stream is read to its end, so its checksum is checked.
+    inflater = zlib.decompressobj()
+    raw = inflater.decompress(chunks, need + 1)
+    if len(raw) > need:
+        raise ValueError(f"{path}: image data is longer than its {height} rows ({need} bytes)")
+    if len(raw) < need:
+        raise ValueError(f"{path}: image data is {len(raw)} bytes, {height} rows need {need}")
+    if not inflater.eof:
+        raise ValueError(f"{path}: image data is truncated: its zlib stream does not end")
     return raw
 
 

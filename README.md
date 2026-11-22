@@ -995,6 +995,8 @@ test's `XDG_RUNTIME_DIR` is too long. Read the runtime dir from
 
 Comparing screenshots: `preview/compare.py old.png new.png` (or two
 directories). It compares RGB and alpha; never compare one without the other.
+It reads pictures up to 4096 x 4096 RGBA and inflates no more image data than
+their rows need; a larger or damaged PNG is unreadable (exit 2).
 
 ### Test helpers for plugins
 

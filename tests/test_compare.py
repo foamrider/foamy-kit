@@ -2,6 +2,7 @@
 """preview/compare.py: RGB and alpha both count; invisible RGB under full
 transparency doesn't; RGB vs RGBA files; sizes; directories; exit codes."""
 
+import resource
 import shutil
 import struct
 import subprocess
@@ -203,6 +204,48 @@ def main():
                 damaged.returncode == 2 and "truncated chunk" in damaged.stderr,
                 f"exit {damaged.returncode}: {(damaged.stdout + damaged.stderr).strip()[-200:]}",
             )
+        # The rows' bytes are all there, but the zlib stream (its checksum)
+        # is cut off: still damaged.
+        (base / "damaged.png").write_bytes(
+            signature + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(whole)[:-4]) + chunk(b"IEND", b"")
+        )
+        damaged = run(p("a.png"), base / "damaged.png")
+        ok &= report(
+            "CLI: a PNG whose image data stream is cut short exits 2 and says why",
+            damaged.returncode == 2 and "unreadable" in damaged.stderr and "truncated" in damaged.stderr,
+            f"exit {damaged.returncode}: {(damaged.stdout + damaged.stderr).strip()[-200:]}",
+        )
+
+        # A few hundred KiB of zlib data can inflate to gigabytes. Each run
+        # gets 256 MiB of address space, less than the 512 MiB of zeros this
+        # stream inflates to: compare.py must refuse it without inflating it.
+        def limited(*args):
+            def cap():
+                resource.setrlimit(resource.RLIMIT_AS, (256 << 20, 256 << 20))
+
+            return subprocess.run(
+                [sys.executable, "-I", str(KIT_ROOT / "preview/compare.py"), *map(str, args)],
+                capture_output=True,
+                text=True,
+                preexec_fn=cap,
+            )
+
+        packer = zlib.compressobj()
+        zeros = b"".join(packer.compress(bytes(1 << 20)) for _ in range(512)) + packer.flush()
+        huge = struct.pack(">IIBBBBB", 65535, 65535, 8, 6, 0, 0, 0)
+        for name, png_header, reason in (
+            ("whose image data runs on past its rows", header, "longer than"),
+            ("whose header declares a picture larger than compare.py reads", huge, "larger than"),
+        ):
+            bomb = base / "bomb.png"
+            bomb.write_bytes(signature + chunk(b"IHDR", png_header) + chunk(b"IDAT", zeros) + chunk(b"IEND", b""))
+            result = limited(bomb, bomb)
+            ok &= report(
+                f"CLI: a PNG {name} exits 2 without inflating it",
+                result.returncode == 2 and "unreadable" in result.stderr and reason in result.stderr,
+                f"exit {result.returncode}: {(result.stdout + result.stderr).strip()[-200:]}",
+            )
+
         # Bytes after IEND are not part of the picture (decoders ignore them).
         (base / "trailing.png").write_bytes(p("a.png").read_bytes() + bytes(8))
         trailing = run(p("a.png"), base / "trailing.png")
