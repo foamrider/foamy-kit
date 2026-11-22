@@ -56,7 +56,10 @@
   as FoamyPrefsQueue's stderr), and sets `truncated` when it cut; `text`
   is read in the Process's `exited` handler, and `clear()` in its
   `started` handler begins each run. A cut never keeps half of a surrogate
-  pair. Quickshell decodes each pipe read on its own, so a character whose
+  pair, and after a cut the collector keeps no later output until
+  `clear()`, so `text` is always the start of the stream, even when the
+  cut backed off a pair and left room. Quickshell decodes each pipe read
+  on its own, so a character whose
   UTF-8 bytes arrive in two reads shows as U+FFFD (StdioCollector decodes
   the whole stream at once); ASCII and a stream that arrives in one read
   are exact. Plugin change: none needed; a plugin adopts it when it

@@ -1,13 +1,15 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "harness"
 import "plugin/kit"
 
 // FoamyBoundedCollector on a real child's stdout and stderr, read in the
 // Process's exited handler: a short stream kept whole; a stream far longer
 // than the bound and than a pipe (many reads) cut to the bound's start;
 // a long stream under the bound kept whole and in order across its reads;
-// a cut that would split a surrogate pair; clear() in the started handler.
+// a cut that would split a surrogate pair, also with the rest of the
+// stream in a later read; clear() in the started handler.
 ShellRoot {
   id: shell
   property int checks: 0
@@ -43,6 +45,9 @@ ShellRoot {
       child.then = null
       next(code)
     }
+  }
+  FoamyWait {
+    id: wait
   }
   // Runs `script` under bash, then `then(exitCode)` from the exited handler.
   function run(script, then) {
@@ -87,8 +92,26 @@ ShellRoot {
     out.limit = 4
     run("printf 'abc\\xf0\\x9f\\x98\\x80def'", function (code) {
       eq([code, out.text, out.truncated], [0, "abc", true], "a cut never keeps half of a surrogate pair")
+      pairThenMore()
+    })
+  }
+
+  // The same cut, with the rest of the stream in a later read: the child
+  // prints it only once the first read was cut (a line on its stdin), and
+  // the text stays the start of the stream.
+  function pairThenMore() {
+    child.stdinEnabled = true
+    run("printf 'abc\\xf0\\x9f\\x98\\x80'; read -r _; printf 'def'", function (code) {
+      eq([code, out.text, out.truncated], [0, "abc", true], "after a cut a later read adds nothing: the text stays the start of the stream")
+      child.stdinEnabled = false
       out.limit = 4096
       cleared()
+    })
+    wait.waitFor(function () {
+      return out.truncated && out.text === "abc"
+    }, 5000, function (cut) {
+      check(cut, "the first read is cut before the pair")
+      child.write("go\n")
     })
   }
 
