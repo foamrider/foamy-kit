@@ -4,7 +4,10 @@ old KeyboardPanel fork, bare Color), the working tree the kit demo. Before
 renders from `git archive dev` (the repo is not touched) on 4.5; a clipped
 pre-kit fork, a dev tree that won't render and a missing ref are labelled."""
 
+import contextlib
+import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -121,7 +124,9 @@ def main():
 
         repo = make_repo(base / "b", fail_on_45=True)
         out = base / "out-b"
-        lines, label = render.trio(repo, out, dev_ref="dev", states=["devices"])
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            lines, label = render.trio(repo, out, dev_ref="dev", states=["devices"])
         ok &= report(
             "dev that won't render on 4.5 is labelled, After still renders",
             label == "Before (dev did not render)"
@@ -129,6 +134,18 @@ def main():
             and (out / "devices-after-4.5.png").is_file()
             and "| devices | — |" in lines[2],
             label,
+        )
+        # The failed render names its log; the trio's work dir is gone by
+        # then, so the log must be in the output dir.
+        logged = re.search(r"log at (\S+)", errors.getvalue())
+        log = Path(logged.group(1)) if logged else None
+        ok &= report(
+            "the failed Before render's log path is in the output dir and still readable",
+            log is not None
+            and log.parent == out
+            and log.is_file()
+            and "this dev tree does not render on 4.5" in log.read_text(),
+            errors.getvalue().strip()[-300:],
         )
 
         lines, label = render.trio(repo, base / "out-c", dev_ref="no-such-ref", states=["devices"])
