@@ -93,6 +93,27 @@ ShellRoot {
         label: "Thursday"
         value: "08:00-16:00"
       }
+      // A save that fails without changing the value (failedSaves()).
+      FoamyScheduleDay {
+        id: friday
+        width: parent.width
+        label: "Friday"
+        value: "08:00-16:00"
+        onChanged: function (range) {
+          shell.changes = shell.changes.concat(["fri " + range])
+        }
+      }
+      // Saves through a queue whose schema refuses a start after 08:59.
+      FoamyScheduleDay {
+        id: saturday
+        width: parent.width
+        label: "Saturday"
+        value: weekend.value("sat")
+        onChanged: function (range) {
+          shell.changes = shell.changes.concat(["sat " + range])
+          weekend.save("sat", range)
+        }
+      }
     }
     Item {
       TestEvent {
@@ -103,6 +124,29 @@ ShellRoot {
 
   FoamyWait {
     id: wait
+  }
+  FoamyPrefsQueue {
+    id: weekend
+    bar: QtObject {
+      property QtObject shell: QtObject {
+        function updateEntryInline(id, settings) {
+          return true
+        }
+      }
+    }
+    moduleName: "foamy.schedule"
+    fields: [
+      {
+        key: "sat",
+        type: "string",
+        pattern: "^(0[0-8]:[0-5][0-9]-[0-9][0-9]:[0-9][0-9])?$",
+        defaultValue: ""
+      }
+    ]
+    settings: ({
+        id: "foamy.schedule",
+        sat: "08:00-16:00"
+      })
   }
   // What the stand-in wl-paste does on the next paste (hostenv.clipboard_fakes()).
   Process {
@@ -202,6 +246,61 @@ ShellRoot {
     pastes()
   }
 
+  // A save that fails without changing `value`: saveFailed() shows the
+  // value again and lets the same range be sent again, but keeps a newer
+  // draft. A row linked to the queue it saves through hears the queue's
+  // refusal of its key by itself.
+  function failedSaves() {
+    var from = find(friday, "fromTime"), to = find(friday, "toTime")
+    from.focusInput()
+    from.text = "09:00"
+    var before = changes.length
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["fri 09:00-16:00"], "Enter sends the range")
+    friday.saveFailed()
+    eq([from.text, to.text], ["08:00", "16:00"], "saveFailed() shows the value again")
+    from.text = "09:00"
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["fri 09:00-16:00", "fri 09:00-16:00"], "and the same range is sent again")
+    // A newer draft (typed after the commit) stays.
+    ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+    ev.keyClick(Qt.Key_Backspace, Qt.NoModifier, -1)
+    friday.saveFailed()
+    eq(from.text, "09:0", "a draft typed after the commit stays")
+    friday.value = "07:00-16:00"
+    to.focusInput()
+
+    saturday.queue = weekend
+    saturday.queueKey = "sat"
+    var satFrom = find(saturday, "fromTime")
+    satFrom.focusInput()
+    satFrom.text = "09:30"
+    before = changes.length
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq([changes.slice(before), weekend.error], [["sat 09:30-16:00"], "That value isn't allowed."], "the queue refuses the range")
+    eq(satFrom.text, "08:00", "the linked row shows the value again at once")
+    satFrom.text = "09:30"
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["sat 09:30-16:00", "sat 09:30-16:00"], "and sends the range again")
+    satFrom.text = "08:30"
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq([weekend.value("sat"), satFrom.text], ["08:30-16:00", "08:30"], "a range the schema takes is saved")
+    // A refusal the queue reports later, as for a queued save refused as it
+    // runs: Friday's caller saves nothing, so `value` never moves.
+    friday.queue = weekend
+    friday.queueKey = "fri"
+    from.focusInput()
+    from.text = "06:30"
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    weekend.failed("other", "06:30-16:00", "refused")
+    eq(from.text, "06:30", "a refusal of another key leaves the row")
+    weekend.failed("fri", "06:30-16:00", "refused")
+    eq(from.text, "07:00", "a later refusal of the range the row sent shows the value again")
+    console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
+    console.log("FOAMY DONE")
+    Qt.quit()
+  }
+
   // A refused paste into a time field says why under the row (the field
   // itself draws no message), until that field's next edit.
   function pastes() {
@@ -218,9 +317,7 @@ ShellRoot {
             ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
             ev.keyClick(Qt.Key_Backspace, Qt.NoModifier, -1)
             check(line !== null && !line.visible && thuTo.text === "16:0", "that field's next edit clears the message: " + (line ? [line.visible, thuTo.text] : "no line"))
-            console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
-            console.log("FOAMY DONE")
-            Qt.quit()
+            failedSaves()
           })
         })
       })

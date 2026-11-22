@@ -91,6 +91,18 @@
   its own `saveFailed()` call (foamy-power, foamy-monitor and
   foamy-notification-center adopt it at their next sync). DESIGN.md:
   Choices. `tests/test_features.py`.
+- `FoamyScheduleDay.saveFailed()`, and the same `queue`/`queueKey` link
+  as FoamyDropdown. Before, after a save that failed without changing
+  `value`, the time fields kept the unsaved range and Enter did not send
+  it again (the row had sent it already). `saveFailed()` shows `value`
+  again and lets the same range be sent again, as
+  `FoamyNumberField.saveFailed()` does; a time field edited since the
+  range was sent keeps its newer draft. A row linked to the
+  FoamyPrefsQueue it saves through calls it itself when the queue refuses
+  its key: at once when `save()` refuses the range, or later for a range
+  the row sent that the queue refuses as it runs. Plugin change: none
+  needed; foamy-train and foamy-zendesk may link their rows
+  (`queue: prefs; queueKey: modelData`). `tests/test_schedule.py`.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a

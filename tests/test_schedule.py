@@ -15,7 +15,8 @@ from common import harness, run_shell, synced_demo  # noqa: E402
 
 def main():
     harness.install_signal_cleanup()
-    plugin = synced_demo(["FoamySchedule"])
+    # FoamyPrefs: a row linked to the FoamyPrefsQueue it saves through.
+    plugin = synced_demo(["FoamySchedule", "FoamyPrefs"])
     results = [
         run_shell("Schedule.qml", host, plugin, host, clipboard=True)
         for host in harness.available_hosts(what="schedule")
