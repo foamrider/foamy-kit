@@ -10,14 +10,19 @@ import qs.Ui
 // panel's mirroring), and an optional label delegate.
 //
 // `value` belongs to the caller: bind it to the setting. Selecting an option
-// emits changed(value) and never assigns `value` (upstream does, which
-// destroys the caller's binding, and since popup bodies are kept between
-// opens, later changes to the setting would stop showing). Until the
+// emits changed(value, serial) and never assigns `value` (upstream does,
+// which destroys the caller's binding, and since popup bodies are kept
+// between opens, later changes to the setting would stop showing). Each
+// pick gets a new `serial` (a handler may take `value` only). Until the
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
 // as soon as `value` changes, the list is reopened, saveFailed() is called,
 // or after pickHoldMs. When the save fails without changing `value`, call
-// saveFailed() so the saved value shows again at once. With a
-// FoamyPrefsQueue that is a save it refuses before any value is pending (a
+// saveFailed() so the saved value shows again at once. A caller whose saves
+// end one by one (quick picks, each its own save) passes the pick's serial,
+// saveFailed(serial): only that pick gives way, so a newer pick, even of
+// the same value, stays on show while its own save runs.
+//   onChanged: function (v, serial) { service.setMode(v, function (ok) { if (!ok) modeDropdown.saveFailed(serial) }) }
+// With a FoamyPrefsQueue that is a save it refuses before any value is pending (a
 // value the schema rejects, a kept invalid stored array, a widget with no
 // bar entry): save() returns false.
 //   onChanged: function (v) { if (!prefs.save("mode", v)) modeDropdown.saveFailed() }
@@ -116,21 +121,31 @@ Item {
   onEnabledChanged: if (!enabled)
     popup.close()
   // Pick an option as the list does: show it and emit changed(), without
-  // touching `value`.
+  // touching `value`. Each pick gets the next serial.
   function select(v) {
     v = String(v)
+    var serial = ++_pickCount
     if (v !== value) {
       pickedValue = v
       pickHeld = true
+      _heldSerial = serial
       pickHold.restart()
     }
-    changed(v)
+    changed(v, serial)
   }
-  // Tell the dropdown its last pick was not saved: it shows `value` again.
-  function saveFailed() {
+  // Tell the dropdown a pick was not saved: it shows `value` again. With the
+  // serial changed() passed, only while that pick is on show (a newer pick,
+  // perhaps of the same value, waits on its own save); without one, the
+  // pick on show goes, whichever it is.
+  function saveFailed(serial) {
+    if (serial !== undefined && serial !== _heldSerial)
+      return
     pickHold.stop()
     pickHeld = false
   }
+  // The serial of the newest pick, and of the pick on show.
+  property int _pickCount: 0
+  property int _heldSerial: 0
   function close() {
     popup.close()
   }
@@ -138,7 +153,7 @@ Item {
     popup.opened ? popup.close() : open()
   }
 
-  signal changed(string value)
+  signal changed(string value, int serial)
   signal hovered(bool isHovered)
 
   function optionValue(o) {

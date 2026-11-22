@@ -265,6 +265,16 @@ ShellRoot {
           shell.dropdownChanges = shell.dropdownChanges.concat([v])
         }
       }
+      // Quick picks whose saves end one by one (serialPicks()).
+      FoamyDropdown {
+        id: serialDropdown
+        width: 200
+        value: "c"
+        options: ["a", "b", "c"]
+        onChanged: function (v, serial) {
+          shell.serialChanges = shell.serialChanges.concat([[v, serial]])
+        }
+      }
     }
     // A dropdown disabled while its list is open, itself or through its
     // parent (disabledDropdown()); nothing lies under its list.
@@ -606,6 +616,32 @@ ShellRoot {
   property string pasteMessage: ""
   property var textPasteMessages: []
   property var lockPicks: []
+  property var serialChanges: []
+
+  // Picks A, B, A, each saved on its own: changed() names each pick with a
+  // serial, and saveFailed(serial) drops only that pick, so the refusal of
+  // the first A leaves the second A on show (its value alone can't tell).
+  function serialPicks() {
+    serialDropdown.select("a")
+    serialDropdown.select("b")
+    serialDropdown.select("a")
+    var serials = serialChanges.map(function (change) {
+      return change[1]
+    })
+    eq(serialChanges.map(function (change) {
+      return change[0]
+    }), ["a", "b", "a"], "each pick emits changed() once")
+    check(serials.length === 3 && serials[0] < serials[1] && serials[1] < serials[2], "changed() gives each pick a newer serial: " + JSON.stringify(serials))
+    serialDropdown.saveFailed(serials[0])
+    eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["a", true], "a refusal of the first A leaves the second A on show")
+    serialDropdown.saveFailed(serials[1])
+    eq(serialDropdown.shownValue, "a", "a refusal of B, no longer on show, changes nothing")
+    serialDropdown.saveFailed(serials[2])
+    eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], "a refusal of the pick on show shows the saved value again")
+    serialDropdown.select("b")
+    serialDropdown.saveFailed()
+    eq(serialDropdown.shownValue, "c", "saveFailed() without a serial still drops whatever pick is on show")
+  }
 
   // A dropdown disabled while its list is open (a settings page that starts
   // saving) closes the list, and nothing there picks: a key or a click on the
@@ -798,6 +834,7 @@ ShellRoot {
     // a save that never lands
     dropdown.select("a")
     dropdownRevert.start()
+    serialPicks()
 
     // --- FoamyAction: a long tooltip wraps in a capped width ---------------------------
     wait.waitFor(function () {

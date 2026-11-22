@@ -64,6 +64,18 @@
   <plugin> --add FoamyBoundedCollector`, and treats a `truncated` reply as
   a failure, never as the whole reply. README.md: Components.
   `tests/test_collector.py`.
+- `FoamyDropdown` pick serials: `changed(value, serial)` gives each pick a
+  new serial, and `saveFailed(serial)` drops the pick on show only when it
+  is that pick. Before, `saveFailed()` named no pick, so after quick picks
+  a caller whose saves end one by one could not drop only the one that
+  failed: a refusal of the first of the picks A, B, A dropped the second
+  A, and comparing values (foamy-power, foamy-monitor and
+  foamy-notification-center check `pickedValue`) takes a repeated value
+  for the refused one. `saveFailed()` without a serial works as before,
+  and a handler that takes only `value` needs no change. Plugin change:
+  none needed; a plugin that ends a pick on its own failed save may pass
+  the serial instead of comparing `pickedValue`. DESIGN.md: Choices.
+  `tests/test_features.py`.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
