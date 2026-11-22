@@ -210,6 +210,18 @@
   type 5-255 was decoded as no filter. Bytes after the `IEND` chunk are
   ignored, as before. No plugin change is needed. `tests/test_compare.py`.
 
+### Changed
+- `REVIEW.md`, section 6 "Test the behavior": it now says what a test must
+  protect, asks that every new or changed test is seen failing with the
+  behavior broken, lists the tests not to add (source text as a stand-in
+  for behavior, a mirror of the implementation, a repeat of a kit test in a
+  plugin, a test that cannot fail), and says that a new test file runs in
+  `tests/suite.sh` in the same change. The review block that sync keeps in
+  each plugin's `AGENTS.md` gains one sentence that sends an agent to that
+  section before it adds or changes a test. `check.sh` and
+  `tests/kit-check.sh` expect the new block after the next sync. No plugin
+  code changes.
+
 ### Upgrading
 - `kit/rust` changed (the four `foamy_helper` items above): a plugin with a
   native helper rebuilds it after the sync (`kit/native/build-native.sh .`)
@@ -220,6 +232,8 @@
   save fails (see Added). The text field items above ask a plugin to act
   only in the cases they name (a hidden field shown again, panel keys
   right after a field hides).
+- The sync replaces `REVIEW.md` and the review block in `AGENTS.md` (see
+  Changed). Nothing else in a plugin changes for it.
 
 ## 0.13.0 — 2026-11-19
 
