@@ -15,8 +15,10 @@ import QtQuick
 // draft. Enter or focus-out: commits a valid, changed draft once (trimmed
 // unless `trim: false`); invalid → `validate`'s message, Enter keeps the
 // draft, focus-out restores `value`. Hiding the field is a focus-out; shown
-// again, it has no error. Escape restores `value` and is consumed (the page
-// stays).
+// again, it has no error. A destroyed field commits nothing: a page that a
+// Loader unloads loses its draft. Keep a settings page loaded while it can
+// show again (FoamyPopup keeps its body), or move the focus away before it
+// unloads. Escape restores `value` and is consumed (the page stays).
 Item {
   id: root
 

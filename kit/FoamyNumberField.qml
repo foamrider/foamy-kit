@@ -20,7 +20,10 @@ import QtQuick.Layouts
 //   committed(v) once); an unchanged draft just goes back to showing `value`.
 //   An invalid draft shows `invalidText`; Enter keeps the draft to fix,
 //   focus-out restores `value`. Hiding the field is a focus-out; shown
-//   again, it has no error.
+//   again, it has no error. A destroyed field commits nothing: a page that
+//   a Loader unloads loses its draft. Keep a settings page loaded while it
+//   can show again (FoamyPopup keeps its body), or move the focus away
+//   before it unloads.
 // - Escape: restores `value` and stays on the page (the key is consumed, so
 //   FoamySettingsPage doesn't go back). Up/Down step the
 //   draft by stepSize within from..to.
