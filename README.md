@@ -71,7 +71,10 @@ Each file's header documents its API. Dependencies are in `kit/components.json`.
 ```
 
 Sync writes `kit/` (components, a generated `kit/qmldir` registering the
-singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the
+singletons, license notices, and `kit/i18n-texts.json`, copied whole: the
+English texts kit components hand the plugin to translate, each with the
+component that hands it out and where it shows up, for the plugin's own
+catalog tests), `tests/kit-check.sh`, root `REVIEW.md`, the
 [tooling](#tooling) (`tests/validate.sh`, `kit/tooling/validate.py`,
 `mise.toml`, `ruff.toml`, `.oxlintrc.json`, `.qmlformat.ini`,
 `.github/workflows/checks.yml`), the review block in `AGENTS.md`, and
@@ -141,7 +144,12 @@ Fails when plugins are on different kit versions, a stamped file, notice or
 `REVIEW.md` was edited, the `AGENTS.md` review block is missing or stale, a
 native helper doesn't match its pin ([Native helpers](#native-helpers)), a
 published plugin is missing from the plugin list in foamy-kit's `AGENTS.md`
-(not checked with `--lint-only`), or the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
+(not checked with `--lint-only`), a catalog (`i18n/*.json`) lacks a text, or
+has it empty, that a kit component the plugin carries hands it to translate
+(`kit/i18n-texts.json`: the paste failures, the helper's unavailable text,
+the settings save errors; the message names the catalog, the text and the
+component; not checked with `--lint-only`), or the design lint finds a
+violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
 
 ## Tooling

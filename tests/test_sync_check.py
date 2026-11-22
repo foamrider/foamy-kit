@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """sync.sh / check.sh / design lint, on throwaway plugin copies in /tmp."""
 
+import json
 import os
 import re
 import shutil
@@ -428,6 +429,55 @@ def component_reference_tests():
     return report("components name only kit types their deps sync", not missing, "; ".join(missing))
 
 
+def catalog_tests(base):
+    """The English texts kit components hand a plugin to translate
+    (kit/i18n-texts.json): sync copies the list, and check.sh requires the
+    texts of the components the plugin carries in each of its catalogs
+    (i18n/*.json), naming a missing one."""
+    ok = True
+    plugin = base / "catalogs"
+    shutil.copytree(FIXTURES / "demo-plugin", plugin)
+    sh(SYNC, str(plugin))
+    listed = json.loads((KIT_ROOT / "kit/i18n-texts.json").read_text())
+    ok &= report(
+        "sync copies kit/i18n-texts.json as it is, and the lock holds it",
+        (plugin / "kit/i18n-texts.json").read_bytes() == (KIT_ROOT / "kit/i18n-texts.json").read_bytes()
+        and "kit/i18n-texts.json" in foamykit.read_lock(plugin)["files"],
+    )
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    native = [e["text"] for e in listed if e["component"] == "FoamyNative"]
+    english = json.loads((plugin / "i18n/en.json").read_text())
+    ok &= report(
+        "check.sh passes a plugin whose catalogs hold every text its components hand it "
+        "(not FoamyNative's, which it does not carry)",
+        code == 0 and native and not any(text in english for text in native),
+        out.strip(),
+    )
+    catalog = plugin / "i18n/da.json"
+    entries = json.loads(catalog.read_text())
+    text = "Clipboard paste timed out. Copy the text again."
+    del entries[text]
+    entries["Couldn't save the setting."] = ""
+    catalog.write_text(json.dumps(entries, ensure_ascii=False))
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    ok &= report(
+        "check.sh fails a catalog that lacks a text or leaves it empty, naming the text and its component",
+        code != 0
+        and f'i18n/da.json lacks "{text}", which FoamyClipboard hands the plugin to translate' in out
+        and 'i18n/da.json lacks "Couldn\'t save the setting.", which FoamyPrefs' in out
+        and out.count(" lacks ") == 2,
+        out.strip(),
+    )
+    code, out = sh(CHECK, "--lint-only", str(plugin))
+    ok &= report("check.sh --lint-only does not check the catalogs", code == 0, out.strip())
+    catalog.write_text("{ not json")
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    ok &= report(
+        "check.sh names a catalog that is not JSON", code != 0 and "i18n/da.json is not a readable JSON catalog" in out
+    )
+    return ok
+
+
 def workflow_job_blocks(lines):
     """Job name -> its lines, for the jobs: block of a workflow."""
     jobs, name = {}, None
@@ -551,6 +601,7 @@ def main():
                 "FoamyStyle.qml",
                 "SafeTextField.qml",
                 "clipboard.sh",
+                "i18n-texts.json",
                 "node-loader.cjs",
                 "qmldir",
                 "tooling",
@@ -595,7 +646,7 @@ def main():
     ok &= report(
         "FoamyClipboard syncs its reader and clipboard.sh alone",
         code == 0
-        and files == ["FoamyClipboard.qml", "clipboard.sh", "qmldir", "tooling"]
+        and files == ["FoamyClipboard.qml", "clipboard.sh", "i18n-texts.json", "qmldir", "tooling"]
         and (paste_only / "kit/qmldir").read_text().splitlines()[1:] == ["FoamyClipboard 1.0 FoamyClipboard.qml"]
         and os.access(paste_only / "kit/clipboard.sh", os.X_OK),
         f"{code} {files} {out.strip()}",
@@ -805,7 +856,8 @@ def main():
     files = sorted(p.name for p in (a / "kit").iterdir())
     ok &= report(
         "narrowing the components removes unneeded files",
-        code == 0 and files == ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs", "qmldir", "tooling"],
+        code == 0
+        and files == ["FoamyI18n.qml", "FoamyI18nText.js", "i18n-texts.json", "node-loader.cjs", "qmldir", "tooling"],
         f"{files}",
     )
     code, out = sh(SYNC, str(a), "--add", "FoamyPeerIpc")
@@ -908,6 +960,9 @@ def main():
 
     # 8. The plugin list in foamy-kit's AGENTS.md (the home repository's map).
     ok &= plugin_map_tests(base)
+
+    # 8b. The kit texts each plugin catalog holds (kit/i18n-texts.json).
+    ok &= catalog_tests(base)
 
     # 9. Design lint.
     code, out = sh(

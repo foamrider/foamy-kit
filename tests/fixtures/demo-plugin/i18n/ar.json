@@ -1,5 +1,12 @@
 {
   "Devices": "الأجهزة",
   "%1 devices": { "zero": "لا أجهزة", "one": "جهاز واحد", "two": "جهازان", "few": "%1 أجهزة", "many": "%1 جهازًا", "other": "%1 جهاز" },
-  "Settings": "الإعدادات"
+  "Settings": "الإعدادات",
+  "Clipboard paste timed out. Copy the text again.": "انتهت مهلة اللصق من الحافظة. انسخ النص مرة أخرى.",
+  "Clipboard text is too large or contains invalid characters.": "نص الحافظة كبير جدًا أو يحتوي على أحرف غير صالحة.",
+  "Could not paste clipboard text. Copy plain text and try again.": "تعذّر لصق نص الحافظة. انسخ نصًا عاديًا وحاول مرة أخرى.",
+  "That value isn't allowed.": "هذه القيمة غير مسموح بها.",
+  "Settings can't be saved: this widget has no bar entry.": "لا يمكن حفظ الإعدادات: ليس لهذه الأداة إدخال في الشريط.",
+  "The saved list in shell.json isn't valid, so it wasn't replaced.": "القائمة المحفوظة في shell.json غير صالحة، لذلك لم تُستبدل.",
+  "Couldn't save the setting.": "تعذّر حفظ الإعداد."
 }

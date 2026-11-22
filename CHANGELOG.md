@@ -26,6 +26,28 @@
   plugin change. README.md: Tooling. `tests/test_sync_check.py` now checks
   this workflow too (actions pinned by commit, read-only by default) and
   fails any write permission outside verify-native.yml's attest job.
+- `kit/i18n-texts.json`: one list of the English texts kit components hand
+  a plugin to translate, each with the component that hands it out and
+  where it shows up: FoamyClipboard's three paste failures (also
+  `SafeTextField.pasteError` and `SafeTextArea.pasteError`), FoamyNative's
+  `UNAVAILABLE_TEXT`, and FoamyPrefs' four save errors
+  (`FoamyPrefsQueue.error`). Sync copies it into every plugin as it is
+  (hashed whole, like `REVIEW.md`), so a plugin's catalog test reads it
+  instead of keeping its own copy of the texts. `check.sh` (and so the
+  `design-lint` check of `tests/validate.sh`) now fails a plugin whose
+  catalog (`i18n/*.json`) lacks a text of a component the plugin carries,
+  or has it empty, naming the catalog, the text and the component
+  (`i18n/no.json lacks "…", which FoamyClipboard hands the plugin to
+  translate (kit/i18n-texts.json)`); `--lint-only` skips it, and a plugin
+  without catalogs needs none. The kit's own labels (Settings, Back,
+  Retry…) and the context-menu labels a field passes to `translate` are
+  not in the list. Plugin change: add the missing texts to every catalog
+  (see Upgrading); foamy-zendesk (`tests/i18n.test.cjs`), foamy-teams and
+  foamy-github (`tests/runtime-panel.py`) can read the list instead of
+  their copies. README.md: Sync, Check; DESIGN.md: Copy.
+  `tests/test_sync_check.py`; the list is tied to the kit's texts in
+  `tests/i18n.test.cjs`, `tests/qml/Clipboard.qml` and
+  `tests/qml/Lifecycle.qml`.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
@@ -82,6 +104,18 @@
   .`) and commits the new binaries and `native.pin`; until then `check.sh`,
   `tests/kit-check.sh` and `--verify` report the binaries stale.
   `foamy-helper`'s version stays 0.1.2, so no plugin `Cargo.lock` changes.
+- `check.sh` asks each catalog for the texts in `kit/i18n-texts.json` of
+  the components a plugin carries (see Added). On the plugins' dev
+  branches (kit 0.13.1) it fails 13 plugins until they add them to
+  `en.json` and `no.json`: "The saved list in shell.json isn't valid, so it
+  wasn't replaced." (audio, bolt, clock, media, menu, monitor,
+  notification-center, power, syncthing, train, vitals, weather); the
+  three paste failures (audio, monitor, power, which carry the text field
+  through FoamySettings without showing one); "Settings can't be saved:
+  this widget has no bar entry." (menu, monitor, notification-center);
+  "That value isn't allowed." and "Couldn't save the setting." (monitor,
+  notification-center); FoamyNative's "This plugin's helper isn't
+  available for this CPU." (lock).
 
 ## 0.13.1 — 2026-11-22
 

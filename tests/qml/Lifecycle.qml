@@ -231,6 +231,11 @@ ShellRoot {
         eq(events, [["failed", "a", "boom", "fake failure\n".length]], "failed signal (stderr kept)")
         eq(q.value("a"), "one", "a failed value rolls back to the value saved before it")
         eq(q.error, "Couldn't save the setting.", "error message")
+        // check.sh asks every plugin catalog for the texts this list holds.
+        var listed = JSON.parse(lines(decodeURIComponent(String(Qt.resolvedUrl("plugin/kit/i18n-texts.json")).replace(/^file:\/\//, ""))).join("\n"))
+        check(listed.some(function (entry) {
+          return entry.component === "FoamyPrefs" && entry.text === q.error
+        }), "kit/i18n-texts.json lists the save error for FoamyPrefs")
         check(q.canRetry, "retryable")
 
         // --- the command can't start: no exited(), only running -> false ---------------

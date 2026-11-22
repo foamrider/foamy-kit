@@ -159,6 +159,14 @@ ShellRoot {
     return JSON.stringify(a) === JSON.stringify(b)
   }
   function finish() {
+    // The failure texts the cases above saw are the ones kit/i18n-texts.json
+    // lists for FoamyClipboard: check.sh asks every plugin catalog for them.
+    var listed = JSON.parse(readFile(decodeURIComponent(String(Qt.resolvedUrl("plugin/kit/i18n-texts.json")).replace(/^file:\/\//, "")))).filter(function (entry) {
+      return entry.component === "FoamyClipboard"
+    }).map(function (entry) {
+      return entry.text
+    })
+    check(same(listed.sort(), [shell.tooLarge, shell.couldNot, shell.timedOut].sort()), "kit/i18n-texts.json lists FoamyClipboard's failure texts: " + JSON.stringify(listed))
     console.log("FOAMY RESULT " + shell.checks + " checks, " + shell.failures + " failed")
     console.log("FOAMY DONE")
     Qt.quit()

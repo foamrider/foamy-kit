@@ -51,7 +51,7 @@ while read -r hash rel; do
     fi
   done
   if ((stamp_line == 0)); then
-    # Notices and REVIEW.md are copied verbatim, without a stamp line.
+    # Notices, REVIEW.md and kit/i18n-texts.json are copied verbatim, without a stamp line.
     actual=$(sha256sum <"$file" | cut -d' ' -f1)
     [[ $actual == "$hash" ]] || fail "$rel was edited (hash differs from foamy-kit.lock)"
     continue

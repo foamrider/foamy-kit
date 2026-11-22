@@ -40,4 +40,26 @@ test("translator: language, then English, then the key", () => {
   assert.strictEqual(english.tn("%1 devices", 1), "1 device");
 });
 
+// kit/i18n-texts.json: the texts kit components hand a plugin to translate,
+// which check.sh requires in the plugin's catalogs. The constants the kit
+// exports for them are listed under their component (the paste and save
+// failures are tied to it in tests/qml/Clipboard.qml and Lifecycle.qml).
+test("kit/i18n-texts.json lists each text once, under a kit component", () => {
+  const listed = require("../kit/i18n-texts.json");
+  const components = require("../kit/components.json");
+  const load = require("../kit/node-loader.cjs").load;
+  for (const entry of listed) {
+    assert.ok(Object.hasOwn(components, entry.component), `a kit component: ${entry.component}`);
+    assert.ok(typeof entry.text === "string" && entry.text !== "", `a text: ${JSON.stringify(entry)}`);
+    assert.ok(typeof entry.source === "string" && entry.source !== "", `a source: ${JSON.stringify(entry)}`);
+  }
+  const texts = listed.map((entry) => entry.text);
+  assert.deepStrictEqual(texts.filter((text, i) => texts.indexOf(text) !== i), [], "no text twice");
+  const under = (component) => listed.filter((entry) => entry.component === component).map((entry) => entry.text);
+  assert.ok(under("FoamyNative").includes(load("FoamyNative").UNAVAILABLE_TEXT), "FoamyNative.UNAVAILABLE_TEXT");
+  const Prefs = load("FoamyPrefs");
+  for (const text of [Prefs.NOT_ALLOWED, Prefs.NO_ENTRY, Prefs.STORED_INVALID])
+    assert.ok(under("FoamyPrefs").includes(text), `FoamyPrefs: ${text}`);
+});
+
 console.log(`PASS FoamyI18nText: ${passed} tests`);

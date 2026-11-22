@@ -317,7 +317,11 @@ information" (the (i) button), "Updated …" in footers. Intervals: "Refresh eve
 like "30 seconds", "5 minutes". Bar options: "Show … in the bar". Counts:
 `FoamyI18n.tn("%1 devices", n)` with a plural catalog entry, never
 `n + " " + t("devices")`. Numbers through `FoamyI18n.number()` or `%1` holes.
-Dates with `Qt.locale(FoamyI18n.formatLocale)`.
+Dates with `Qt.locale(FoamyI18n.formatLocale)`. The English texts kit
+components hand the plugin to translate (paste failures, the helper's
+unavailable text, settings save errors) are listed in `kit/i18n-texts.json`;
+every catalog holds those of the components the plugin carries (`check.sh`
+fails without them).
 
 ## Lint
 
