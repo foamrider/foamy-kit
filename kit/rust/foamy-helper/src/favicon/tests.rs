@@ -819,7 +819,7 @@ fn xdg_dirs_must_be_absolute() {
             before,
             "{row:?}: nothing is written in the working directory"
         );
-        if reply == &found {
+        if reply == found {
             assert_eq!(fs::read(cached.join(name)).unwrap(), icon, "{row:?}");
         }
     }
