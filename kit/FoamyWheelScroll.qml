@@ -151,6 +151,16 @@ QtObject {
     _place(item, margin)
   }
 
+  // The content grows only after the followed item has (a Column lays out
+  // later), so a place on the item's height alone stops short at the old
+  // end of the content.
+  property Connections _followContent: Connections {
+    target: root._following ? root.target : null
+    function onContentHeightChanged() {
+      root._refollow()
+    }
+  }
+
   property Timer _followTimer: Timer {
     id: followTimer
     interval: root.followMs

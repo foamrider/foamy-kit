@@ -41,7 +41,7 @@ ShellRoot {
   FloatingWindow {
     id: win
     implicitWidth: 600
-    implicitHeight: 200
+    implicitHeight: 240
     Column {
       width: 560
       spacing: 8
@@ -72,6 +72,16 @@ ShellRoot {
         // Does not reflect: the row must leave its value alone.
         onChanged: function (range) {
           shell.changes = shell.changes.concat(["tue " + range])
+        }
+      }
+      FoamyScheduleDay {
+        id: wednesday
+        width: parent.width
+        label: "Wednesday"
+        value: "08:00-16:00"
+        // Does not reflect either: its value catches up later, if at all.
+        onChanged: function (range) {
+          shell.changes = shell.changes.concat(["wed " + range])
         }
       }
     }
@@ -143,6 +153,23 @@ ShellRoot {
     eq(changes.slice(before), ["tue 22:00-02:00"], "a click turns a day off back on with its last range")
     check(!find(tuesday, "fromTime").enabled, "a day off has its fields disabled")
     eq(tuesday.value, "", "the row never assigns its value")
+
+    // A caller whose value has not caught up: the focus loss after Enter
+    // must not send the same range again; an edit may send it again.
+    var wedFrom = find(wednesday, "fromTime")
+    wedFrom.focusInput()
+    wedFrom.text = "09:00"
+    before = changes.length
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["wed 09:00-16:00"], "Enter, then focus-out: the range is sent once")
+    wedFrom.focusInput()
+    ev.keyClick(Qt.Key_End, Qt.NoModifier, -1)
+    ev.keyClick(Qt.Key_Backspace, Qt.NoModifier, -1)
+    ev.keyClick(Qt.Key_0, Qt.NoModifier, -1)
+    eq(wedFrom.text, "09:00", "typing gives the same text again")
+    ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+    eq(changes.slice(before), ["wed 09:00-16:00", "wed 09:00-16:00"], "after an edit, Enter sends the same range again")
 
     console.log("FOAMY RESULT checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")

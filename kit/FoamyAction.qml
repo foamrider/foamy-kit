@@ -108,6 +108,10 @@ Rectangle {
 
   PanelToolTip {
     visible: mouse.containsMouse && root.tooltipText !== ""
+    // The host's tooltip is as wide as its text and wraps only under a cap,
+    // so a long label or path would cover the whole popup. Capped through
+    // implicitWidth, which the tooltip centers itself by (as the host does).
+    implicitWidth: Math.min(implicitContentWidth + leftPadding + rightPadding, Commons.Style.space(320))
     text: root.tooltipText
     fontFamily: root.fontFamily
   }

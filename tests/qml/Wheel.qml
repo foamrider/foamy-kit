@@ -375,6 +375,23 @@ ShellRoot {
       }, function () {
         return !grow.running && isNaN(page.wheel.destination)
       }),
+      // A section that unfolds at once (no animation, as under reduced
+      // motion) at the end of the page: the page's content grows only after
+      // the section's height has changed, and the whole section must still
+      // come into view.
+      step(function () {
+        grower.height = 0
+        page.flickable.contentY = 0
+      }, function () {}), step(function () {
+        page.ensureVisible(grower)
+        grower.height = 260
+      }, function () {
+        var y = topOf(grower)
+        var view = page.flickable
+        check(inView(grower), "ensureVisible shows all of a section that unfolds at once " + [y, grower.height, view.contentY, view.height, view.contentHeight])
+      }, function () {
+        return shell.idle() && inView(grower)
+      }),
       // FoamyInfoNote: closed by default, opens inline and scrolls into view.
       step(function () {
         check(!lfs.infoNote.expanded && !lfs.infoNote.note.visible, "info note starts folded")
