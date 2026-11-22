@@ -50,6 +50,14 @@
   cut now drops the whole pair, as the masked field already did. No plugin
   change is needed. `tests/test_features.py`, `tests/test_masked.py`,
   `tests/test_text_area.py`.
+- `SafeTextArea` (since 0.13.0) shows its text inside its paddings. The
+  attached `TextArea` left the field scrolled one padding to the side
+  (`contentX` at minus `leftPadding`), so the text sat one padding too far
+  in, and in a right-to-left layout the ends of the lines were cut at the
+  field's edge ("line" showed as "lir", a quiet area's "In place" as "In
+  plac"). It now keeps the horizontal scroll inside the text, as
+  `SafeTextField` does. No plugin change is needed.
+  `tests/test_text_area.py`.
 - `SafeTextField` (since 0.2.0) drops a key typed at `maximumLength`,
   wherever the caret is, as Qt's `TextInput` and `SafeTextArea` do.
   Before, the key was kept and the end of the text was cut: typing 8

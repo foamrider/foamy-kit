@@ -234,7 +234,23 @@ ShellRoot {
     shell.edits = 0
   }
 
+  // [left, right] of `field`'s text, in the field's own coordinates: where
+  // it shows.
+  function textSpan(field) {
+    var e = field.editorItem
+    var a = e.mapToItem(field, e.positionToRectangle(0)).x
+    var b = e.mapToItem(field, e.positionToRectangle(field.text.length)).x
+    return [Math.min(a, b), Math.max(a, b)]
+  }
+
   function typing() {
+    // The same text in an area and a field of the same width shows in the
+    // same place, inside the paddings. The area used to sit scrolled one
+    // padding off: its text one padding too far in, and in RTL the ends of
+    // its lines past its edge.
+    var areaSpan = textSpan(quietArea), fieldSpan = textSpan(quietField)
+    check(near(areaSpan[0], fieldSpan[0]) && near(areaSpan[1], fieldSpan[1]), "an area's text shows where a field's does: " + areaSpan + " vs " + fieldSpan)
+    check(areaSpan[0] >= quietArea.leftPadding - 1 && areaSpan[1] <= quietArea.width - quietArea.rightPadding + 1, "an area's text stays inside its paddings: " + areaSpan + " in " + quietArea.width)
     shell.quietness(quietArea, area, "quiet area")
     shell.quietness(quietField, after, "quiet field")
     var editor = area.editorItem
