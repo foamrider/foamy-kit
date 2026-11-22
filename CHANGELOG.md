@@ -28,6 +28,22 @@
   `PageTabList` role (its tabs are `PageTab`s already); foamy-syncthing's
   Folders / Devices row and foamy-monitor's Display / Advanced / Wireless
   row move to `FoamyTabs`. No kit code changes.
+- `FoamyText.cap()` and `tooltip()` cut a line where a reader sees a
+  character end. Before, they cut by code point (as documented), so the
+  letter at the cut could lose its accent or vowel sign (an Arabic letter
+  kept without its fatha), an emoji its skin tone, a ZWJ sequence could end
+  in a joiner, and a flag show half (one regional indicator). The cut now drops
+  the whole cluster before the "…", with foamy-media's rules: the
+  Unicode 16 combining marks, Hangul jamo, the Thai and Lao vowel sign AM,
+  the halfwidth kana voiced sound marks, joiners, variation selectors,
+  skin tones, tags and flag pairs (Unicode's other grapheme rules, a
+  conjunct across a virama or a prepended sign, are not followed). The
+  functions, their arguments and the code-point count of `maxChars` are
+  unchanged; a cut line can come out shorter. It reaches the bar tooltips
+  of every plugin and the `FoamyAction`, `FoamyButton` and
+  `FoamyPanelFooter` tooltips. Plugin change: foamy-media can drop its own
+  copy of the rules (Model.js `scriptMarks`, `isScriptMark`,
+  `continuesCluster`, `splitsFlag`). `tests/text.test.cjs`.
 
 ### Fixed
 - `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
