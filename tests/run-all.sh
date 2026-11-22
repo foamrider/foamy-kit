@@ -28,6 +28,7 @@ run python3 -I test_geometry.py
 run python3 -I test_runtime.py
 run python3 -I test_features.py
 run python3 -I test_lifecycle.py
+run python3 -I test_collector.py
 run python3 -I test_ipc_cli.py
 run python3 -I test_compare.py
 run python3 -I test_clipboard.py

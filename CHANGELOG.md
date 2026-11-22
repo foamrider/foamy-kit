@@ -48,6 +48,22 @@
   `tests/test_sync_check.py`; the list is tied to the kit's texts in
   `tests/i18n.test.cjs`, `tests/qml/Clipboard.qml` and
   `tests/qml/Lifecycle.qml`.
+- `FoamyBoundedCollector` (new component, `kit/FoamyBoundedCollector.qml`):
+  a Process's stdout or stderr with a memory bound, in place of
+  StdioCollector, which keeps the whole stream however much the child
+  prints. It keeps the start of the stream, at most `limit` characters
+  (default 65536), drops the rest as it arrives (a chunk-mode SplitParser,
+  as FoamyPrefsQueue's stderr), and sets `truncated` when it cut; `text`
+  is read in the Process's `exited` handler, and `clear()` in its
+  `started` handler begins each run. A cut never keeps half of a surrogate
+  pair. Quickshell decodes each pipe read on its own, so a character whose
+  UTF-8 bytes arrive in two reads shows as U+FFFD (StdioCollector decodes
+  the whole stream at once); ASCII and a stream that arrives in one read
+  are exact. Plugin change: none needed; a plugin adopts it when it
+  touches a collector (foamy-idle-suspend's probes first), after `sync.sh
+  <plugin> --add FoamyBoundedCollector`, and treats a `truncated` reply as
+  a failure, never as the whole reply. README.md: Components.
+  `tests/test_collector.py`.
 
 ### Changed
 - DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a

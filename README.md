@@ -48,6 +48,7 @@ edited in a plugin: change it here, then sync.
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 122 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
 | FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
 | FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |
+| FoamyBoundedCollector | `FoamyBoundedCollector.qml` | A Process's stdout or stderr with a memory bound, in place of StdioCollector: keeps the start of the stream, at most `limit` characters (65536), drops the rest as it arrives and says so (`truncated`); `text` read in `exited`, `clear()` in `started`. A character split between two pipe reads shows as U+FFFD (exact for ASCII or a stream in one read). A plugin synced before 0.14.0 adds it with `sync.sh <plugin> --add FoamyBoundedCollector` |
 | FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces (kept as `\n` with `multiline`) |
 | SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes; styled `runs` ({text, color}) drawn over its own glyphs, plain text when they don't match or text is selected |
 | SafeTextArea | `SafeTextArea.qml` | Multi-line SafeTextField: the same bounded paste with line breaks kept, `maximumLength`, wrapping, `minimumHeight`/`maximumHeight` (scrolls past it), Enter for a newline, `keyPressed` hook (Ctrl+Enter), `editingFinished` on focus loss |
@@ -1217,7 +1218,10 @@ settings state), the wall clock across the Oslo DST fallback
 (`test_clock.py`), how a prefs-queue CLI save ends
 (`test_lifecycle.py`: exit, failed start, deadline, capped stderr, stopped,
 queue destroyed, an array save's stuck child killed with it so it never
-writes late; and a peer call that can't start), a `qs ipc` argument probe, harness
+writes late; and a peer call that can't start), FoamyBoundedCollector on a
+real child's stdout and stderr (`test_collector.py`: the bound over 4 MiB of
+output, `truncated`, order across reads, a surrogate pair at the cut,
+`clear()`), a `qs ipc` argument probe, harness
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and FoamyPopupCard height
