@@ -60,10 +60,11 @@
   kills the script with SIGKILL then, which its trap never saw. A TERM in
   the moment between the start of the read and the trap did the same.
   Now a small guard process kills the read when the script ends without
-  finishing it, SIGKILL included, and the TERM, INT and HUP trap is set
-  before the read starts. The exit codes and the output are unchanged; the
-  2 s deadline stays. No plugin change is needed.
-  `tests/test_clipboard.py` (SIGKILL at the start and mid-read),
+  finishing it, SIGKILL included, also when a stop goes to the script's
+  whole process group, and the TERM, INT and HUP trap is set before the
+  read starts. The exit codes and the output are unchanged; the 2 s
+  deadline stays. No plugin change is needed. `tests/test_clipboard.py`
+  (SIGKILL at the start and mid-read, a stop to the process group),
   `tests/test_clipboard_reader.py` (a destroyed reader).
 - `FoamyScheduleDay`: a time range is sent once per commit. Before (since
   0.9.0, when the row moved into the kit), Enter emitted `changed(range)`

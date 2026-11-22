@@ -27,6 +27,10 @@ case ${1:-} in
     # waited for) means there is nothing left to kill. timeout leads its own
     # process group once it runs: kill its pid too, in case it has not yet.
     exec {guard}> >(
+      # A stop sent to the whole process group (a closed terminal, a session
+      # that ends) reaches the guard too: it must outlive the wrapper to kill
+      # the read, which timeout has moved to a group of its own.
+      trap '' TERM INT HUP
       exec >/dev/null 2>&1
       job=
       while read -r line && [[ $line != "done" ]]; do

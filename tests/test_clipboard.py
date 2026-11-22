@@ -68,7 +68,8 @@ def signalled(env, signum):
     """(exit code or the reason no signal was sent, stdout, stderr, producer
     pid, producer stopped within 1 s) for a `loaded` paste whose
     clipboard.sh gets `signum` once its trap is set. The stand-in timeout gives `loaded` 60 s and its producer runs
-    2.5 s, so only the trap's kill of the whole read ends it within 1 s."""
+    2.5 s, so only clipboard.sh's own kill of the whole read ends it within
+    1 s."""
     state = Path(env["TEST_CLIPBOARD_STATE"])
     state.write_text("loaded")
     Path(f"{state}.pid").unlink(missing_ok=True)
@@ -117,14 +118,17 @@ def read_processes(marker):
     return pids
 
 
-def killed(env, early):
+def killed(env, early, group_signal=None):
     """The pids of a `loaded` paste's processes still alive 1 s after its
     clipboard.sh got SIGKILL (no trap runs: Quickshell kills it so when its
     Process is destroyed), or the reason no kill was sent. With `early`, the
     kill comes as soon as clipboard.sh has started a child, else once the
-    producer runs. The stand-in timeout gives `loaded` 60 s and its producer
-    runs 2.5 s, so only clipboard.sh's own kill of the read ends it within
-    1 s."""
+    producer runs. With `group_signal`, clipboard.sh leads its own process
+    group and that signal goes to the whole group instead (a closed
+    terminal, a session that ends), which also reaches the processes
+    clipboard.sh started in its group. The stand-in timeout gives `loaded`
+    60 s and its producer runs 2.5 s, so only clipboard.sh's own kill of the
+    read ends it within 1 s."""
     state = Path(env["TEST_CLIPBOARD_STATE"])
     state.write_text("loaded")
     pid_file = Path(f"{state}.pid")
@@ -136,6 +140,7 @@ def killed(env, early):
         env=dict(env, FOAMY_TEST_READ=tag),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        start_new_session=group_signal is not None,
     )
     children = Path(f"/proc/{proc.pid}/task/{proc.pid}/children")
     try:
@@ -148,7 +153,10 @@ def killed(env, early):
             # Early: poll without a pause, to kill as close to the start as possible.
             if not early:
                 time.sleep(0.01)
-        proc.kill()
+        if group_signal is None:
+            proc.kill()
+        else:
+            os.killpg(proc.pid, group_signal)
         proc.wait()
         deadline = time.monotonic() + 1
         while (left := read_processes(marker)) and time.monotonic() < deadline:
@@ -265,6 +273,16 @@ def main():
         for early, when in ((True, "at its start"), (False, "mid-read")):
             left = killed(env, early)
             ok &= report(f"SIGKILL to clipboard.sh {when} kills the whole read", left == [], f"still running: {left}")
+
+        # A stop sent to clipboard.sh's whole process group mid-read: the
+        # processes of that group end together, and the read still ends.
+        for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            left = killed(env, False, signum)
+            ok &= report(
+                f"{signum.name} to clipboard.sh's process group kills the whole read",
+                left == [],
+                f"still running: {left}",
+            )
 
         # Load: a paste that takes 2.5 s (a slow machine) still pastes with
         # the stand-in timeout, and is killed by the real one.
