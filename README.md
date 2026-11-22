@@ -978,10 +978,13 @@ MultiEffect, ShaderEffect and layer effects draw nothing under the software
 renderer the harness uses (as under Omarchy CPU rendering): gate them so the
 content still reads without them (DESIGN.md, "Effects").
 
-Temp dirs: each run owns one PID-tagged dir under the temp dir (`$TMPDIR`,
-else `/tmp`) and removes only that one. Never `rm -rf /tmp/foamy-kit-preview-*`
-— concurrent renders (other agents') live there. `python3 preview/harness.py
---gc` removes only dirs of runs whose process is gone.
+Temp dirs: each run owns two PID-tagged dirs, `run.base` under the temp dir
+(`$TMPDIR`, else `/tmp`) and its socket dir `run.sockets` (below), and
+`cleanup()` removes only those two. A run that is not cleaned up (a failed
+run kept to look at, a test killed midway) leaves both: remove both, by
+exact path, or run `python3 preview/harness.py --gc`, which removes only the
+dirs of runs whose process is gone. Never `rm -rf /tmp/foamy-kit-preview-*`
+— concurrent renders (other agents') live there.
 
 Sockets: a unix socket path holds at most 107 bytes, so each run keeps its
 runtime dir (`XDG_RUNTIME_DIR`, where qs binds
