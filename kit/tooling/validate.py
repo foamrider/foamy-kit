@@ -663,7 +663,7 @@ def check_oxlint(repo):
         data = json.loads(result.stdout[start:])
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("oxlint produced no JSON report") from None
+        raise Failure(f"oxlint produced no JSON report (exit {result.returncode})") from None
     loaded = qml_loaded(repo, files)
     entries, api = [], 0
     for item in data.get("diagnostics", []):
@@ -730,7 +730,7 @@ def check_ruff(repo):
         data = json.loads(result.stdout)
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("ruff check produced no JSON report") from None
+        raise Failure(f"ruff check produced no JSON report (exit {result.returncode})") from None
     entries = [
         finding(
             os.path.relpath(item["filename"], repo.root),
@@ -800,7 +800,7 @@ def check_shellcheck(repo):
         data = json.loads(result.stdout)
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("shellcheck produced no JSON report") from None
+        raise Failure(f"shellcheck produced no JSON report (exit {result.returncode})") from None
     entries = [
         finding(item["file"], f"SC{item['code']}", item["message"], repo, item.get("line"))
         for item in data.get("comments", [])

@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -234,6 +235,24 @@ def main():
         code != 0 and "mise.toml pins oxlint" in out and "run `mise install`" in out,
         summary(out),
     )
+    # A linter that ends without its JSON report (killed, out of memory)
+    # fails with its exit code, as qmllint does.
+    pins = tomllib.loads((KIT_ROOT / "mise.toml").read_text())["tools"]
+    (plugin / "probe.py").write_text("x = 1\n")
+    (plugin / "probe.sh").write_text("#!/bin/bash\necho ok\n")
+    for tool, label in (("oxlint", "oxlint"), ("ruff", "ruff check"), ("shellcheck", "shellcheck")):
+        version = next(v for k, v in pins.items() if k.rsplit("/", 1)[-1] == tool)
+        (empty / tool).unlink(missing_ok=True)
+        (empty / tool).write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo "{tool} {version}" && exit 0\nexit 9\n')
+        (empty / tool).chmod(0o755)
+        code, out = validate(plugin, "--only", tool, env=env)
+        ok &= report(
+            f"{label} with no JSON report fails with its exit code",
+            code != 0 and f"{label} produced no JSON report (exit 9)" in out,
+            summary(out),
+        )
+    (plugin / "probe.py").unlink()
+    (plugin / "probe.sh").unlink()
     shutil.rmtree(empty, ignore_errors=True)
 
     # The suite hook, and --ci.

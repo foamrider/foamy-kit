@@ -157,7 +157,10 @@
   readable report, the failure gives qmllint's exit code and the read
   error ("`qmllint wrote no JSON report (exit 5): [Errno 2] No such file
   or directory: …`"). Before, a full `/tmp` or a crashed qmllint looked
-  like a plain lint failure. `tests/test_validate.py`.
+  like a plain lint failure. The oxlint, ruff and shellcheck checks give
+  the tool's exit code the same way when it prints no JSON report
+  ("`oxlint produced no JSON report (exit 9)`"). No plugin change is
+  needed. `tests/test_validate.py`.
 - `tests/validate.sh` oxlint check (since 0.9.0): a local
   `tests/lint/oxlintrc.json` must list `"../../.oxlintrc.json"` in its
   `"extends"` array. Before, the name anywhere in the file passed (a
