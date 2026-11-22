@@ -250,7 +250,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   gives them back to the panel's key catcher (FoamyPopup's `focusTarget`;
   a settings page or an editor page keeps them: `foamyKeyHome`).
   `FoamyClickAway` does it; FoamyPopup and FoamyWheelScroll put it in by
-  themselves, so a plugin adds nothing. A list that reacts to a click on
+  themselves, so a plugin adds nothing. A focused text field that hides
+  gives the keys to the same key home (the nearest one that shows). A list that reacts to a click on
   its empty space (clearing a selection) uses `FoamyWheelScroll.spaceClicked`.
   Whether it shows: `FoamySettingsState` (`show()` opens the popup on
   Settings; resets on close, never on open).

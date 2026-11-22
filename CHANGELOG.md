@@ -144,6 +144,17 @@
   host does, in both themes. No plugin change is needed; a plugin test
   that renders or reads the mock bar's colours sees the theme's. README.md:
   Preview. `tests/test_preview.py`.
+- `SafeTextField` and `SafeTextArea` (since 0.13.1) give the keys of a
+  focused field that hides to the nearest key home that shows
+  (FoamyClickAway's `foamyKeyHome`: FoamyPopup's key catcher, a settings
+  page), as a click-away does, else to the nearest focus scope as before.
+  Before, the keys always went to the nearest focus scope, so the panel's
+  keys (Esc, arrows) did nothing after a focused field hid until the
+  plugin moved the focus itself. A key home that hides with the field (a
+  settings page closing) passes the search on. Plugin change: none needed;
+  a plugin that moves the focus after a field hides (foamy-notification-
+  center's search) can drop that at its next sync. DESIGN.md: Click-away.
+  `tests/test_text_area.py`.
 - `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
   whose clock runs a little ahead of this one (NFS, SMB) reuses its icons
   again. 0.13.1 made every file time in the future stale, so there each
