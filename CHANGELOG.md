@@ -94,7 +94,13 @@
   old end of the content: the last pixels of an animated section, or
   almost all of one that unfolds at once (reduced motion), stayed below
   the fold. Now it places the section again when the content height
-  changes while it follows. No plugin change is needed.
+  changes while it follows. A scroll that is still gliding when the bounds
+  shrink (a popup body that grows to fit its content does so after the
+  content grew) is aimed inside the new bounds again, so the view never
+  ends past the end of its content; the glide's end used to be clamped
+  only when it started, which in foamy-train's settings left the page
+  337 px past its end after "Use a weekly schedule" was switched on. This
+  also holds for a wheel notch. No plugin change is needed.
   `tests/test_wheel.py`.
 - `FoamyDropdown`: a failed save that does not change `value` no longer
   leaves the unsaved pick on show. Before (since 0.2.0), the trigger kept

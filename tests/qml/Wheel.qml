@@ -96,6 +96,40 @@ ShellRoot {
         target: fixed
       }
 
+      // A view whose height follows its content after the content grew, as a
+      // popup body sized to its content does: the steps grow the content,
+      // then the height.
+      Flickable {
+        id: fitting
+        x: 930
+        width: 300
+        height: 300
+        contentHeight: fitColumn.height
+        boundsBehavior: Flickable.StopAtBounds
+        Column {
+          id: fitColumn
+          width: parent.width
+          Repeater {
+            model: 3
+            Rectangle {
+              width: 300
+              height: 100
+              color: index % 2 ? "dimgray" : "gray"
+            }
+          }
+          Rectangle {
+            id: fitGrower
+            width: 300
+            height: 0
+            color: "steelblue"
+          }
+        }
+      }
+      FoamyWheelScroll {
+        id: fitWheel
+        target: fitting
+      }
+
       FoamySettingsPage {
         id: page
         x: 500
@@ -211,7 +245,32 @@ ShellRoot {
   // No FoamyWheelScroll animation runs: a burst starts its glide at once,
   // so idle after a burst means the scroll is done.
   function idle() {
-    return isNaN(wheel.destination) && isNaN(page.wheel.destination) && isNaN(shortWheel.destination)
+    return isNaN(wheel.destination) && isNaN(page.wheel.destination) && isNaN(shortWheel.destination) && isNaN(fitWheel.destination)
+  }
+  // Steps for one height the growing view may reach (`room`): the section
+  // at the end unfolds, the scroll toward the old end starts, then the view
+  // grows; at rest the view ends inside its content and shows the section.
+  function growingViewSteps(room) {
+    return [step(function () {
+        fitGrower.height = 0
+        fitColumn.forceLayout()
+        fitting.height = 300
+        fitWheel.scrollTo(0, false)
+      }, function () {}), step(function () {
+        fitWheel.ensureVisible(fitGrower)
+        fitGrower.height = 260
+        // The content grows now, not at the next layout pass.
+        fitColumn.forceLayout()
+        var aimed = fitWheel.destination
+        check(aimed > 0, "room " + room + ": the unfolded section starts a scroll toward the end of the old view " + [aimed, fitting.contentHeight, fitting.height])
+        fitting.height = Math.min(fitting.contentHeight, room)
+      }, function () {
+        var view = fitting
+        var y = fitGrower.mapToItem(view.contentItem, 0, 0).y
+        var end = Math.max(0, view.contentHeight - view.height)
+        check(view.contentY >= -0.5 && view.contentY <= end + 0.5, "room " + room + ": a scroll that runs while the view grows ends inside the content " + [view.contentY, end, view.contentHeight, view.height])
+        check(y >= view.contentY - 1 && y + fitGrower.height <= view.contentY + view.height + 1, "room " + room + ": the unfolded section is in view " + [y, fitGrower.height, view.contentY, view.height])
+      })]
   }
   // Send `count` events of `delta` (angle units) to `item` at (x, y), `gap` ms apart.
   function burst(item, x, y, count, delta, horizontal) {
@@ -391,7 +450,7 @@ ShellRoot {
         check(inView(grower), "ensureVisible shows all of a section that unfolds at once " + [y, grower.height, view.contentY, view.height, view.contentHeight])
       }, function () {
         return shell.idle() && inView(grower)
-      }),
+      })].concat(growingViewSteps(10000), growingViewSteps(400), [
       // FoamyInfoNote: closed by default, opens inline and scrolls into view.
       step(function () {
         check(!lfs.infoNote.expanded && !lfs.infoNote.note.visible, "info note starts folded")
@@ -413,7 +472,7 @@ ShellRoot {
         lfs.infoNote.infoButton.clicked()
       }, function () {
         check(!lfs.infoNote.expanded, "the (i) folds it again")
-      })]
+      })])
     next()
   }
 }

@@ -67,6 +67,17 @@ QtObject {
     return Math.max(minY, Math.min(maxY, y))
   }
 
+  // A glide's end is clamped when it starts. The bounds can shrink while it
+  // runs (a popup body that grows to fit its content does so after the
+  // content grew), and the animation would then write a place past the new
+  // end over the view's own clamp: aim it inside the bounds again.
+  function _keepInBounds() {
+    if (animation.running && Math.abs(clamp(animation.to) - animation.to) > 0.01)
+      scrollTo(animation.to, true)
+  }
+  onMinYChanged: _keepInBounds()
+  onMaxYChanged: _keepInBounds()
+
   // Scroll by `dy` content px. animate: glide there (wheel notches).
   function scrollBy(dy, animate) {
     if (!target || dy === 0)
