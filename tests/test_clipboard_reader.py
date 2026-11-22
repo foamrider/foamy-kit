@@ -4,8 +4,9 @@ hostenv.clipboard_fakes(): the read and failed signals for every stand-in
 mode, the primary selection, one read at a time, cancel() (nothing
 follows, the reader stays busy until the stopped read exits, which happens
 at once, producer included, while a "loaded" paste's 2.5 s producer would
-still run) and a reader destroyed mid-read (clipboard.sh's 2 s watchdog
-still ends its read). The scene checks the producers through /proc."""
+still run) and a reader destroyed mid-read (its read ends at once too,
+although Quickshell kills clipboard.sh with SIGKILL then). The scene checks
+the producers through /proc."""
 
 import shutil
 import sys
