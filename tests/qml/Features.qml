@@ -580,6 +580,10 @@ ShellRoot {
     eq([dropdown.value, dropdown.shownValue], ["b", "b"], "the binding follows the setting")
     shell.dropdownSetting = "c"
     eq([dropdown.value, dropdown.shownValue], ["c", "c"], "a later external change still shows (binding intact)")
+    // a save that failed: the caller says so, and the saved value shows at once
+    dropdown.select("b")
+    dropdown.saveFailed()
+    eq([dropdown.value, dropdown.shownValue], ["c", "c"], "saveFailed() drops the unsaved pick at once")
     // a save that never lands
     dropdown.select("a")
     dropdownRevert.start()
