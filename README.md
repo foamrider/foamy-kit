@@ -948,9 +948,15 @@ property, the same object. Write each read so that it adds no qmllint entry
   both lint clean (the `var` property also ends the old `missing-property`
   entries for calls on `popup.bodyItem`);
 - inside the `body` Component, qmllint reports every read of the preview's
-  scope as `unqualified`, `preview.…` included, so no form is clean there:
-  leave an existing `popup.…` as it is, and its baselined entry still
-  matches; rewriting it only swaps one entry for another.
+  scope as `unqualified`, `preview.…` included, unless the file starts with
+  `pragma ComponentBehavior: Bound` (foamy-todoist's preview has it). The
+  Component is then bound to the preview's context, the preview renders
+  the same, and reads through the root id (`preview.previewState`,
+  `preview.popup.…`) lint clean; a bare `popup.…` stays `unqualified`, so
+  qualify it as well. With the pragma an id of the file wins over a
+  property of the same name in the body's objects. Without it no form is
+  clean there: leave an existing `popup.…` as it is, and its baselined
+  entry still matches; rewriting it only swaps one entry for another.
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
 FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,

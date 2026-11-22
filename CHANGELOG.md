@@ -360,6 +360,14 @@
   section before it adds or changes a test. `check.sh` and
   `tests/kit-check.sh` expect the new block after the next sync. No plugin
   code changes.
+- README.md, Preview: reads of the preview's scope inside the `body`
+  Component lint clean when `preview/Preview.qml` starts with `pragma
+  ComponentBehavior: Bound`: `preview.…` and `preview.popup.…` do, a bare
+  `popup.…` stays `unqualified`. README said no form was clean there. The
+  demo plugin's preview, with the pragma, has no `unqualified` finding
+  left and renders the same. No plugin change is needed; a preview that
+  adds the pragma drops the baseline entries it ends
+  (`tests/validate.sh --update-baseline qmllint`).
 
 ### Upgrading
 - `kit/rust` changed (the five `foamy_helper` items above): a plugin with a
