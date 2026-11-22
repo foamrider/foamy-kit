@@ -12,7 +12,7 @@
 
 ### Fixed
 - `FoamyNumberField` and `FoamyTextSettingField` commit on focus-out
-  (broken since they came in, 0.5.2). Moving the focus away (Tab, a click
+  (broken since they came in, 0.3.2). Moving the focus away (Tab, a click
   on another field) left a valid draft uncommitted and an invalid one on
   screen: only Enter saved. The fields commit on `editingFinished` only
   when the editor has lost the focus, and `SafeTextField.inputActiveFocus`
@@ -23,7 +23,7 @@
   the same lag and is an alias too. No plugin change is needed; a plugin
   that reads `inputActiveFocus` in its own `onEditingFinished` now gets
   false there. `tests/test_features.py`, `tests/test_text_area.py`.
-- `SafeTextField` (since 0.5.2) and `SafeTextArea` (since 0.13.0) never
+- `SafeTextField` (since 0.2.0) and `SafeTextArea` (since 0.13.0) never
   keep half of a surrogate pair at `maximumLength`. A normal
   `SafeTextField` cut a paste, a longer `text` and a lowered
   `maximumLength` by UTF-16 unit, so an emoji at the limit left a lone
@@ -47,7 +47,7 @@
   placeholder hint (a search field labelled only "Search"). No plugin
   change is needed. DESIGN.md: Inputs. `tests/test_masked.py`,
   `tests/test_text_area.py`.
-- `SafeTextField` (since 0.5.2) and `SafeTextArea` (since 0.13.0) give up
+- `SafeTextField` (since 0.1.0) and `SafeTextArea` (since 0.13.0) give up
   the keyboard focus when they hide (their own `visible` or a parent's).
   Qt keeps the active focus on a hidden item, so keys typed after a
   focused field was hidden still edited text the user could not see. A
@@ -146,7 +146,7 @@
 - `tests/kit-check.sh` (generated from `tools/kit-check.sh.in`) names a
   `native.pin` checksum line for a file other than `bin/x86_64/<binary>`
   and `bin/aarch64/<binary>`: "`<crate>/native.pin lists unexpected file
-  <path>`", the message `check.sh` has given since 0.7.0. Before, it
+  <path>`", the message `check.sh` has given since 0.5.0. Before, it
   ignored such a line and failed the pin only through the notices check,
   without the reason. Plugins get the new check at their next sync.
   `tests/test_native.py`.
