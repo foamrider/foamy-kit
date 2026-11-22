@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
+import "FoamyText.js" as FoamyText
 
 // The foamy action button: an icon (and optional label) on a rounded hover
 // surface. One size everywhere (FoamyStyle.actionSize); the settings button
@@ -15,6 +16,9 @@ import qs.Ui
 //
 // actionEnabled: false keeps the button visible with its tooltip but inert
 // (for "nothing to do right now"); enabled: false greys it out entirely.
+//
+// The tooltip is at most Style.space(320) wide and shows at most 3 lines of
+// 200 characters of tooltipText, cut with "…"; Accessible.name keeps it all.
 Rectangle {
   id: root
 
@@ -107,12 +111,24 @@ Rectangle {
   }
 
   PanelToolTip {
+    id: tip
     visible: mouse.containsMouse && root.tooltipText !== ""
     // The host's tooltip is as wide as its text and wraps only under a cap,
     // so a long label or path would cover the whole popup. Capped through
     // implicitWidth, which the tooltip centers itself by (as the host does).
     implicitWidth: Math.min(implicitContentWidth + leftPadding + rightPadding, Commons.Style.space(320))
-    text: root.tooltipText
+    // App text (a folder's path or name) has no length bound: 3 lines of
+    // 200 characters keep an ordinary path whole and the wrapped tooltip a
+    // few lines high, with a visible "…" beyond.
+    text: FoamyText.cap(root.tooltipText, 3, 200)
     fontFamily: root.fontFamily
+
+    // The host's text wraps at word boundaries only, so a name typed
+    // without spaces would run past the capped width.
+    Binding {
+      target: tip.contentItem
+      property: "wrapMode"
+      value: Text.Wrap
+    }
   }
 }

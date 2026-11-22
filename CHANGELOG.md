@@ -90,11 +90,17 @@
   failed save does not change `value` (foamy-power's default profiles)
   calls the new `saveFailed()` on the failure. `tests/test_features.py`.
 - `FoamyAction` tooltip: at most `Style.space(320)` wide, as the host caps
-  its own long tooltips. Before (since 0.1.0), the host's `PanelToolTip`
-  was as wide as its text and wrapped only under a cap, so a long
-  `tooltipText` (a folder path, an app's name) spread over the whole
-  popup. Now a long text wraps in a tooltip-sized box; short labels keep
-  their own width. No plugin change is needed. `tests/test_features.py`.
+  its own long tooltips, and a few lines high. Before (since 0.1.0), the
+  host's `PanelToolTip` was as wide as its text and wrapped only under a
+  cap, so a long `tooltipText` (a folder path, an app's name) spread over
+  the whole popup. Now a long text wraps in a tooltip-sized box, a word
+  with no break (a name typed without spaces) breaks anywhere, and the
+  shown text is cut to 3 lines of 200 characters with a visible "…"
+  (`FoamyText.cap()`), so a 4096-byte path no longer fills the popup's
+  height. Short labels keep their own width and text; `Accessible.name`
+  keeps the whole `tooltipText`. `FoamyAction` now depends on `FoamyText`,
+  so a plugin's next sync adds `kit/FoamyText.js` where it was not
+  selected yet; no plugin change is needed. `tests/test_features.py`.
 - `foamy_helper::fs::read_file_limited` (since 0.5.0): the error for a file
   over the limit lost its `io::TooLarge` payload when the path was added to
   the message, so `io::is_over_limit` was false for it and a helper could

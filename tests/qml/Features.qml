@@ -632,13 +632,30 @@ ShellRoot {
       var tip = shell.toolTipOf(tipAction)
       var cap = Style.space(320)
       shell.check(ok && tip.width <= cap + 0.5 && tip.height < window.height / 2, "a long tooltip wraps within " + cap + " px instead of covering the window: " + (tip ? tip.width + "x" + tip.height : "none"))
-      tipAction.tooltipText = "Refresh"
-      wait.waitFor(function () {
-        return tip.width < cap / 2
-      }, 2000, function () {
-        shell.check(Math.abs(tip.width - (tip.implicitContentWidth + tip.leftPadding + tip.rightPadding)) < 0.5, "a short tooltip keeps its own width: " + tip.width)
-        shell.done("tooltip")
-      }, "a short tooltip is narrow")
+      // A name typed without spaces has no word break, and still stays in the box.
+      tipAction.tooltipText = "Pause synchronization for " + "X".repeat(512)
+      var fits = function () {
+        var text = tip.contentItem
+        return tip.width <= cap + 0.5 && text.contentWidth + text.leftPadding + text.rightPadding <= tip.width + 0.5
+      }
+      wait.waitFor(fits, 2000, function (inside) {
+        shell.check(inside, "an unbreakable word wraps inside the tooltip: " + tip.contentItem.contentWidth + " px of text in " + tip.width + " px")
+        // A path of any length keeps the tooltip a few lines high, cut with a "…".
+        tipAction.tooltipText = "Open /home/test/" + "Sync/Folder-with-a-long-name/".repeat(140) + "\nFolder ID: abcde-fghij"
+        wait.waitFor(function () {
+          return tip.height < window.height / 3 && fits()
+        }, 2000, function (short) {
+          var lines = String(tip.text).split("\n")
+          shell.check(short && lines.length === 2 && lines[0].slice(-1) === "\u2026" && lines[1] === "Folder ID: abcde-fghij", "a long path is cut so the tooltip stays short and shows its last line: " + tip.width + "x" + tip.height + ", " + lines.length + " lines")
+          tipAction.tooltipText = "Refresh"
+          wait.waitFor(function () {
+            return tip.width < cap / 2
+          }, 2000, function () {
+            shell.check(Math.abs(tip.width - (tip.implicitContentWidth + tip.leftPadding + tip.rightPadding)) < 0.5 && tip.text === "Refresh", "a short tooltip keeps its own width and text: " + tip.width)
+            shell.done("tooltip")
+          }, "a short tooltip is narrow")
+        })
+      })
     }, "the action's tooltip opens")
 
     // --- FoamyNumberField: binding-safe numeric settings ------------------------------------

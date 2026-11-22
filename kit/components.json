@@ -8,7 +8,7 @@
   "FoamyIpc": {"files": ["FoamyIpc.qml", "FoamyIpcResolver.js", "FoamyIpcPreference.qml"], "deps": []},
   "FoamyPeerIpc": {"files": ["FoamyPeerIpc.qml"], "deps": ["FoamyIpc"]},
   "FoamyIcon": {"files": ["FoamyIcon.qml"], "deps": ["FoamyStyle", "FoamyPalette", "FoamyI18n"], "notices": ["LICENSE-LUCIDE"]},
-  "FoamyAction": {"files": ["FoamyAction.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyMotion"]},
+  "FoamyAction": {"files": ["FoamyAction.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyMotion", "FoamyText"]},
   "FoamyMenu": {"files": ["FoamyMenu.qml", "FoamyMenuItem.qml"], "deps": ["FoamyIcon", "FoamyStyle", "FoamyPalette", "FoamyMotion", "FoamyI18n", "FoamyWheelScroll"]},
   "FoamyHeader": {"files": ["FoamyHeader.qml"], "deps": ["FoamyAction", "FoamyMenu", "FoamyI18n"]},
   "FoamyHeroBand": {"files": ["FoamyHeroBand.qml"], "deps": ["FoamyHeader", "FoamySettings", "FoamyPalette", "FoamyStyle", "FoamyMotion", "FoamyI18n"]},
