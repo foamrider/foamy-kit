@@ -176,10 +176,14 @@
   a tooltip-sized box, a word with no break (a name typed without spaces)
   breaks anywhere, and the shown text is cut to 3 lines of 200 characters
   with a visible "…" (`FoamyText.cap()`), so a 4096-byte path no longer
-  fills the popup's height. Short labels keep their own width and text;
-  `Accessible.name` keeps the whole text. The three components now depend
-  on `FoamyText`, so a plugin's next sync adds `kit/FoamyText.js` where it
-  was not selected yet; no plugin change is needed.
+  fills the popup's height. Short labels keep their own width and text.
+  Where the tooltip names the control, its `Accessible.name` keeps the
+  whole text: a `FoamyAction`, and a `FoamyButton` without text. A
+  `FoamyButton` with text is named by its text and the footer's status
+  by `status`, so a screen reader reads neither tooltip, as before. The
+  three components now depend on `FoamyText`, so a plugin's next sync
+  adds `kit/FoamyText.js` where it was not selected yet; no plugin change
+  is needed.
   `tests/test_features.py`.
 - `foamy_helper::fs::read_file_limited` (since 0.5.0): the error for a file
   over the limit lost its `io::TooLarge` payload when the path was added to
