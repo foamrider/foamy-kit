@@ -13,7 +13,9 @@ import QtQuick
 // synchronously, so an `onOpenedChanged: if (opened) editingSettings = false`
 // runs after show() set it and the settings IPC lands on the overview.
 // holdOnClose keeps the page across a close (e.g. a folder picker or browser
-// sign-in that closes the popup and reopens it).
+// sign-in that closes the popup and reopens it). When the page hides (Back,
+// or the reset on close), FoamyPopup gives the keys it had back to the
+// popup body's key home: a plugin needs no onHidden refocus.
 QtObject {
   id: state
 

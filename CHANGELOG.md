@@ -155,6 +155,18 @@
   a plugin that moves the focus after a field hides (foamy-notification-
   center's search) can drop that at its next sync. DESIGN.md: Click-away.
   `tests/test_text_area.py`.
+- `FoamyPopup` (since 0.1.0) gives the keys back to its body when the item
+  in the body that has them hides: a settings page left with Back, or
+  reset when the popup closes on it (FoamySettingsState). Before, Qt kept
+  the keys on the hidden page, and the host's focus on the next open went
+  back to it: the first Esc after reopening, or after Back, went to the
+  hidden page instead of closing the popup, unless the plugin refocused
+  its list in `onHidden`. Now the keys go to the body's key home
+  (`focusTarget`, the body item by default) once the item has hidden. A
+  plugin's own refocus, at once or later, still wins. Plugin change: none
+  needed; foamy-bolt's `onHidden` refocus can go at its next sync.
+  README.md: Components; DESIGN.md: Click-away.
+  `tests/test_popup_keys.py`.
 - `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
   whose clock runs a little ahead of this one (NFS, SMB) reuses its icons
   again. 0.13.1 made every file time in the future stale, so there each

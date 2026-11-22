@@ -41,6 +41,7 @@ run python3 -I test_i18n_runtime.py
 run python3 -I test_band.py
 run python3 -I test_band_field.py
 run python3 -I test_click_away.py
+run python3 -I test_popup_keys.py
 run python3 -I test_menu.py
 run python3 -I test_components.py
 run python3 -I test_rows.py

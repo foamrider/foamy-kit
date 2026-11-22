@@ -254,7 +254,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   gives the keys to the same key home (the nearest one that shows). A list that reacts to a click on
   its empty space (clearing a selection) uses `FoamyWheelScroll.spaceClicked`.
   Whether it shows: `FoamySettingsState` (`show()` opens the popup on
-  Settings; resets on close, never on open).
+  Settings; resets on close, never on open). When Settings hides (Back, or
+  the reset on close), FoamyPopup gives the keys the page had back to the
+  body's key home, so Esc and the arrows work at once and after the next
+  open; a plugin needs no `onHidden` refocus, and its own still wins.
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
   period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
   with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.

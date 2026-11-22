@@ -46,6 +46,13 @@ import qs.Ui
 // a nearer `foamyKeyHome` (FoamyClickAway). Flickables get the same through
 // FoamyWheelScroll.
 //
+// Keys of an item that hides: when the item in the body that has the keys
+// hides (a settings page left with Back, or reset when the popup closes on
+// it: FoamySettingsState), they go back to the same key home, so the
+// panel's keys work at once and on the next open. A plugin needs no
+// onHidden refocus; one it keeps (an item of its own, at once or later)
+// still wins.
+//
 // Usage:
 //   FoamyPopup {
 //     id: popup
@@ -105,6 +112,41 @@ KeyboardPanel {
     focus: true
     active: !!root.body && (root.open || root.bodyRequested)
     sourceComponent: root.body
+  }
+
+  // Qt keeps the keys on an item that hides, and the host's focus on the
+  // next open goes back to it: a settings page left with Back, or closed
+  // with the popup, kept Esc and the arrows while the panel showed its list.
+  // When the item in the body that has the keys hides, it lets go and the
+  // body's key home takes them. A plugin's own refocus, at once or later,
+  // still wins: it moves the keys to an item that shows.
+  property Item _keysAt: null
+  property Connections _keysWatch: Connections {
+    target: bodyLoader.Window
+    function onActiveFocusItemChanged() {
+      var item = bodyLoader.Window.activeFocusItem
+      if (item && root._inBody(item))
+        root._keysAt = item
+    }
+  }
+  property Connections _keysHide: Connections {
+    target: root._keysAt
+    function onVisibleChanged() {
+      if (root._keysAt && !root._keysAt.visible)
+        Qt.callLater(root._reclaimKeys)
+    }
+  }
+  function _inBody(item) {
+    for (let at = item; at; at = at.parent)
+      if (at === bodyLoader)
+        return true
+    return false
+  }
+  function _reclaimKeys() {
+    var held = _keysAt
+    var home = bodyLoader.foamyKeyHome
+    if (held && !held.visible && home && home.visible && _inBody(held))
+      home.forceActiveFocus()
   }
 
   // KeyboardPanel draws the card with Style.cornerRadius and the popup
