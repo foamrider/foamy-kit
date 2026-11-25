@@ -148,9 +148,10 @@ published plugin is missing from the plugin list in foamy-kit's `AGENTS.md`
 (not checked with `--lint-only`), a catalog (`i18n/*.json`) lacks a text, or
 has it empty, that a kit component the plugin carries hands it to translate
 (`kit/i18n-texts.json`: the paste failures, the helper's unavailable text,
-the settings save errors; the message names the catalog, the text and the
-component; not checked with `--lint-only`), or the design lint finds a
-violation (see DESIGN.md, "Lint"). The lint covers
+the settings save errors; a plural entry counts as empty without a non-empty
+`other` form, the one `FoamyI18n.t()` shows; the message names the catalog,
+the text and the component; not checked with `--lint-only`), or the design
+lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
 
 ## Tooling

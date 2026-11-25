@@ -470,6 +470,29 @@ def catalog_tests(base):
     )
     code, out = sh(CHECK, "--lint-only", str(plugin))
     ok &= report("check.sh --lint-only does not check the catalogs", code == 0, out.strip())
+    # FoamyI18n.t() shows a plural entry's "other" form, and the English text
+    # when that form is missing or empty.
+    danish = json.loads((FIXTURES / "demo-plugin/i18n/da.json").read_text())
+    for value, shown in (
+        ({}, False),
+        ({"one": danish[text]}, False),
+        ({"other": ""}, False),
+        ({"other": 3}, False),
+        ({"one": danish[text], "other": danish[text]}, True),
+    ):
+        catalog.write_text(json.dumps({**danish, text: value}, ensure_ascii=False))
+        code, out = sh(CHECK, "--no-lint", str(plugin))
+        if shown:
+            ok &= report(
+                f"check.sh passes a plural entry with an other form: {json.dumps(value)}", code == 0, out.strip()
+            )
+        else:
+            named = f'i18n/da.json lacks "{text}" (a plural entry needs a non-empty "other"), which FoamyClipboard'
+            ok &= report(
+                f"check.sh fails a plural entry without a non-empty other form, naming it: {json.dumps(value)}",
+                code != 0 and named in out and out.count(" lacks ") == 1,
+                out.strip(),
+            )
     catalog.write_text("{ not json")
     code, out = sh(CHECK, "--no-lint", str(plugin))
     ok &= report(

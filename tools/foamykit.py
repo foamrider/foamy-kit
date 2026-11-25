@@ -943,8 +943,9 @@ def checked_plugin_map():
 def catalog_problems(plugin, components):
     """The texts of kit/i18n-texts.json whose component is in `components`
     (the plugin's lock) and that one of the plugin's catalogs (i18n/*.json)
-    lacks: no entry, or an empty one. A plugin without catalogs shows the
-    English text, so it needs none."""
+    lacks: no entry, an empty one, or a plural entry without a non-empty
+    "other" form. A plugin without catalogs shows the English text, so it
+    needs none."""
     try:
         listed = json.loads((KIT_DIR / I18N_TEXTS).read_text(encoding="utf-8"))
         texts = [(entry["component"], entry["text"]) for entry in listed if entry["component"] in components]
@@ -962,10 +963,14 @@ def catalog_problems(plugin, components):
             continue
         for component, text in texts:
             value = entries.get(text)
-            # A plural entry (an object) counts; these texts are singular.
-            if not (isinstance(value, dict) or (isinstance(value, str) and value)):
+            # FoamyI18n.t() shows a plural entry's "other" form, and the
+            # English text when that form is missing or empty.
+            plural = isinstance(value, dict)
+            shown = value.get("other") if plural else value
+            if not (isinstance(shown, str) and shown):
+                note = ' (a plural entry needs a non-empty "other")' if plural else ""
                 problems.append(
-                    f'i18n/{catalog.name} lacks "{text}", which {component} hands the plugin to translate '
+                    f'i18n/{catalog.name} lacks "{text}"{note}, which {component} hands the plugin to translate '
                     f"(kit/{I18N_TEXTS})"
                 )
     return problems

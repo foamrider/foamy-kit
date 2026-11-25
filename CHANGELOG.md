@@ -38,16 +38,18 @@
   catalog (`i18n/*.json`) lacks a text of a component the plugin carries,
   or has it empty, naming the catalog, the text and the component
   (`i18n/no.json lacks "…", which FoamyClipboard hands the plugin to
-  translate (kit/i18n-texts.json)`); `--lint-only` skips it, and a plugin
-  without catalogs needs none. The kit's own labels (Settings, Back,
-  Retry…) and the context-menu labels a field passes to `translate` are
-  not in the list. Plugin change: add the missing texts to every catalog
-  (see Upgrading); foamy-zendesk (`tests/i18n.test.cjs`), foamy-teams and
-  foamy-github (`tests/runtime-panel.py`) can read the list instead of
-  their copies. README.md: Sync, Check; DESIGN.md: Copy.
-  `tests/test_sync_check.py`; the list is tied to the kit's texts in
-  `tests/i18n.test.cjs`, `tests/qml/Clipboard.qml` and
-  `tests/qml/Lifecycle.qml`.
+  translate (kit/i18n-texts.json)`). A plural entry counts as empty
+  without a non-empty `other` form, the form `FoamyI18n.t()` shows, and
+  the message then adds `(a plural entry needs a non-empty "other")`.
+  `--lint-only` skips the check, and a plugin without catalogs needs none.
+  The kit's own labels (Settings, Back, Retry…) and the context-menu
+  labels a field passes to `translate` are not in the list. Plugin change:
+  add the missing texts to every catalog (see Upgrading); foamy-zendesk
+  (`tests/i18n.test.cjs`), foamy-teams and foamy-github
+  (`tests/runtime-panel.py`) can read the list instead of their copies.
+  README.md: Sync, Check; DESIGN.md: Copy. `tests/test_sync_check.py`;
+  the list is tied to the kit's texts in `tests/i18n.test.cjs`,
+  `tests/qml/Clipboard.qml` and `tests/qml/Lifecycle.qml`.
 - `FoamyBoundedCollector` (new component, `kit/FoamyBoundedCollector.qml`):
   a Process's stdout or stderr with a memory bound, in place of
   StdioCollector, which keeps the whole stream however much the child
