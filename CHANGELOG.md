@@ -14,6 +14,22 @@
   in use still emits `changed()` with a serial of its own, and a refusal
   of the older pick after it (`saveFailed(serial)`) changes nothing.
   Plugin change: none needed. `tests/test_features.py`.
+- `FoamyDropdown`'s queue link (`queue`, `queueKey`, since 0.14.0) ends
+  a pick whose save is refused as it runs also when `onChanged` saves
+  another value than the option. Before, after `changed()` the link ended
+  the pick only when `failed()` named the option's value, so foamy-teams'
+  "When all accounts are closed" pick "hide", saved as
+  `hideWhenClosed: true`, stayed on show for 10 s beside the error when
+  it waited behind a running CLI save and the widget lost its bar entry
+  meanwhile. Now a refusal or failure of the key ends the held pick,
+  whatever value it names, when the queue runs no other save and keeps no
+  save of the key waiting. So a failed older save of the key leaves a
+  newer pick whose save still waits, even one of the same value (a
+  dropdown bound to the stored settings lost it before), and such a
+  dropdown gives way when its own CLI save fails, mapped value or not, as
+  the failure rolls back nothing it shows. Plugin change: none needed;
+  foamy-teams' dropdown works as it is. DESIGN.md: Choices.
+  `tests/test_features.py`.
 
 ## 0.14.0 — 2026-11-22
 

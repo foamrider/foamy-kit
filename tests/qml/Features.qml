@@ -296,6 +296,36 @@ ShellRoot {
         }
       }
     }
+    // Linked dropdowns that save another value than the option, as
+    // foamy-teams' "When all accounts are closed" saves "hide" as true
+    // (mappedDropdowns()). The second shows the stored setting, as
+    // foamy-github's do, so a failed CLI save rolls back nothing it shows.
+    Column {
+      x: 560
+      y: 120
+      FoamyDropdown {
+        id: mappedDropdown
+        width: 160
+        value: mappedQueue.value("hide") ? "hide" : "mute"
+        queue: mappedQueue
+        queueKey: "hide"
+        options: ["mute", "hide"]
+        onChanged: function (v) {
+          mappedQueue.save("hide", v === "hide")
+        }
+      }
+      FoamyDropdown {
+        id: failingDropdown
+        width: 160
+        value: failingQueue.settings.hide ? "hide" : "mute"
+        queue: failingQueue
+        queueKey: "hide"
+        options: ["mute", "hide"]
+        onChanged: function (v) {
+          failingQueue.save("hide", v === "hide")
+        }
+      }
+    }
     // A dropdown disabled while its list is open, itself or through its
     // parent (disabledDropdown()); nothing lies under its list.
     Item {
@@ -682,6 +712,50 @@ ShellRoot {
         mode: "x"
       })
   }
+  // The queues of the mapped dropdowns, both through the fake CLI, which
+  // fails every save of foamy.link-fail.
+  readonly property var mappedFields: [
+    {
+      key: "hide",
+      type: "boolean",
+      defaultValue: false
+    },
+    {
+      key: "other",
+      type: "string",
+      defaultValue: ""
+    }
+  ]
+  FoamyPrefsQueue {
+    id: mappedQueue
+    bar: cliBar
+    moduleName: "foamy.link-mapped"
+    fields: shell.mappedFields
+    settings: ({
+        id: "foamy.link-mapped",
+        hide: false
+      })
+  }
+  FoamyPrefsQueue {
+    id: failingQueue
+    bar: cliBar
+    moduleName: "foamy.link-fail"
+    fields: shell.mappedFields
+    settings: ({
+        id: "foamy.link-fail",
+        hide: false
+      })
+  }
+  // The failing dropdown as the second pick's save starts, just after the
+  // first pick's save failed (mappedDropdowns()).
+  property var failingAtSecondSave: null
+  Connections {
+    target: failingQueue
+    function onSavingChanged() {
+      if (failingQueue.saving && failingQueue.lastFailed !== null && shell.failingAtSecondSave === null)
+        shell.failingAtSecondSave = [failingQueue.error, failingDropdown.shownValue, failingDropdown.pickHeld]
+    }
+  }
   // A dropdown linked to a queue and a key gives way when the queue
   // refuses that key: at once when save() refuses the pick (it returns
   // false), and when a pick that waited behind a running save is refused
@@ -705,6 +779,39 @@ ShellRoot {
     }, 5000, function (drained) {
       eq([drained, linkCliQueue.error, queuedDropdown.value, queuedDropdown.shownValue], [true, "Settings can't be saved: this widget has no bar entry.", "y", "y"], "a queued pick the linked queue refuses as it runs gives way at once")
       then()
+    })
+  }
+
+  // A linked dropdown whose onChanged saves another value than the option
+  // (true for "hide") gives way when the queue refuses or fails the pick's
+  // own save, whatever value that names; a refusal of another save of the
+  // key leaves it, so a newer pick whose save still waits stays on show.
+  function mappedDropdowns(then) {
+    // foamy-teams' case: the pick waits behind a save of another key, and
+    // the widget loses its bar entry before the pick's save runs.
+    mappedQueue.save("other", "x")
+    mappedDropdown.select("hide")
+    eq([mappedQueue.saving, mappedQueue.waiting.length, mappedDropdown.value, mappedDropdown.shownValue], [true, 1, "mute", "hide"], "a mapped pick waits behind a running save and shows")
+    mappedQueue.moduleName = ""
+    wait.waitFor(function () {
+      return !mappedQueue.busy
+    }, 5000, function (drained) {
+      eq([drained, mappedQueue.error, mappedDropdown.value, mappedDropdown.shownValue], [true, "Settings can't be saved: this widget has no bar entry.", "mute", "mute"], "a queued mapped pick the linked queue refuses as it runs gives way at once")
+      // Every CLI save of failingQueue fails. The first pick's save runs; a
+      // value of the key that save() refuses at once is another save's.
+      failingDropdown.select("hide")
+      failingQueue.save("hide", "not a boolean")
+      eq([failingQueue.saving, failingQueue.error, failingDropdown.shownValue], [true, "That value isn't allowed.", "hide"], "a refusal at once of another save of the key leaves the pick whose save runs")
+      // The second pick, of the same value, waits behind the first one's save.
+      failingDropdown.select("hide")
+      eq([failingQueue.saving, failingQueue.waiting.length, failingDropdown.shownValue], [true, 1, "hide"], "a second mapped pick waits behind the first one's running save and shows")
+      wait.waitFor(function () {
+        return !failingQueue.busy
+      }, 5000, function (done) {
+        eq(shell.failingAtSecondSave, ["Couldn't save the setting.", "hide", true], "the failure of the first pick's save leaves the second pick on show while its own save waits")
+        eq([done, failingDropdown.shownValue, failingDropdown.pickHeld], [true, "mute", false], "the failure of the pick's own save ends it, whatever value it saved")
+        then()
+      })
     })
   }
 
@@ -1557,9 +1664,11 @@ ShellRoot {
       shell.refusedPastes(function () {
         shell.disabledDropdown(function () {
           shell.linkedDropdowns(function () {
-            console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-            console.log("FOAMY DONE")
-            Qt.quit()
+            shell.mappedDropdowns(function () {
+              console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+              console.log("FOAMY DONE")
+              Qt.quit()
+            })
           })
         })
       })
