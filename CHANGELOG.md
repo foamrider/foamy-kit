@@ -30,9 +30,11 @@
   the failure rolls back nothing it shows. Another object linked as the
   queue, with only a `failed(key, value, error)` signal, has no such
   state: there the failure must name the option's value, as before, so an
-  older pick's failure leaves a newer pick on show. Plugin change: none
-  needed; foamy-teams' dropdown works as it is. DESIGN.md: Choices.
-  `tests/test_features.py`.
+  older pick's failure leaves a newer pick on show. FoamyScheduleDay's
+  link is unchanged and matches a later refusal by the range it sent; its
+  header and README.md said it works "as FoamyDropdown does" and now say
+  that. Plugin change: none needed; foamy-teams' dropdown works as it is.
+  DESIGN.md: Choices. `tests/test_features.py`.
 - `FoamyTextSettingField` and `FoamyNumberField` (`saveFailed()`, since
   0.3.4) show the saved value again when `saveFailed()` is called inside
   their own `committed()`, and the same input can be sent again. Before,

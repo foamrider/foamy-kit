@@ -36,9 +36,12 @@ import "FoamySchedule.js" as Schedule
 // When a save fails without changing `value`, call saveFailed(): the time
 // fields show `value` again (a field edited since keeps its draft) and the
 // same range can be sent again. With FoamyPrefsQueue, link the row to the
-// queue and its key instead (`queue: prefs; queueKey: modelData`), as
-// FoamyDropdown does: a refusal of that key, whether save() refuses the
-// range or a queued save of it is refused as it runs, calls saveFailed().
+// queue and its key instead (`queue: prefs; queueKey: modelData`): a
+// refusal of that key calls saveFailed(), at once when save() refuses the
+// range, and later when a refusal or failure of the key names the range
+// the row last sent (a queued save refused as it runs). It matches that
+// later refusal by its value, so save the range as the row emits it; it
+// reads no queue state, unlike FoamyDropdown's link.
 // `labelComponent` is any Component whose root has a `text` property
 // (default: a plain-text body label); `labelItem` is it.
 ColumnLayout {
@@ -100,8 +103,9 @@ ColumnLayout {
   property bool _sending: false
 
   // Optional link to the FoamyPrefsQueue the caller saves through (or any
-  // object with its failed(key, value, error) signal) and the key it saves,
-  // as FoamyDropdown has: a refusal of that key calls saveFailed() itself.
+  // object with its failed(key, value, error) signal) and the key it saves:
+  // a refusal of that key for the range the row sent calls saveFailed()
+  // itself (see the header).
   property QtObject queue: null
   property string queueKey: ""
   Connections {
