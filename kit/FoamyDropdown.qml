@@ -15,9 +15,10 @@ import qs.Ui
 // between opens, later changes to the setting would stop showing). Each
 // pick gets a new `serial` (a handler may take `value` only). Until the
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
-// as soon as `value` changes, the list is reopened, saveFailed() is called,
-// or after pickHoldMs. When the save fails without changing `value`, call
-// saveFailed() so the saved value shows again at once. A caller whose saves
+// as soon as `value` changes, `value` itself is picked, the list is
+// reopened, saveFailed() is called, or after pickHoldMs. When the save fails
+// without changing `value`, call saveFailed() so the saved value shows again
+// at once. A caller whose saves
 // end one by one (quick picks, each its own save) passes the pick's serial,
 // saveFailed(serial): only that pick gives way, so a newer pick, even of
 // the same value, stays on show while its own save runs.
@@ -124,7 +125,8 @@ Item {
   onEnabledChanged: if (!enabled)
     popup.close()
   // Pick an option as the list does: show it and emit changed(), without
-  // touching `value`. Each pick gets the next serial.
+  // touching `value`. Each pick gets the next serial. A pick of `value`
+  // holds nothing; it ends the hold of an older pick, so `value` shows.
   function select(v) {
     v = String(v)
     var serial = ++_pickCount
@@ -133,6 +135,9 @@ Item {
       pickHeld = true
       _heldSerial = serial
       pickHold.restart()
+    } else {
+      pickHold.stop()
+      pickHeld = false
     }
     _savingSerial = serial
     changed(v, serial)

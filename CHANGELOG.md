@@ -2,6 +2,19 @@
 
 ## 0.14.1 — 2026-11-26
 
+### Fixed
+- `FoamyDropdown.select()` (since 0.1.0): a pick of the value in use ends
+  the hold of an older pick, so the last pick shows. Before, only a pick
+  of another value was held, so with `value` "c" the picks "a" and then
+  "c" kept "a" on show (`shownValue` "a", `pickHeld` true) until `value`
+  changed, "a" was refused or `pickHoldMs` (10 s) passed; in foamy-monitor,
+  with GTK scale 2 in use, the picks 3 and then 2 showed 3 until the
+  request for 3 ended. Code that picks with `select()` met it; a pick from
+  the list did not, as opening the list ends a hold. The pick of the value
+  in use still emits `changed()` with a serial of its own, and a refusal
+  of the older pick after it (`saveFailed(serial)`) changes nothing.
+  Plugin change: none needed. `tests/test_features.py`.
+
 ## 0.14.0 — 2026-11-22
 
 ### Added

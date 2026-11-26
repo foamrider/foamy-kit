@@ -731,6 +731,19 @@ ShellRoot {
     serialDropdown.select("b")
     serialDropdown.saveFailed()
     eq(serialDropdown.shownValue, "c", "saveFailed() without a serial still drops whatever pick is on show")
+    // A pick of the value in use after a pick of another value: the last
+    // pick is the value in use, so it shows at once, and the refusal of the
+    // older pick that comes later changes nothing.
+    serialDropdown.select("a")
+    serialDropdown.select("c")
+    var last = serialChanges.slice(-2)
+    eq(last.map(function (change) {
+      return change[0]
+    }), ["a", "c"], "a pick of the value in use emits changed() too")
+    check(last.length === 2 && last[0][1] < last[1][1], "the pick of the value in use has a serial of its own: " + JSON.stringify(last))
+    eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], "a pick of the value in use ends the hold of the older pick")
+    serialDropdown.saveFailed(last[0][1])
+    eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], "a refusal of the older pick then changes nothing")
   }
 
   // A dropdown disabled while its list is open (a settings page that starts
