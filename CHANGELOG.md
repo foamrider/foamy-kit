@@ -117,7 +117,7 @@
   that code emitting `FoamyDropdown.changed()` itself picks with
   `select()`, and that a test runs FoamyPopup in an active window.
 - foamy-media, foamy-syncthing and foamy-todoist may render their
-  `preview.png` again with `preview/render.py` for round corners.
+  `preview.png` again with `preview/render.py` for rounded corners.
   foamy-menu's black-cornered `preview.png` comes from its own
   `tests/launcher.py --shots`, which this does not change.
 
