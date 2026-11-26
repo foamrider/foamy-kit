@@ -18,7 +18,9 @@ import QtQuick.Controls as Controls
 // Esc goes back. Tab walks the form controls (focusable: true); the page
 // scrolls to keep the focused control visible (a SafeTextArea's box, not
 // its whole text). RTL mirrors the whole page.
-// Focus `backTarget` when the page opens.
+// Focus `backTarget` when the page opens: focusBack() does, and does
+// nothing while the page is hidden, so a Qt.callLater(page.focusBack) from
+// when Settings showed is safe after Settings hid again.
 //
 // Scrolling: a wheel notch moves ~3 rows and touchpad deltas map 1:1
 // (FoamyWheelScroll; Qt's own wheel handling loses most of a high-resolution
@@ -49,8 +51,11 @@ FocusScope {
   LayoutMirroring.childrenInherit: true
   implicitHeight: header.implicitHeight + column.implicitHeight
 
+  // A call deferred when Settings showed (Qt.callLater) can run after the
+  // page hid again in the same event-loop turn: a hidden page takes no keys.
   function focusBack() {
-    header.backButton.forceActiveFocus()
+    if (visible)
+      header.backButton.forceActiveFocus()
   }
   function resetScroll() {
     scroll.contentY = 0

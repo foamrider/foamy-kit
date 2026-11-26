@@ -9,8 +9,9 @@ import "plugin/kit"
 // catcher), with no onHidden handler in the plugin: open Settings, close the
 // popup, open it, Esc closes it; Esc on Settings goes back, the next Esc
 // closes; a field on the page that hides with it; a focused Retry that
-// hides while Settings stays open leaves the keys with the page; and a
-// plugin that refocuses its own list in onHidden keeps that.
+// hides while Settings stays open leaves the keys with the page; a
+// plugin that refocuses its own list in onHidden keeps that; and a
+// deferred focusBack() that runs after Settings hid again takes no keys.
 ShellRoot {
   id: shell
   readonly property string tag: Quickshell.env("FOAMY_TAG")
@@ -262,10 +263,38 @@ ShellRoot {
           return focused() === popup.bodyItem.list
         }, 3000, function (ok) {
           check(ok, "the plugin's own refocus wins: " + focused())
-          console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-          console.log("FOAMY DONE")
-          Qt.quit()
+          lateFocusBack()
         })
+      })
+    })
+  }
+
+  // 6. Settings shows and hides again in one event-loop turn (two quick
+  // inputs, or a settings IPC call and then a close), and the focusBack()
+  // a plugin deferred when Settings showed runs after it hid: the hidden
+  // page takes no keys, so Esc closes the popup.
+  property bool lateRan: false
+  function lateFocusBack() {
+    shell.ownRefocus = false
+    panel.close()
+    reopen("late focusBack", function () {
+      var page = popup.bodyItem.page
+      settingsState.show()
+      Qt.callLater(function () {
+        page.focusBack()
+        shell.lateRan = true
+      })
+      settingsState.hide()
+      wait.waitFor(function () {
+        return shell.lateRan
+      }, 3000, function (ran) {
+        check(ran && !page.visible, "the deferred focusBack() ran after Settings hid")
+        check(!inside(focused(), page), "the hidden settings page takes no keys from a late focusBack(): " + focused())
+        esc()
+        check(!panel.opened, "Esc closes the popup after a late focusBack()")
+        console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+        console.log("FOAMY DONE")
+        Qt.quit()
       })
     })
   }

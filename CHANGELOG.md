@@ -47,6 +47,20 @@
   (studio/ScenePage.qml, the colour field) can drop their
   `Qt.callLater(… .saveFailed)` at their next sync.
   `tests/test_features.py`.
+- `FoamySettingsPage.focusBack()` (since 0.1.0) does nothing while the
+  page is hidden. foamy-github, foamy-syncthing, foamy-todoist,
+  foamy-train, foamy-vitals and foamy-zendesk call
+  `Qt.callLater(settingsPage.focusBack)` when Settings shows. Qt delivers
+  queued input events before deferred calls, so when Settings showed and
+  hid again in one event-loop turn (two quick inputs while the shell was
+  busy, or a settings IPC call and then a close), the call ran on the
+  hidden page and gave the keys to its hidden Back button: Esc went to
+  the hidden page and did nothing, also after the popup closed and
+  opened again. FoamyPopup gives the keys back only when the item that
+  has them hides, so it could not see this; the plugins' own refocus,
+  which they dropped at the 0.14.0 sync, used to cover it. Now the keys
+  stay where they are. Plugin change: none needed; the six plugins'
+  deferred call is safe as it is. `tests/test_popup_keys.py`.
 
 ## 0.14.0 — 2026-11-22
 
