@@ -11,9 +11,10 @@ import "plugin/kit"
 // closes; a field on the page that hides with it; a focused Retry that
 // hides while Settings stays open leaves the keys with the page; a
 // plugin that refocuses its own list in onHidden keeps that; a deferred
-// focusBack() that runs after Settings hid again takes no keys; and one
+// focusBack() that runs after Settings hid again takes no keys; one
 // deferred as show() opens the closed popup on Settings gives the page the
-// keys.
+// keys; and one called at once before the page shows gives it the keys
+// once it shows.
 ShellRoot {
   id: shell
   readonly property string tag: Quickshell.env("FOAMY_TAG")
@@ -305,6 +306,10 @@ ShellRoot {
   // by then and takes the keys, so Esc goes back.
   property bool deferOnShow: false
   property bool openRan: false
+  // Case 8: focusBack() at once, from this handler, which runs before the
+  // page's `visible` binding follows `editing` (it was connected first).
+  property bool callOnShow: false
+  property var hiddenAtCall: null
   Connections {
     target: settingsState
     function onEditingChanged() {
@@ -313,6 +318,10 @@ ShellRoot {
           popup.bodyItem.page.focusBack()
           shell.openRan = true
         })
+      if (settingsState.editing && shell.callOnShow) {
+        shell.hiddenAtCall = !popup.bodyItem.page.visible
+        popup.bodyItem.page.focusBack()
+      }
     }
   }
   function focusBackOnOpen() {
@@ -327,6 +336,26 @@ ShellRoot {
       check(ran && panel.opened && page.visible && inside(focused(), page), "a focusBack() deferred as show() opens the popup gives the page the keys: " + focused())
       esc()
       check(!settingsState.editing && panel.opened, "Esc then goes back from Settings")
+      focusBackBeforeShown()
+    })
+  }
+
+  // 8. focusBack() called at once while the page does not show yet (a
+  // handler of `editing` that runs before the page's `visible` binding):
+  // the call tries again after the current turn, when the page shows, so
+  // the page gets the keys and Esc goes back.
+  function focusBackBeforeShown() {
+    shell.callOnShow = true
+    settingsState.show()
+    shell.callOnShow = false
+    var page = popup.bodyItem.page
+    check(shell.hiddenAtCall === true, "the call ran while the page did not show yet: " + shell.hiddenAtCall)
+    wait.waitFor(function () {
+      return inside(focused(), page)
+    }, 3000, function (ok) {
+      check(ok && page.visible, "a focusBack() called before the page shows gives it the keys once it shows: " + focused())
+      esc()
+      check(!settingsState.editing && panel.opened, "Esc then goes back from Settings, after a call before the page showed")
       console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")
       Qt.quit()

@@ -52,8 +52,8 @@
   (studio/ScenePage.qml, the colour field) can drop their
   `Qt.callLater(… .saveFailed)` at their next sync.
   `tests/test_features.py`.
-- `FoamySettingsPage.focusBack()` (since 0.1.0) does nothing while the
-  page is hidden. foamy-github, foamy-syncthing, foamy-todoist,
+- `FoamySettingsPage.focusBack()` (since 0.1.0) gives a hidden page no
+  keys. foamy-github, foamy-syncthing, foamy-todoist,
   foamy-train, foamy-vitals and foamy-zendesk call
   `Qt.callLater(settingsPage.focusBack)` when Settings shows. Qt delivers
   queued input events before deferred calls, so when Settings showed and
@@ -63,11 +63,21 @@
   the hidden page and did nothing, also after the popup closed and
   opened again. FoamyPopup gives the keys back only when the item that
   has them hides, so it could not see this; the plugins' own refocus,
-  which they dropped at the 0.14.0 sync, used to cover it. Now the keys
-  stay where they are. A call deferred as `show()` opens a closed popup on
-  Settings finds the page shown and gives it the keys, as before. Plugin
-  change: none needed; the six plugins' deferred call is safe as it is.
-  `tests/test_popup_keys.py`.
+  which they dropped at the 0.14.0 sync, used to cover it. Now a call
+  while the page does not show tries once more after the current
+  event-loop turn and gives the keys only if the page shows then: a call
+  that runs after Settings hid again leaves the keys where they are, and
+  one made at once before the page's `visible` follows the settings state
+  (a handler of `editing` that runs first) still gives the page the keys.
+  Plugins may rely on this: call `focusBack()` at once or deferred, when
+  or after Settings shows; a call after Settings hid does nothing. Every
+  plugin's call on its dev branch already runs deferred after Settings
+  shows (foamy-audio, foamy-bolt, foamy-clock, foamy-github, foamy-media,
+  foamy-notification-center, foamy-power, foamy-syncthing, foamy-teams,
+  foamy-todoist, foamy-train, foamy-vitals, foamy-weather, foamy-zendesk)
+  or from the page's own account editor (foamy-teams' `leaveEditor()`,
+  which after a save that ends with the popup closed now leaves the keys
+  alone). Plugin change: none needed. `tests/test_popup_keys.py`.
 - The 0.14.0 notes below and the docs said three things that are not so
   for every plugin; the 0.14.0 text is corrected (it was never released
   beyond the local dev branch). (1) The pick serial entry said a handler
