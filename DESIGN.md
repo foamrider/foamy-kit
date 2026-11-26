@@ -144,7 +144,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 124 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 125 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`. Text edited in place, where
