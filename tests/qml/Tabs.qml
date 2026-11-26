@@ -386,13 +386,13 @@ ShellRoot {
     check(cursor.byKeys && row0.hasCursor && row0.borderTop === FoamyStyle.borderWidth && sameColor(row0.borderSpec.color, row0.accent), "the keys' cursor: an accent border " + [row0.borderTop, row0.borderSpec.color])
     cursor.byKeys = false
     cursor.index = saved
-    // Light themes: a destructive label on its strongest tint reads at
-    // 4.5:1 too (dark themes keep the raw red, 4.3:1 there: not changed
-    // here). Any theme: a
-    // primary label takes whichever of text and background reads better.
+    // A destructive label on its strongest tint reads at 4.5:1 in light
+    // and dark themes (the preview's dark red drew 4.32:1 there before
+    // 0.15.1). A primary label takes whichever of text and background
+    // reads better.
     var urgentTint = Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))
     var inkOther = Qt.colorEqual(FoamyPalette.accentInk, FoamyPalette.text) ? FoamyPalette.background : FoamyPalette.text
-    check((!FoamyPalette.lightTheme || FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint) >= 4.5) && FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent) >= FoamyPalette.contrastRatio(inkOther, FoamyPalette.accent), "the destructive label and the primary ink read " + [FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint).toFixed(2), FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent).toFixed(2)])
+    check(FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint) >= 4.5 && FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent) >= FoamyPalette.contrastRatio(inkOther, FoamyPalette.accent), "the destructive label and the primary ink read " + [FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint).toFixed(2), FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent).toFixed(2)])
     // The palette in this theme: status marks and secondary text read at
     // 4.5:1 (light themes darken only as far as that), muted hints at 4:1.
     var minimum = function (c) {
@@ -403,6 +403,13 @@ ShellRoot {
     }) && minimum(FoamyPalette.secondaryText) >= 4.5 && minimum(FoamyPalette.mutedText) >= 4, "status marks and text tones read (" + ["error", "warning", "success", "info"].map(function (k) {
       return minimum(FoamyPalette.onSurface(FoamyPalette[k])).toFixed(2)
     }) + ", " + minimum(FoamyPalette.secondaryText).toFixed(2) + ", " + minimum(FoamyPalette.mutedText).toFixed(2) + ")")
+    // A status colour that already reads comes back unchanged, so a theme
+    // keeps its look wherever it read before (light or dark).
+    check(["error", "warning", "success", "info"].every(function (k) {
+      return minimum(FoamyPalette[k]) < 4.5 || Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette[k]), FoamyPalette[k])
+    }), "a status colour that reads is returned unchanged " + ["error", "warning", "success", "info"].map(function (k) {
+      return FoamyPalette[k] + "->" + FoamyPalette.onSurface(FoamyPalette[k])
+    }))
     check(part(s, 0, "foamyTabCount").font.family === FoamyStyle.monoFamily && part(s, 0, "foamyTabCount").font.pixelSize === FoamyStyle.font.bodySmall, "count in the mono bodySmall")
     // The open tab: DemiBold text label, accent icon, count and underline.
     check(part(s, 0, "foamyTabLabel").font.weight === Font.DemiBold && part(s, 2, "foamyTabLabel").font.weight === Font.Normal, "open label DemiBold, others normal")

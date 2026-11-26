@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.15.1 — 2026-11-26
+
+### Fixed
+- Dark themes: `FoamyPalette.onSurface(c, surface)` returned the colour
+  unchanged (since 0.1.0, where it came in light-only), so a destructive
+  `FoamyButton` label on its strongest (pressed) tint drew 4.30:1 in the preview's dark theme, under the 4.5:1
+  the kit promises for text. In a dark theme it now lightens
+  (`Qt.lighter`) in the steps the light path darkens in, only until it
+  reads at 4.5:1 on `surface` as drawn, at most 1.7 times; the hue stays
+  (preview dark #f38ba8 -> #ff92b0, 4.73:1; Nord #bf616a, 2.33:1 ->
+  4.63:1). Light themes are unchanged. Plugins' dark looks change at their
+  next sync only where a status colour did not read: the destructive
+  label, a destructive menu row under the cursor, the urgent tab count and
+  error or status text in themes with a dim red or yellow (Nord, Kanagawa,
+  Miasma, Solitude and others). `tests/test_tabs.py` (the destructive
+  label check now runs in the dark cases, which failed at 4.30:1 before;
+  a status colour that already reads comes back unchanged). DESIGN.md:
+  Tokens.
+
 ## 0.15.0 — 2026-11-26
 
 From the foamy-todoist UI review. Every plugin's look changes at its next
