@@ -34,9 +34,15 @@ QtObject {
   function at(i) {
     return index === i
   }
+  // The keys moved the cursor last (move(); a panel that sets `index`
+  // from a key sets this too); the pointer clears it (hover()). Surfaces
+  // draw the keys' cursor with an accent border (FoamyCursorSurface.byKeys).
+  property bool byKeys: false
   function hover(i) {
-    if (i >= 0 && i < count)
+    if (i >= 0 && i < count) {
       index = i
+      byKeys = false
+    }
   }
   function reset() {
     index = -1
@@ -52,6 +58,7 @@ QtObject {
     catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
   }
   function move(delta) {
+    byKeys = true
     if (count <= 0) {
       index = -1
       return

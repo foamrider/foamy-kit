@@ -44,7 +44,9 @@ Rectangle {
 
   signal clicked
 
-  readonly property color foreground: primary ? FoamyPalette.onAccent : destructive ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
+  // Destructive: readable on its strongest (pressed) tint, so the label
+  // doesn't change on hover.
+  readonly property color foreground: primary ? FoamyPalette.accentInk : destructive ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))) : FoamyPalette.text
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight

@@ -13,7 +13,10 @@ import QtQuick
 //   FoamyMenuItem { separator: true }
 //
 // enabled: false shows it greyed out and skips it with the keyboard;
-// visible: false leaves it out. checked: true marks it with a check.
+// visible: false leaves it out. checked: true marks it with a check: the
+// current choice of a set (one entry), where a menu opened from the keys
+// starts (FoamyMenu.open(true)). A multi-select menu (labels) with exactly
+// one checked entry starts on it too, so there Enter unchecks it.
 QtObject {
   id: root
 

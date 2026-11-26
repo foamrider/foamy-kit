@@ -396,6 +396,14 @@ ShellRoot {
       var footer = clock.footer
       var r = footer.refreshButton.mapToItem(footer, 0, 0)
       var c = clock.calendarButton.mapToItem(footer, 0, 0)
+      // The keys' cursor on an action: the accent border; the pointer's: none.
+      var calendar = clock.calendarButton
+      calendar.hasCursor = true
+      calendar.cursorByKeys = true
+      var byKeysBorder = calendar.border.width
+      calendar.cursorByKeys = false
+      check(byKeysBorder === 1 && calendar.border.width === 0 && Qt.colorEqual(calendar.border.color, Commons.Color.accent), "an action's keys' cursor has the accent border " + [byKeysBorder, calendar.border.width])
+      calendar.hasCursor = false
       var st = findByName(footer, "foamyFooterStatus")
       var sp = st.mapToItem(footer, 0, 0)
       if (shell.rtl) {
@@ -412,6 +420,9 @@ ShellRoot {
       // Buttons.
       var page = formPopup.bodyItem
       check(!Qt.colorEqual(page.primary.color, page.secondary.color) && !Qt.colorEqual(page.destructive.color, page.secondary.color), "kinds have their own fill")
+      // A primary label is the accent's ink: the popup's text or background,
+      // never black for want of a colour.
+      check(Qt.colorEqual(page.primary.foreground, FoamyPalette.accentInk) && (Qt.colorEqual(FoamyPalette.accentInk, FoamyPalette.text) || Qt.colorEqual(FoamyPalette.accentInk, FoamyPalette.background)), "a primary label in accentInk " + [page.primary.foreground, FoamyPalette.text, FoamyPalette.background])
       check(page.secondary.border.width >= 1 && page.destructive.border.width >= 1, "secondary/destructive are bordered")
       page.secondary.forceActiveFocus()
       ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)

@@ -39,8 +39,9 @@ PopupCard {
   borderSpec: FoamyStyle.popupBorderSpec
   padding: FoamyStyle.menuPadding
   contentWidth: fittedContentWidth(FoamyStyle.menuWidth)
-  // An open FoamyMenu may ask for room below its button (foamyMenuReserve):
-  // the card grows while it is open instead of the menu scrolling.
+  // An open FoamyMenu may ask for room below its button (foamyMenuReserve)
+  // when it fits neither below nor above it: the card grows while it is
+  // open (FoamyMenu.maxGrowHeight of menu at most; past it the menu scrolls).
   contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
 
   onOpenChanged: if (open && body)

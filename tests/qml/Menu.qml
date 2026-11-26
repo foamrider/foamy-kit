@@ -75,6 +75,7 @@ ShellRoot {
         property alias rowBelow: rowBelow
         property alias longMenu: longMenu
         property alias longButton: longButton
+        property alias rowMenu: rowMenu
         // Synthetic keys and clicks go to the window the card is in.
         property alias ev: bodyEvent
         TestEvent {
@@ -205,6 +206,17 @@ ShellRoot {
             height: 10
             focus: true
           }
+          // A row's ⋯ inside a cursor surface, which is a bordered surface
+          // of its own: its menu still belongs to the card.
+          FoamyCursorSurface {
+            width: parent.width
+            height: 40
+            FoamyAction {
+              id: rowButton
+              anchors.right: parent.right
+              iconName: "ellipsis"
+            }
+          }
           // A fixed room, shorter than the long menu: the menu scrolls.
           Item {
             id: longHost
@@ -214,6 +226,33 @@ ShellRoot {
               id: longButton
               anchors.right: parent.right
               iconName: "ellipsis"
+            }
+          }
+        }
+        FoamyMenu {
+          id: rowMenu
+          anchorItem: rowButton
+          FoamyMenuItem {
+            text: "Row entry"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "The current choice"
+            iconName: "check"
+            checked: true
+          }
+          FoamyMenuItem {
+            text: "Pick one"
+            iconName: "check"
+            FoamyMenuItem {
+              objectName: "subFirst"
+              text: "First"
+              iconName: "check"
+            }
+            FoamyMenuItem {
+              text: "Second"
+              iconName: "check"
+              checked: true
             }
           }
         }
@@ -310,8 +349,60 @@ ShellRoot {
           FoamyMenuItem {
             text: "Four"
             iconName: "check"
+          },
+          FoamyMenuItem {
+            text: "More"
+            iconName: "check"
+            FoamyMenuItem {
+              text: "Only"
+              iconName: "check"
+            }
           }
         ]
+      }
+    }
+  }
+
+  // A button low in its card, with room above for its menu but not below:
+  // the menu opens above and the card keeps its height.
+  FoamyPopup {
+    id: lowPopup
+    anchorItem: sim.anchor
+    bar: bar
+    open: false
+    centerOnBar: true
+    body: Component {
+      Column {
+        property alias menu: lowMenu
+        width: FoamyStyle.popupWidth
+        Item {
+          width: parent.width
+          height: FoamyStyle.rowHeight * 12
+        }
+        FoamyAction {
+          id: lowButton
+          iconName: "ellipsis"
+        }
+        FoamyMenu {
+          id: lowMenu
+          anchorItem: lowButton
+          FoamyMenuItem {
+            text: "One"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Two"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Three"
+            iconName: "check"
+          }
+          FoamyMenuItem {
+            text: "Four"
+            iconName: "check"
+          }
+        }
       }
     }
   }
@@ -559,14 +650,61 @@ ShellRoot {
           check(grown(), "a short card grows for the menu " + shell.shortBefore + " -> " + shortCard.height)
           check(fits(), "the menu fits without scrolling " + shortMenu.panel.height + " / " + shortMenu.overlayItem.naturalHeight)
           check(inside(), "and stays inside the card")
-          shortCard.grabToImage(function (shot) {
-            shot.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
-            band.closeMenu()
-            wait.waitFor(function () {
-              return near(shortCard.height, shell.shortBefore)
-            }, 5000, function (ok) {
-              check(ok, "the card shrinks back after " + shortCard.height)
-              step7.start()
+          // A shorter level (a submenu) doesn't shrink the grown card under
+          // the open menu (a shrink would show within half a second).
+          var grownHeight = shortCard.height
+          shortMenu.activate(shortMenu.entries.length - 1)
+          check(shortMenu.inSubmenu, "the short menu's submenu opened")
+          wait.waitFor(function () {
+            return shortCard.height < grownHeight - 1
+          }, 500, function (shrank) {
+            check(!shrank, "a shorter submenu keeps the grown card " + [grownHeight, shortCard.height])
+            shortMenu.leaveSubmenu()
+            shortCard.grabToImage(function (shot) {
+              shot.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
+              band.closeMenu()
+              wait.waitFor(function () {
+                return near(shortCard.height, shell.shortBefore)
+              }, 5000, function (ok) {
+                check(ok, "the card shrinks back after " + shortCard.height)
+                // Capped: the card grows by at most maxGrowHeight of menu,
+                // and the rest of the menu scrolls.
+                shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 3
+                band.openMenu(true)
+                wait.waitFor(function () {
+                  return shortCard.height > shell.shortBefore + 10
+                }, 5000, function (grewSome) {
+                  check(grewSome && shortCard.height < shell.shortBefore + shortMenu.overlayItem.naturalHeight - 20 && shortMenu.panel.height < shortMenu.overlayItem.naturalHeight - 1, "a capped growth: the card grows less, the menu scrolls " + [shortCard.height, shell.shortBefore, shortMenu.panel.height, shortMenu.overlayItem.naturalHeight])
+                  band.closeMenu()
+                  shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 9
+                  wait.waitFor(function () {
+                    return near(shortCard.height, shell.shortBefore)
+                  }, 5000, function () {
+                    // Room above, none below: above, and no growth.
+                    shortPopup.open = false
+                    lowPopup.open = true
+                    wait.waitFor(function () {
+                      return lowPopup.bodyItem && lowPopup.cardItem && lowPopup.cardItem.height > FoamyStyle.rowHeight * 12
+                    }, 5000, function () {
+                      var lowCard = lowPopup.cardItem
+                      var lowBefore = lowCard.height
+                      var low = lowPopup.bodyItem.menu
+                      low.open(true)
+                      wait.waitFor(function () {
+                        return low.opened && low.panel.height > 0
+                      }, 5000, function () {
+                        var button = low.anchorItem.mapToItem(lowCard, 0, 0)
+                        var panel = low.panel.mapToItem(lowCard, 0, 0)
+                        check(near(lowCard.height, lowBefore) && panel.y + low.panel.height <= button.y + 1 && near(low.panel.height, low.overlayItem.naturalHeight), "room above: the menu opens above, the card keeps its height " + [lowBefore, lowCard.height, panel.y, low.panel.height, button.y])
+                        low.close()
+                        lowPopup.open = false
+                        shortPopup.open = true
+                        step7.start()
+                      })
+                    })
+                  })
+                })
+              })
             })
           })
         })
@@ -615,6 +753,22 @@ ShellRoot {
     interval: 100
     onTriggered: {
       var body = popup.bodyItem
+      body.rowMenu.open(false)
+      check(body.rowMenu.opened && body.rowMenu.overlayItem.parent === popup.cardItem && body.rowMenu.panel.height > 0, "a menu anchored inside a row's surface lives in the popup card " + body.rowMenu.overlayItem.parent)
+      body.rowMenu.close()
+      // From the keys it starts on the current choice, so Enter keeps it.
+      body.rowMenu.open(true)
+      check(body.rowMenu.currentIndex === 1, "keyboard open selects the checked entry " + body.rowMenu.currentIndex)
+      // A submenu too starts on its checked entry (after Back, First).
+      body.rowMenu.activate(2)
+      check(body.rowMenu.inSubmenu && body.rowMenu.currentIndex === 2, "a submenu starts on its checked entry " + body.rowMenu.currentIndex)
+      // Two checked (a multi-select set): the first entry, not a checked one.
+      body.rowMenu.leaveSubmenu()
+      body.rowMenu.items[2].items[0].checked = true
+      body.rowMenu.activate(2)
+      check(body.rowMenu.currentIndex === 1, "two checked: the first entry " + body.rowMenu.currentIndex)
+      body.rowMenu.items[2].items[0].checked = false
+      body.rowMenu.close()
       var menu = body.longMenu
       body.catcher.forceActiveFocus()
       menu.open(true)
