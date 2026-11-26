@@ -387,7 +387,7 @@ ShellRoot {
     cursor.byKeys = false
     cursor.index = saved
     // A destructive label on its strongest tint reads at 4.5:1 in light
-    // and dark themes (the preview's dark red drew 4.32:1 there before
+    // and dark themes (the preview's dark red drew 4.30:1 there before
     // 0.15.1). A primary label takes whichever of text and background
     // reads better.
     var urgentTint = Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))
