@@ -18,6 +18,8 @@ from common import KIT_ROOT, harness, report, synced_demo  # noqa: E402
 FAKE_OMARCHY = """#!/bin/bash
 printf '%s\\n' "omarchy $*" >> "$FOAMY_CALLS"
 sleep 0.3
+# Every save of this widget fails (Features.qml mappedDropdowns()).
+[[ ${3:-} == foamy.link-fail ]] && exit 1
 exit 0
 """
 FAKE_OMARCHY_SHELL = """#!/bin/bash

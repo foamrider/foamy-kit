@@ -31,7 +31,7 @@ edited in a plugin: change it here, then sync.
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
 | FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
 | FoamyI18n | `FoamyI18n.qml` (singleton), `FoamyI18nText.js`, `node-loader.cjs` | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations. `FoamyI18nText.js`: its value substitution, and `translator(catalog, english)` for node tests |
-| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body`; when the item in the body that has the keys hides, they go to the nearest key home that shows: the settings page while it shows (its Retry hiding as the retry starts), else the body's (Settings closing) |
+| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body`; when the item in the body that has the keys hides, they go to the nearest key home that shows: the settings page while it shows (its Retry hiding as the retry starts), else the body's (Settings closing). It learns the item with the keys from the window's `activeFocusItem`, so it needs the popup's window to be active, as it is on the desktop: a test that runs the popup in a window that is not active, or in none, puts it in a window and activates it first (`requestActivate()`) |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
 | FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
@@ -57,7 +57,7 @@ edited in a plugin: change it here, then sync.
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblems.<key>` says which), node loader for unit tests |
 | FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never between a letter and its marks or inside an emoji sequence, a flag or a surrogate pair |
-| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component, the reason of a refused paste under the row, `saveFailed()` or a FoamyPrefsQueue link, `queue`/`queueKey`, for a range that was not saved). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
+| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component, the reason of a refused paste under the row, `saveFailed()` or a FoamyPrefsQueue link, `queue`/`queueKey`, for a range that was not saved; the link matches a later refusal by the range the row sent, so the row saves the range as it emits it). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
 | FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
@@ -980,7 +980,9 @@ property, the same object. Write each read so that it adds no qmllint entry
   entry still matches; rewriting it only swaps one entry for another.
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
-FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
+FoamyPopup puts it) and `<state>.png` (the card, with an alpha channel: the
+corners outside a rounded card are transparent, also when the card holds
+an opaque rectangle or image). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da`, `--position`,
 `--rounding`, `--scale 1.25` (display scale: windows get that device pixel
 ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),

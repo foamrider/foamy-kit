@@ -296,6 +296,61 @@ ShellRoot {
         }
       }
     }
+    // Linked dropdowns that save another value than the option, as
+    // foamy-teams' "When all accounts are closed" saves "hide" as true
+    // (mappedDropdowns()). The second shows the stored setting, as
+    // foamy-github's do, so a failed CLI save rolls back nothing it shows.
+    Column {
+      x: 560
+      y: 120
+      FoamyDropdown {
+        id: mappedDropdown
+        width: 160
+        value: mappedQueue.value("hide") ? "hide" : "mute"
+        queue: mappedQueue
+        queueKey: "hide"
+        options: ["mute", "hide"]
+        onChanged: function (v) {
+          mappedQueue.save("hide", v === "hide")
+        }
+      }
+      FoamyDropdown {
+        id: failingDropdown
+        width: 160
+        value: failingQueue.settings.hide ? "hide" : "mute"
+        queue: failingQueue
+        queueKey: "hide"
+        options: ["mute", "hide"]
+        onChanged: function (v) {
+          failingQueue.save("hide", v === "hide")
+        }
+      }
+    }
+    // Settings fields that save through a queue which refuses every save at
+    // once, wired as the fields' headers say (refusedCommits()).
+    Column {
+      x: 560
+      y: 200
+      width: 160
+      FoamyTextSettingField {
+        id: refusedText
+        width: parent.width
+        value: refusingQueue.value("name")
+        onCommitted: function (v) {
+          refusingQueue.save("name", v)
+        }
+      }
+      FoamyNumberField {
+        id: refusedNumber
+        width: parent.width
+        value: refusingQueue.value("count")
+        from: 1
+        to: 100
+        onCommitted: function (v) {
+          refusingQueue.save("count", v)
+        }
+      }
+    }
     // A dropdown disabled while its list is open, itself or through its
     // parent (disabledDropdown()); nothing lies under its list.
     Item {
@@ -682,6 +737,111 @@ ShellRoot {
         mode: "x"
       })
   }
+  // The queue of the refused fields: a widget with no bar entry, so save()
+  // refuses every value at once, inside the field's own committed().
+  FoamyPrefsQueue {
+    id: refusingQueue
+    bar: cliBar
+    moduleName: ""
+    fields: [
+      {
+        key: "name",
+        type: "string",
+        defaultValue: ""
+      },
+      {
+        key: "count",
+        type: "integer",
+        min: 1,
+        max: 100,
+        defaultValue: 1
+      }
+    ]
+    settings: ({
+        name: "saved",
+        count: 20
+      })
+  }
+  property var refusals: []
+  Connections {
+    target: refusingQueue
+    function onFailed(key) {
+      shell.refusals = shell.refusals.concat([key])
+      if (key === "name")
+        refusedText.saveFailed()
+      else if (key === "count")
+        refusedNumber.saveFailed()
+    }
+  }
+  // A save the queue refuses at once comes inside the field's own
+  // committed(): with that wiring the field shows the saved value again at
+  // once, and the same input can be sent again.
+  function refusedCommits() {
+    refusedText.field.focusInput()
+    refusedText.field.selectAll()
+    type("typed")
+    key(Qt.Key_Return)
+    eq([shell.refusals, refusedText.field.text, refusedText.editing], [["name"], "saved", false], "a text the queue refuses at once shows the saved text again")
+    refusedText.field.selectAll()
+    type("typed")
+    key(Qt.Key_Return)
+    eq(shell.refusals, ["name", "name"], "the same text can be sent again after the refusal")
+    refusedNumber.field.focusInput()
+    refusedNumber.field.selectAll()
+    type("30")
+    key(Qt.Key_Return)
+    eq([shell.refusals, refusedNumber.field.text, refusedNumber.editing], [["name", "name", "count"], "20", false], "a number the queue refuses at once shows the saved number again")
+    refusedNumber.field.selectAll()
+    type("30")
+    key(Qt.Key_Return)
+    eq(shell.refusals, ["name", "name", "count", "count"], "the same number can be sent again after the refusal")
+    longField.focusInput()
+  }
+
+  // The queues of the mapped dropdowns, both through the fake CLI, which
+  // fails every save of foamy.link-fail.
+  readonly property var mappedFields: [
+    {
+      key: "hide",
+      type: "boolean",
+      defaultValue: false
+    },
+    {
+      key: "other",
+      type: "string",
+      defaultValue: ""
+    }
+  ]
+  FoamyPrefsQueue {
+    id: mappedQueue
+    bar: cliBar
+    moduleName: "foamy.link-mapped"
+    fields: shell.mappedFields
+    settings: ({
+        id: "foamy.link-mapped",
+        hide: false
+      })
+  }
+  FoamyPrefsQueue {
+    id: failingQueue
+    bar: cliBar
+    moduleName: "foamy.link-fail"
+    fields: shell.mappedFields
+    settings: ({
+        id: "foamy.link-fail",
+        hide: false
+      })
+  }
+  // The failing dropdown as the second pick's save starts, just after the
+  // first pick's save failed (mappedDropdowns()).
+  property var failingAtSecondSave: null
+  Connections {
+    target: failingQueue
+    function onSavingChanged() {
+      if (failingQueue.saving && failingQueue.lastFailed !== null && shell.failingAtSecondSave === null)
+        shell.failingAtSecondSave = [failingQueue.error, failingDropdown.shownValue, failingDropdown.pickHeld]
+    }
+  }
   // A dropdown linked to a queue and a key gives way when the queue
   // refuses that key: at once when save() refuses the pick (it returns
   // false), and when a pick that waited behind a running save is refused
@@ -708,6 +868,39 @@ ShellRoot {
     })
   }
 
+  // A linked dropdown whose onChanged saves another value than the option
+  // (true for "hide") gives way when the queue refuses or fails the pick's
+  // own save, whatever value that names; a refusal of another save of the
+  // key leaves it, so a newer pick whose save still waits stays on show.
+  function mappedDropdowns(then) {
+    // foamy-teams' case: the pick waits behind a save of another key, and
+    // the widget loses its bar entry before the pick's save runs.
+    mappedQueue.save("other", "x")
+    mappedDropdown.select("hide")
+    eq([mappedQueue.saving, mappedQueue.waiting.length, mappedDropdown.value, mappedDropdown.shownValue], [true, 1, "mute", "hide"], "a mapped pick waits behind a running save and shows")
+    mappedQueue.moduleName = ""
+    wait.waitFor(function () {
+      return !mappedQueue.busy
+    }, 5000, function (drained) {
+      eq([drained, mappedQueue.error, mappedDropdown.value, mappedDropdown.shownValue], [true, "Settings can't be saved: this widget has no bar entry.", "mute", "mute"], "a queued mapped pick the linked queue refuses as it runs gives way at once")
+      // Every CLI save of failingQueue fails. The first pick's save runs; a
+      // value of the key that save() refuses at once is another save's.
+      failingDropdown.select("hide")
+      failingQueue.save("hide", "not a boolean")
+      eq([failingQueue.saving, failingQueue.error, failingDropdown.shownValue], [true, "That value isn't allowed.", "hide"], "a refusal at once of another save of the key leaves the pick whose save runs")
+      // The second pick, of the same value, waits behind the first one's save.
+      failingDropdown.select("hide")
+      eq([failingQueue.saving, failingQueue.waiting.length, failingDropdown.shownValue], [true, 1, "hide"], "a second mapped pick waits behind the first one's running save and shows")
+      wait.waitFor(function () {
+        return !failingQueue.busy
+      }, 5000, function (done) {
+        eq(shell.failingAtSecondSave, ["Couldn't save the setting.", "hide", true], "the failure of the first pick's save leaves the second pick on show while its own save waits")
+        eq([done, failingDropdown.shownValue, failingDropdown.pickHeld], [true, "mute", false], "the failure of the pick's own save ends it, whatever value it saved")
+        then()
+      })
+    })
+  }
+
   // Picks A, B, A, each saved on its own: changed() names each pick with a
   // serial, and saveFailed(serial) drops only that pick, so the refusal of
   // the first A leaves the second A on show (its value alone can't tell).
@@ -731,6 +924,48 @@ ShellRoot {
     serialDropdown.select("b")
     serialDropdown.saveFailed()
     eq(serialDropdown.shownValue, "c", "saveFailed() without a serial still drops whatever pick is on show")
+    // A pick of the value in use after a pick of another value: the last
+    // pick is the value in use, so it shows at once.
+    serialDropdown.select("a")
+    serialDropdown.select("c")
+    var last = serialChanges.slice(-2)
+    eq(last.map(function (change) {
+      return change[0]
+    }), ["a", "c"], "a pick of the value in use emits changed() too")
+    check(last.length === 2 && last[0][1] < last[1][1], "the pick of the value in use has a serial of its own: " + JSON.stringify(last))
+    eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], "a pick of the value in use ends the hold of the older pick")
+  }
+
+  // Queues that are not a FoamyPrefsQueue: one with only the failed()
+  // signal, and one whose `waiting` is a count, not a list. The link has no
+  // queue state to read there, so it ends the held pick only for a failure
+  // that names the pick's value: an older pick's failure leaves the newer
+  // pick on show.
+  QtObject {
+    id: signalQueue
+    signal failed(string key, var value, string error)
+  }
+  QtObject {
+    id: countingQueue
+    property bool saving: false
+    property int waiting: 1
+    signal failed(string key, var value, string error)
+  }
+  function signalQueueLinks() {
+    serialDropdown.queueKey = "mode"
+    var queues = [[signalQueue, "a queue with only failed()"], [countingQueue, "a queue whose waiting is a count"]]
+    queues.forEach(function (entry) {
+      var queue = entry[0]
+      serialDropdown.queue = queue
+      serialDropdown.select("a")
+      serialDropdown.select("b")
+      queue.failed("mode", "a", "Couldn't save the setting.")
+      eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["b", true], entry[1] + ": the older pick's failure leaves the newer pick on show")
+      queue.failed("mode", "b", "Couldn't save the setting.")
+      eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], entry[1] + ": the failure of the pick on show ends it")
+    })
+    serialDropdown.queue = null
+    serialDropdown.queueKey = ""
   }
 
   // A dropdown disabled while its list is open (a settings page that starts
@@ -925,6 +1160,7 @@ ShellRoot {
     dropdown.select("a")
     dropdownRevert.start()
     serialPicks()
+    signalQueueLinks()
 
     // --- FoamyAction: a long tooltip wraps in a capped width ---------------------------
     wait.waitFor(function () {
@@ -1137,6 +1373,7 @@ ShellRoot {
     retryField.field.pasteError = "Clipboard paste timed out. Copy the text again."
     eq(shell.pasteMessage, "Clipboard paste timed out. Copy the text again.", "a refused paste is reported (pasteFailed)")
     retryField.field.pasteError = ""
+    refusedCommits()
 
     // --- state switches build and destroy fields (no TypeError in the log) ----------------
     stateFlip.start()
@@ -1544,9 +1781,11 @@ ShellRoot {
       shell.refusedPastes(function () {
         shell.disabledDropdown(function () {
           shell.linkedDropdowns(function () {
-            console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
-            console.log("FOAMY DONE")
-            Qt.quit()
+            shell.mappedDropdowns(function () {
+              console.log("FOAMY RESULT " + host + " checks=" + checks + " failures=" + failures)
+              console.log("FOAMY DONE")
+              Qt.quit()
+            })
           })
         })
       })

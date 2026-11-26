@@ -1118,6 +1118,12 @@ mod tests {
         Bounded::new("/bin/sh").arg("-c").arg(script)
     }
 
+    // A redirect from a descriptor above 9 (`cat <&12`) is bash syntax:
+    // dash, /bin/sh on Debian and Ubuntu, refuses it ("Bad fd number").
+    fn bash(script: &str) -> Bounded {
+        Bounded::new("/bin/bash").arg("-c").arg(script)
+    }
+
     #[test]
     fn captures_output_and_status() {
         let output = sh("printf out; printf err >&2; exit 3").run().unwrap();
@@ -1261,9 +1267,9 @@ mod tests {
         write.write_all(b"through fd").unwrap();
         drop(write);
         let script = format!("cat <&{}", read.as_raw_fd());
-        let output = sh(&script).inherit_fd(&read).run().unwrap();
+        let output = bash(&script).inherit_fd(&read).run().unwrap();
         assert_eq!(output.stdout, b"through fd");
-        let closed = sh(&script).run().unwrap();
+        let closed = bash(&script).run().unwrap();
         assert!(
             !closed.success(),
             "without inherit_fd the fd stays close-on-exec"
@@ -1274,7 +1280,7 @@ mod tests {
         write.write_all(b"the pipe").unwrap();
         drop(write);
         let script = format!("cat <&{}", read.as_raw_fd());
-        let command = sh(&script).inherit_fd(read);
+        let command = bash(&script).inherit_fd(read);
         let (_reused, _keep) = io::pipe().unwrap();
         let output = command.run().unwrap();
         assert_eq!(output.stdout, b"the pipe", "{output:?}");

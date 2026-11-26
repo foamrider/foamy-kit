@@ -9,8 +9,12 @@ import "plugin/kit"
 // catcher), with no onHidden handler in the plugin: open Settings, close the
 // popup, open it, Esc closes it; Esc on Settings goes back, the next Esc
 // closes; a field on the page that hides with it; a focused Retry that
-// hides while Settings stays open leaves the keys with the page; and a
-// plugin that refocuses its own list in onHidden keeps that.
+// hides while Settings stays open leaves the keys with the page; a
+// plugin that refocuses its own list in onHidden keeps that; a deferred
+// focusBack() that runs after Settings hid again takes no keys; one
+// deferred as show() opens the closed popup on Settings gives the page the
+// keys; and one called at once before the page shows gives it the keys
+// once it shows.
 ShellRoot {
   id: shell
   readonly property string tag: Quickshell.env("FOAMY_TAG")
@@ -262,11 +266,99 @@ ShellRoot {
           return focused() === popup.bodyItem.list
         }, 3000, function (ok) {
           check(ok, "the plugin's own refocus wins: " + focused())
-          console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-          console.log("FOAMY DONE")
-          Qt.quit()
+          lateFocusBack()
         })
       })
+    })
+  }
+
+  // 6. Settings shows and hides again in one event-loop turn (two quick
+  // inputs, or a settings IPC call and then a close), and the focusBack()
+  // a plugin deferred when Settings showed runs after it hid: the hidden
+  // page takes no keys, so Esc closes the popup.
+  property bool lateRan: false
+  function lateFocusBack() {
+    shell.ownRefocus = false
+    panel.close()
+    reopen("late focusBack", function () {
+      var page = popup.bodyItem.page
+      settingsState.show()
+      Qt.callLater(function () {
+        page.focusBack()
+        shell.lateRan = true
+      })
+      settingsState.hide()
+      wait.waitFor(function () {
+        return shell.lateRan
+      }, 3000, function (ran) {
+        check(ran && !page.visible, "the deferred focusBack() ran after Settings hid")
+        check(!inside(focused(), page), "the hidden settings page takes no keys from a late focusBack(): " + focused())
+        esc()
+        check(!panel.opened, "Esc closes the popup after a late focusBack()")
+        focusBackOnOpen()
+      })
+    })
+  }
+
+  // 7. show() opens the closed popup on Settings, and the focusBack() a
+  // plugin defers when Settings shows (queued as `editing` turns true,
+  // before show() opens the panel) runs in the next turn: the page shows
+  // by then and takes the keys, so Esc goes back.
+  property bool deferOnShow: false
+  property bool openRan: false
+  // Case 8: focusBack() at once, from this handler, which runs before the
+  // page's `visible` binding follows `editing` (it was connected first).
+  property bool callOnShow: false
+  property var hiddenAtCall: null
+  Connections {
+    target: settingsState
+    function onEditingChanged() {
+      if (settingsState.editing && shell.deferOnShow)
+        Qt.callLater(function () {
+          popup.bodyItem.page.focusBack()
+          shell.openRan = true
+        })
+      if (settingsState.editing && shell.callOnShow) {
+        shell.hiddenAtCall = !popup.bodyItem.page.visible
+        popup.bodyItem.page.focusBack()
+      }
+    }
+  }
+  function focusBackOnOpen() {
+    check(!panel.opened, "the popup is closed before Settings opens it")
+    shell.deferOnShow = true
+    settingsState.show()
+    wait.waitFor(function () {
+      return shell.openRan
+    }, 3000, function (ran) {
+      shell.deferOnShow = false
+      var page = popup.bodyItem.page
+      check(ran && panel.opened && page.visible && inside(focused(), page), "a focusBack() deferred as show() opens the popup gives the page the keys: " + focused())
+      esc()
+      check(!settingsState.editing && panel.opened, "Esc then goes back from Settings")
+      focusBackBeforeShown()
+    })
+  }
+
+  // 8. focusBack() called at once while the page does not show yet (a
+  // handler of `editing` that runs before the page's `visible` binding):
+  // the call tries again after the current turn, when the page shows, so
+  // the page gets the keys and Esc goes back.
+  function focusBackBeforeShown() {
+    shell.callOnShow = true
+    settingsState.show()
+    shell.callOnShow = false
+    var page = popup.bodyItem.page
+    check(shell.hiddenAtCall === true, "the call ran while the page did not show yet: " + shell.hiddenAtCall)
+    wait.waitFor(function () {
+      return inside(focused(), page)
+    }, 3000, function (ok) {
+      check(ok && page.visible, "a focusBack() called before the page shows gives it the keys once it shows: " + focused())
+      esc()
+      check(!settingsState.editing && panel.opened, "Esc then goes back from Settings, after a call before the page showed")
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
     })
   }
 }

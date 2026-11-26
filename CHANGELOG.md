@@ -1,5 +1,176 @@
 # Changelog
 
+## 0.14.1 — 2026-11-26
+
+### Fixed
+- `FoamyDropdown.select()` (since 0.1.0): a pick of the value in use ends
+  the hold of an older pick, so the last pick shows. Before, only a pick
+  of another value was held, so with `value` "c" the picks "a" and then
+  "c" kept "a" on show (`shownValue` "a", `pickHeld` true) until `value`
+  changed, "a" was refused or `pickHoldMs` (10 s) passed; in foamy-monitor,
+  with GTK scale 2 in use, the picks 3 and then 2 showed 3 until the
+  request for 3 ended. Code that picks with `select()` met it; a pick from
+  the list did not, as opening the list ends a hold. The pick of the value
+  in use still emits `changed()` with a serial of its own, and a refusal
+  of the older pick after it (`saveFailed(serial)`) changes nothing.
+  Plugin change: none needed. `tests/test_features.py`.
+- `FoamyDropdown`'s queue link (`queue`, `queueKey`, since 0.14.0) ends
+  a pick whose save is refused as it runs also when `onChanged` saves
+  another value than the option. Before, after `changed()` the link ended
+  the pick only when `failed()` named the option's value, so foamy-teams'
+  "When all accounts are closed" pick "hide", saved as
+  `hideWhenClosed: true`, stayed on show for 10 s beside the error when
+  it waited behind a running CLI save and the widget lost its bar entry
+  meanwhile. Now a refusal or failure of the key ends the held pick,
+  whatever value it names, when the queue runs no other save and keeps no
+  save of the key waiting. So a failed older save of the key leaves a
+  newer pick whose save still waits, even one of the same value (a
+  dropdown bound to the stored settings lost it before), and such a
+  dropdown gives way when its own CLI save fails, mapped value or not, as
+  the failure rolls back nothing it shows. Another object linked as the
+  queue, with only a `failed(key, value, error)` signal, has no such
+  state: there the failure must name the option's value, as before, so an
+  older pick's failure leaves a newer pick on show. FoamyScheduleDay's
+  link is unchanged and matches a later refusal by the range it sent; its
+  header and README.md said it works "as FoamyDropdown does" and now say
+  that. Plugin change: none needed; foamy-teams' dropdown works as it is.
+  DESIGN.md: Choices. `tests/test_features.py`.
+- `FoamyTextSettingField` and `FoamyNumberField` (`saveFailed()`, since
+  0.3.4) show the saved value again when `saveFailed()` is called inside
+  their own `committed()`, and the same input can be sent again. Before,
+  a commit emitted `committed()` before the field settled its draft, and
+  `saveFailed()` shows `value` only in a settled field, so a save that
+  FoamyPrefsQueue refuses at once (a widget with no bar entry, a value the
+  schema refuses, a kept invalid stored list), whose `failed()` comes
+  inside the caller's `onCommitted`, left the refused text on show beside
+  the error. Now the field settles first (no draft, its text the committed
+  value) and then emits `committed()` with the same value, so the wiring
+  DESIGN.md gives (the queue's `failed()` calls the field's
+  `saveFailed()`) works as written; inside `committed()` the field is no
+  longer `editing`. Plugin change: none needed; foamy-todoist
+  (TodoSettings.qml, the Open command) and foamy-lock
+  (studio/ScenePage.qml, the colour field) can drop their
+  `Qt.callLater(… .saveFailed)` at their next sync.
+  `tests/test_features.py`.
+- `FoamySettingsPage.focusBack()` (since 0.1.0) gives a hidden page no
+  keys. foamy-github, foamy-syncthing, foamy-todoist,
+  foamy-train, foamy-vitals and foamy-zendesk call
+  `Qt.callLater(settingsPage.focusBack)` when Settings shows. Qt delivers
+  queued input events before deferred calls, so when Settings showed and
+  hid again in one event-loop turn (two quick inputs while the shell was
+  busy, or a settings IPC call and then a close), the call ran on the
+  hidden page and gave the keys to its hidden Back button: Esc went to
+  the hidden page and did nothing, also after the popup closed and
+  opened again. FoamyPopup gives the keys back only when the item that
+  has them hides, so it could not see this; the plugins' own refocus,
+  which they dropped at the 0.14.0 sync, used to cover it. Now a call
+  while the page does not show tries once more after the current
+  event-loop turn and gives the keys only if the page shows then: a call
+  that runs after Settings hid again leaves the keys where they are, and
+  one made at once before the page's `visible` follows the settings state
+  (a handler of `editing` that runs first) still gives the page the keys.
+  Plugins may rely on this: call `focusBack()` at once or deferred, when
+  or after Settings shows; a call after Settings hid does nothing. Every
+  plugin's call on its dev branch already runs deferred after Settings
+  shows (foamy-audio, foamy-bolt, foamy-clock, foamy-github, foamy-media,
+  foamy-notification-center, foamy-power, foamy-syncthing, foamy-teams,
+  foamy-todoist, foamy-train, foamy-vitals, foamy-weather, foamy-zendesk)
+  or from the page's own account editor (foamy-teams' `leaveEditor()`,
+  which after a save that ends with the popup closed now leaves the keys
+  alone). Plugin change: none needed. `tests/test_popup_keys.py`.
+- The 0.14.0 notes below and the docs said three things that are not so
+  for every plugin; the 0.14.0 text is corrected (0.14.0 was not merged
+  to main or tagged). (1) The pick serial entry said a handler
+  that takes only `value` needs no change, which is true, but code that
+  emits `FoamyDropdown.changed()` itself with one argument throws
+  "Insufficient arguments" since 0.14.0 (foamy-lock's studio test, the
+  runtime tests of foamy-teams and foamy-lock); 0.14.0's Upgrading now
+  says to pick with `select()` instead. (2) The queue link entry said
+  foamy-power, foamy-monitor and foamy-notification-center adopt the
+  link, but none of them saves a dropdown through FoamyPrefsQueue
+  (foamy-power saves through its helper, with a failure signal of its
+  own; foamy-notification-center through its own queue; foamy-monitor
+  through its own requests). They are now named under the pick serial
+  entry, as their own failure paths compare picks, and the link entry
+  names the eleven plugins that link a dropdown. (3) FoamyPopup's key
+  return (0.14.0) learns the item with the keys from the window's
+  `activeFocusItem`, which Qt keeps only in the active window; a test
+  that runs the popup in a window that is not active, or in none, sees no
+  key return (foamy-bolt, foamy-vitals and foamy-github had to activate
+  the window, or put the popup in one, before dropping their refocus).
+  README.md (Components), the FoamyPopup header and 0.14.0's Upgrading
+  now say so. No kit code changed. Plugin change: none needed. No test:
+  only documentation changed.
+- `preview/render.py` (`PreviewShell.qml.in`, since 0.1.0) writes every
+  card picture (`<state>.png`) with its alpha channel, the corners outside
+  a rounded card transparent. Before, a card that held a fully opaque
+  rectangle without radius (FoamyTabs' open-tab underline) or an opaque
+  image came out RGB with black corners: under the software renderer
+  `grabToImage()` leaves out its transparent fill as soon as one node is
+  opaque, as Qt tests the opaque area with `QRegion::contains()`, which
+  means "overlaps". The card is now captured through a
+  ShaderEffectSource whose layer keeps an alpha channel, sized to the
+  direct grab's whole device pixels, so a display scale where the card
+  covers part of a pixel (`--scale 1.25`, 382 px high) resamples nothing.
+  Every pixel the card fully covers is the one the old capture gave, its
+  rounded edge fades out instead of into black, and a picture that had
+  transparent corners before is the same to the pixel (foamy-syncthing
+  and foamy-todoist, dark and light, compared state by state;
+  foamy-syncthing also at scale 1.25). A FoamyPopupCard's copy on the
+  screen picture has the screen in its corners. A capture that
+  `grabToImage()` refuses (a card under a pixel wide) fails the render at
+  once with "FOAMY FAIL the card capture did not start", where the old
+  grab waited out the render's timeout. Plugin change: none
+  needed; foamy-media, foamy-syncthing and foamy-todoist, whose committed
+  `preview.png` has black corners, may render it again. README.md:
+  Preview. `tests/test_preview.py`.
+- `foamy-helper`'s tests (`kit/rust/foamy-helper`) run the scripts that
+  need bash with bash. Five ran with `/bin/sh` and bash syntax or wording,
+  which dash, `/bin/sh` on Debian and Ubuntu, does not take. Four redirect
+  from a descriptor above 9 (`cat <&12`), which dash refuses with "Bad fd
+  number":
+  `child::tests::inherited_fds_reach_the_child_under_their_number` and,
+  through the fake bubblewrap,
+  `sandbox::tests::a_seccomp_memfd_serves_more_than_one_run`,
+  `bwrap_names_each_temporary_fd_by_its_own_duplicate` and
+  `bwrap_keeps_its_own_copy_of_the_fds_it_names`.
+  `bwrap_runs_with_the_seccomp_filter_and_inherited_fds` reads bash's
+  message for a fork that fails, which dash words otherwise. foamy-kit's
+  "foamy-helper crate" job (new in 0.14.0) on ubuntu-24.04 failed the
+  first three (116 passed, 3 failed): the descriptor numbers decide, and
+  the job skips the bubblewrap test. They now run `/bin/bash -c`,
+  `#!/bin/bash` scripts and `/usr/bin/bash` in the sandbox; only test code
+  changed, and the crate builds the same helper. Plugin change: a plugin
+  with a native helper rebuilds it (see Upgrading).
+  `kit/rust/foamy-helper/src/child.rs` and
+  `kit/rust/foamy-helper/src/sandbox/tests.rs`.
+
+### Upgrading
+- The sync changes `FoamyDropdown.qml`, `FoamyNumberField.qml`,
+  `FoamyTextSettingField.qml`, `FoamySettingsPage.qml` and, in comments
+  only, `FoamyPopup.qml` and `FoamyScheduleDay.qml`. `kit/i18n-texts.json`
+  did not change: `check.sh` asks the catalogs for no new text.
+- `kit/rust` changed in its tests only, but `native.pin` hashes the whole
+  vendored `kit/rust`: foamy-audio, foamy-github, foamy-lock, foamy-media,
+  foamy-monitor, foamy-notification-center, foamy-notifications,
+  foamy-power, foamy-syncthing, foamy-todoist, foamy-train, foamy-vitals,
+  foamy-weather and foamy-zendesk rebuild their helper after the sync
+  (`kit/native/build-native.sh .`) and commit the new binaries and
+  `native.pin`; until then `check.sh`, `tests/kit-check.sh` and `--verify`
+  report the binaries stale. `foamy-helper`'s version stays 0.1.2.
+- No plugin needs a code change. foamy-todoist (TodoSettings.qml) and
+  foamy-lock (studio/ScenePage.qml) can call `saveFailed()` at once
+  instead of through `Qt.callLater`. A plugin test that reads a settings
+  field's `editing` or text inside its own `onCommitted` sees the field
+  settled now.
+- A plugin still on 0.13.1 reads 0.14.0's Upgrading too: it now says
+  that code emitting `FoamyDropdown.changed()` itself picks with
+  `select()`, and that a test runs FoamyPopup in an active window.
+- foamy-media, foamy-syncthing and foamy-todoist may render their
+  `preview.png` again with `preview/render.py` for rounded corners.
+  foamy-menu's black-cornered `preview.png` comes from its own
+  `tests/launcher.py --shots`, which this does not change.
+
 ## 0.14.0 — 2026-11-22
 
 ### Added
@@ -77,10 +248,13 @@
   A, and comparing values (foamy-power, foamy-monitor and
   foamy-notification-center check `pickedValue`) takes a repeated value
   for the refused one. `saveFailed()` without a serial works as before,
-  and a handler that takes only `value` needs no change. Plugin change:
-  none needed; a plugin that ends a pick on its own failed save may pass
-  the serial instead of comparing `pickedValue`. DESIGN.md: Choices.
-  `tests/test_features.py`.
+  and a handler that takes only `value` needs no change; code that emits
+  `changed()` itself must pass a serial now (see Upgrading). Plugin
+  change: none needed; a plugin that ends a pick on its own failed save
+  may pass the serial instead of comparing `pickedValue`: foamy-power
+  (its helper's own failure signal), foamy-monitor (its own requests) and
+  foamy-notification-center (its own save queue) at their next sync.
+  DESIGN.md: Choices. `tests/test_features.py`.
 - `FoamyDropdown.queue` and `queueKey`: a dropdown linked to the
   FoamyPrefsQueue it saves through and its key ends its pick by itself
   when the queue refuses that key: at once when `save()` refuses the pick
@@ -93,9 +267,10 @@
   A refusal of another key leaves the pick; a dropdown without the link
   works as before. Plugin change: none needed; a plugin that saves a
   dropdown through FoamyPrefsQueue sets `queue` and `queueKey` and drops
-  its own `saveFailed()` call (foamy-power, foamy-monitor and
-  foamy-notification-center adopt it at their next sync). DESIGN.md:
-  Choices. `tests/test_features.py`.
+  its own `saveFailed()` call at its next sync (foamy-bolt, foamy-clock,
+  foamy-github, foamy-media, foamy-syncthing, foamy-teams, foamy-todoist,
+  foamy-train, foamy-vitals, foamy-weather and foamy-zendesk have such
+  dropdowns). DESIGN.md: Choices. `tests/test_features.py`.
 - `FoamyScheduleDay.saveFailed()`, and the same `queue`/`queueKey` link
   as FoamyDropdown. Before, after a save that failed without changing
   `value`, the time fields kept the unsaved range and Enter did not send
@@ -201,6 +376,20 @@
   "That value isn't allowed." and "Couldn't save the setting." (monitor,
   notification-center); FoamyNative's "This plugin's helper isn't
   available for this CPU." (lock).
+- `FoamyDropdown.changed()` has a second argument, the pick's serial (see
+  Added). A handler that takes only `value` works as before, but code
+  that emits `changed()` itself with one argument now throws
+  "Insufficient arguments" (foamy-lock's studio test and the runtime
+  tests of foamy-teams and foamy-lock did): a test or caller that emits
+  `changed()` itself picks with `select(value)` instead, which shows the
+  pick as the list does and emits `changed(value, serial)`.
+- FoamyPopup's key return (see Fixed) learns the item with the keys from
+  its window's `activeFocusItem`, which Qt keeps only in the active
+  window. On the desktop the popup's window is active; a plugin test that
+  runs the popup in a window that is not active, or in none, sees no key
+  return, so before it drops its own refocus it puts the popup in a
+  window and activates it (foamy-bolt, foamy-vitals and foamy-github had
+  to).
 - `tests/test_text_field.py` (new, `tests/qml/TextField.qml`) tests a
   plain SafeTextField through real keys, the mouse and real pastes: the
   13 cases foamy-bolt's and foamy-weather's `tests/tst_clipboard.qml`
