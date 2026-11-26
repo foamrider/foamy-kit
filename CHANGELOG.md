@@ -166,11 +166,13 @@
   the keys on the hidden page, and the host's focus on the next open went
   back to it: the first Esc after reopening, or after Back, went to the
   hidden page instead of closing the popup, unless the plugin refocused
-  its list in `onHidden`. Now the keys go to the body's key home
-  (`focusTarget`, the body item by default) once the item has hidden. A
-  plugin's own refocus, at once or later, still wins. Plugin change: none
-  needed; foamy-bolt's `onHidden` refocus can go at its next sync.
-  README.md: Components; DESIGN.md: Click-away.
+  its list in `onHidden`. Now, once the item has hidden, the keys go to
+  the nearest key home that shows: the settings page while it still shows
+  (a focused Retry that hides as its retry starts leaves Esc on the page,
+  which goes back), else the body's key home (`focusTarget`, the body
+  item by default). A plugin's own refocus, at once or later, still wins.
+  Plugin change: none needed; foamy-bolt's `onHidden` refocus can go at
+  its next sync. README.md: Components; DESIGN.md: Click-away.
   `tests/test_popup_keys.py`.
 - `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
   whose clock runs a little ahead of this one (NFS, SMB) reuses its icons

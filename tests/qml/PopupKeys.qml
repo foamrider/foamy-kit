@@ -8,15 +8,19 @@ import "plugin/kit"
 // Settings hides and FoamyPopup gives the keys back to its body (the key
 // catcher), with no onHidden handler in the plugin: open Settings, close the
 // popup, open it, Esc closes it; Esc on Settings goes back, the next Esc
-// closes; a field on the page that hides with it; and a plugin that
-// refocuses its own list in onHidden keeps that.
+// closes; a field on the page that hides with it; a focused Retry that
+// hides while Settings stays open leaves the keys with the page; and a
+// plugin that refocuses its own list in onHidden keeps that.
 ShellRoot {
   id: shell
   readonly property string tag: Quickshell.env("FOAMY_TAG")
   property int checks: 0
   property int failures: 0
-  // The plugin's own refocus (case 4).
+  // The plugin's own refocus (case 5).
   property bool ownRefocus: false
+  // The page's save error and the retries it asked for (case 4).
+  property string saveError: ""
+  property int retries: 0
 
   function check(ok, label) {
     checks++
@@ -37,6 +41,21 @@ ShellRoot {
   }
   function esc() {
     ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
+  }
+  // The page's Retry (FoamySettingsError's FoamyAction).
+  function retryButton(item) {
+    if (item === undefined)
+      item = popup.bodyItem.page
+    if (!item)
+      return null
+    if (item.iconName === "refresh-cw" && item.label === FoamyI18n.t("Retry"))
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = retryButton(item.children[i])
+      if (found)
+        return found
+    }
+    return null
   }
 
   FloatingWindow {
@@ -103,7 +122,14 @@ ShellRoot {
           visible: settingsState.editing
           width: parent.width
           height: parent.height
+          error: shell.saveError
+          retryable: true
           onBack: settingsState.hide()
+          // A retry starts: the error goes, and Retry with it.
+          onRetry: {
+            shell.retries++
+            shell.saveError = ""
+          }
           SafeTextField {
             id: pageField
             width: 200
@@ -192,13 +218,39 @@ ShellRoot {
           check(!popup.bodyItem.pageField.inputActiveFocus && !inside(focused(), popup.bodyItem.page), "the hidden page's field has no keys: " + focused())
           esc()
           check(!panel.opened, "Esc closes the popup that closed with a field focused on Settings")
+          retryOnSettings()
+        })
+      })
+    })
+  }
+
+  // 4. A focused Retry hides as the retry starts, and Settings stays open:
+  // the page keeps the keys (its key home), so Esc still goes back, though
+  // the panel's key catcher ignores keys while Settings shows.
+  function retryOnSettings() {
+    shell.saveError = "Couldn't save the setting."
+    reopen("Retry", function () {
+      openSettings(function () {
+        retryButton().forceActiveFocus()
+      }, "Retry", function () {
+        var retry = retryButton()
+        check(retry !== null && focused() === retry, "Retry has the keys: " + focused())
+        ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
+        check(shell.retries === 1 && retry !== null && !retry.visible && settingsState.editing, "Enter on Retry starts the retry; Retry hides and Settings stays open")
+        wait.waitFor(function () {
+          return focused() === popup.bodyItem.page
+        }, 3000, function (kept) {
+          check(kept, "the settings page keeps the keys after Retry hides: " + focused())
+          esc()
+          check(!settingsState.editing && panel.opened, "Esc goes back from Settings after Retry hid")
+          panel.close()
           ownRefocusWins()
         })
       })
     })
   }
 
-  // 4. A plugin that refocuses its own list when Settings hides keeps that.
+  // 5. A plugin that refocuses its own list when Settings hides keeps that.
   function ownRefocusWins() {
     shell.ownRefocus = true
     reopen("own refocus", function () {

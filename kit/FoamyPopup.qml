@@ -48,10 +48,11 @@ import qs.Ui
 //
 // Keys of an item that hides: when the item in the body that has the keys
 // hides (a settings page left with Back, or reset when the popup closes on
-// it: FoamySettingsState), they go back to the same key home, so the
-// panel's keys work at once and on the next open. A plugin needs no
-// onHidden refocus; one it keeps (an item of its own, at once or later)
-// still wins.
+// it: FoamySettingsState), they go to the nearest key home that shows: a
+// settings page that still shows (its Retry hid as the retry started),
+// else the same key home as a click-away. So Esc and the panel's keys work
+// at once and on the next open. A plugin needs no onHidden refocus; one it
+// keeps (an item of its own, at once or later) still wins.
 //
 // Usage:
 //   FoamyPopup {
@@ -118,7 +119,8 @@ KeyboardPanel {
   // next open goes back to it: a settings page left with Back, or closed
   // with the popup, kept Esc and the arrows while the panel showed its list.
   // When the item in the body that has the keys hides, it lets go and the
-  // body's key home takes them. A plugin's own refocus, at once or later,
+  // nearest key home that shows takes them (a settings page that still
+  // shows, else the body's). A plugin's own refocus, at once or later,
   // still wins: it moves the keys to an item that shows.
   property Item _keysAt: null
   property Connections _keysWatch: Connections {
@@ -142,11 +144,29 @@ KeyboardPanel {
         return true
     return false
   }
+  // The nearest key home above `item` that shows, up to the body's: a
+  // settings page that still shows keeps the keys of a Retry that hid on it.
+  function _keyHome(item) {
+    for (let at = item; at; at = at.parent) {
+      if ("foamyKeyHome" in at && at.foamyKeyHome && at.foamyKeyHome.visible)
+        return at.foamyKeyHome
+      if (at === bodyLoader)
+        break
+    }
+    return null
+  }
   function _reclaimKeys() {
     var held = _keysAt
-    var home = bodyLoader.foamyKeyHome
-    if (held && !held.visible && home && home.visible && _inBody(held))
-      home.forceActiveFocus()
+    if (!held || held.visible || !_inBody(held))
+      return
+    var home = _keyHome(held)
+    if (!home)
+      return
+    // The hidden items let go first: a home that is a focus scope (the
+    // settings page) would hand the keys straight back to the hidden item.
+    for (let at = held; at && !at.visible; at = at.parent)
+      at.focus = false
+    home.forceActiveFocus()
   }
 
   // KeyboardPanel draws the card with Style.cornerRadius and the popup

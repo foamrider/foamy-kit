@@ -257,7 +257,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   Settings; resets on close, never on open). When Settings hides (Back, or
   the reset on close), FoamyPopup gives the keys the page had back to the
   body's key home, so Esc and the arrows work at once and after the next
-  open; a plugin needs no `onHidden` refocus, and its own still wins.
+  open; a plugin needs no `onHidden` refocus, and its own still wins. An
+  item on the page that hides while the page shows (Retry, as the retry
+  starts) leaves the keys with the page, so Esc still goes back.
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
   period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
   with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.

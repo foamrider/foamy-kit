@@ -31,7 +31,7 @@ edited in a plugin: change it here, then sync.
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
 | FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
 | FoamyI18n | `FoamyI18n.qml` (singleton), `FoamyI18nText.js`, `node-loader.cjs` | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations. `FoamyI18nText.js`: its value substitution, and `translator(catalog, english)` for node tests |
-| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body`; when the item in the body that has the keys hides (Settings closing), they go back to the body's key home |
+| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body`; when the item in the body that has the keys hides, they go to the nearest key home that shows: the settings page while it shows (its Retry hiding as the retry starts), else the body's (Settings closing) |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
 | FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |

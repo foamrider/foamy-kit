@@ -2,8 +2,10 @@
 """FoamyPopup gives the keys back to its body when Settings hides
 (tests/qml/PopupKeys.qml) on 4.5: a popup closed on Settings and opened
 again closes on Esc; Esc on Settings goes back and the next Esc closes; a
-field focused on the page when it hides; a plugin's own refocus in
-onHidden still wins. Real keys through the host's KeyboardPanel."""
+field focused on the page when it hides; a focused Retry that hides while
+Settings stays open leaves the keys with the page, so Esc goes back; a
+plugin's own refocus in onHidden still wins. Real keys through the host's
+KeyboardPanel."""
 
 import shutil
 import sys
