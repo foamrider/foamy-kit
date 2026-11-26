@@ -38,7 +38,9 @@ import qs.Ui
 // stored settings has nothing to roll back, and the link ends the hold.
 // Another object with a failed(key, value, error) signal can be the queue
 // too; without FoamyPrefsQueue's state the link ends the pick only for a
-// failure that names the option's value.
+// failure that names the option's value. The link expects save() inside
+// onChanged: a save made later that the queue refuses at once, while it
+// runs another save, does not end the pick.
 // Without the link, call saveFailed() when save() returns false:
 //   onChanged: function (v) { if (!prefs.save("mode", v)) modeDropdown.saveFailed() }
 // A caller that wants an uncontrolled dropdown handles changed() itself.
