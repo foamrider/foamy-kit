@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """sync.sh / check.sh / design lint, on throwaway plugin copies in /tmp."""
 
+import json
 import os
 import re
 import shutil
@@ -428,6 +429,78 @@ def component_reference_tests():
     return report("components name only kit types their deps sync", not missing, "; ".join(missing))
 
 
+def catalog_tests(base):
+    """The English texts kit components hand a plugin to translate
+    (kit/i18n-texts.json): sync copies the list, and check.sh requires the
+    texts of the components the plugin carries in each of its catalogs
+    (i18n/*.json), naming a missing one."""
+    ok = True
+    plugin = base / "catalogs"
+    shutil.copytree(FIXTURES / "demo-plugin", plugin)
+    sh(SYNC, str(plugin))
+    listed = json.loads((KIT_ROOT / "kit/i18n-texts.json").read_text())
+    ok &= report(
+        "sync copies kit/i18n-texts.json as it is, and the lock holds it",
+        (plugin / "kit/i18n-texts.json").read_bytes() == (KIT_ROOT / "kit/i18n-texts.json").read_bytes()
+        and "kit/i18n-texts.json" in foamykit.read_lock(plugin)["files"],
+    )
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    native = [e["text"] for e in listed if e["component"] == "FoamyNative"]
+    english = json.loads((plugin / "i18n/en.json").read_text())
+    ok &= report(
+        "check.sh passes a plugin whose catalogs hold every text its components hand it "
+        "(not FoamyNative's, which it does not carry)",
+        code == 0 and native and not any(text in english for text in native),
+        out.strip(),
+    )
+    catalog = plugin / "i18n/da.json"
+    entries = json.loads(catalog.read_text())
+    text = "Clipboard paste timed out. Copy the text again."
+    del entries[text]
+    entries["Couldn't save the setting."] = ""
+    catalog.write_text(json.dumps(entries, ensure_ascii=False))
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    ok &= report(
+        "check.sh fails a catalog that lacks a text or leaves it empty, naming the text and its component",
+        code != 0
+        and f'i18n/da.json lacks "{text}", which FoamyClipboard hands the plugin to translate' in out
+        and 'i18n/da.json lacks "Couldn\'t save the setting.", which FoamyPrefs' in out
+        and out.count(" lacks ") == 2,
+        out.strip(),
+    )
+    code, out = sh(CHECK, "--lint-only", str(plugin))
+    ok &= report("check.sh --lint-only does not check the catalogs", code == 0, out.strip())
+    # FoamyI18n.t() shows a plural entry's "other" form, and the English text
+    # when that form is missing or empty.
+    danish = json.loads((FIXTURES / "demo-plugin/i18n/da.json").read_text())
+    for value, shown in (
+        ({}, False),
+        ({"one": danish[text]}, False),
+        ({"other": ""}, False),
+        ({"other": 3}, False),
+        ({"one": danish[text], "other": danish[text]}, True),
+    ):
+        catalog.write_text(json.dumps({**danish, text: value}, ensure_ascii=False))
+        code, out = sh(CHECK, "--no-lint", str(plugin))
+        if shown:
+            ok &= report(
+                f"check.sh passes a plural entry with an other form: {json.dumps(value)}", code == 0, out.strip()
+            )
+        else:
+            named = f'i18n/da.json lacks "{text}" (a plural entry needs a non-empty "other"), which FoamyClipboard'
+            ok &= report(
+                f"check.sh fails a plural entry without a non-empty other form, naming it: {json.dumps(value)}",
+                code != 0 and named in out and out.count(" lacks ") == 1,
+                out.strip(),
+            )
+    catalog.write_text("{ not json")
+    code, out = sh(CHECK, "--no-lint", str(plugin))
+    ok &= report(
+        "check.sh names a catalog that is not JSON", code != 0 and "i18n/da.json is not a readable JSON catalog" in out
+    )
+    return ok
+
+
 def workflow_job_blocks(lines):
     """Job name -> its lines, for the jobs: block of a workflow."""
     jobs, name = {}, None
@@ -442,12 +515,13 @@ def workflow_job_blocks(lines):
 
 
 def workflow_permission_tests():
-    """The workflows every plugin carries (the files are the thing checked):
-    actions pinned to a full commit, read-only by default, and only
-    verify-native.yml's attest job may sign, never on a pull request and
-    never after building anything itself."""
+    """The workflows every plugin carries, and foamy-kit's own crate
+    workflow (the files are the thing checked): actions pinned to a full
+    commit, read-only by default, no write grant but verify-native.yml's
+    attest job's, which may sign, never on a pull request and never after
+    building anything itself."""
     ok = True
-    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml"):
+    for rel in ("kit/native/verify-native.yml", ".github/workflows/checks.yml", ".github/workflows/foamy-helper.yml"):
         lines = (KIT_ROOT / rel).read_text().splitlines()
         problems = []
         uses = [line.split("#")[0].strip() for line in lines if re.match(r"\s*(- )?uses:", line)]
@@ -463,9 +537,13 @@ def workflow_permission_tests():
             problems.append(f"default permissions are {default}")
         jobs = workflow_job_blocks(lines)
         attest = jobs.get("attest")
-        for grant in ("id-token: write", "attestations: write"):
-            outside = sum(grant in line for line in lines) - sum(grant in line for line in attest or [])
-            if outside:
+
+        def grants(block):
+            return [line.split("#")[0].strip() for line in block if re.search(r":\s*write\s*$", line.split("#")[0])]
+
+        inside = grants(attest or [])
+        for grant in sorted(set(grants(lines))):
+            if grants(lines).count(grant) > inside.count(grant):
                 problems.append(f"{grant} outside the attest job")
         if rel.endswith("verify-native.yml"):
             if attest is None:
@@ -479,7 +557,7 @@ def workflow_permission_tests():
                     if any(word in line for line in attest)
                 ]
         ok &= report(
-            f"{rel}: actions pinned, read-only default, only the attest job signs",
+            f"{rel}: actions pinned, read-only default, only the attest job writes or signs",
             bool(uses) and not problems,
             "; ".join(problems),
         )
@@ -546,6 +624,7 @@ def main():
                 "FoamyStyle.qml",
                 "SafeTextField.qml",
                 "clipboard.sh",
+                "i18n-texts.json",
                 "node-loader.cjs",
                 "qmldir",
                 "tooling",
@@ -590,7 +669,7 @@ def main():
     ok &= report(
         "FoamyClipboard syncs its reader and clipboard.sh alone",
         code == 0
-        and files == ["FoamyClipboard.qml", "clipboard.sh", "qmldir", "tooling"]
+        and files == ["FoamyClipboard.qml", "clipboard.sh", "i18n-texts.json", "qmldir", "tooling"]
         and (paste_only / "kit/qmldir").read_text().splitlines()[1:] == ["FoamyClipboard 1.0 FoamyClipboard.qml"]
         and os.access(paste_only / "kit/clipboard.sh", os.X_OK),
         f"{code} {files} {out.strip()}",
@@ -800,7 +879,8 @@ def main():
     files = sorted(p.name for p in (a / "kit").iterdir())
     ok &= report(
         "narrowing the components removes unneeded files",
-        code == 0 and files == ["FoamyI18n.qml", "FoamyI18nText.js", "node-loader.cjs", "qmldir", "tooling"],
+        code == 0
+        and files == ["FoamyI18n.qml", "FoamyI18nText.js", "i18n-texts.json", "node-loader.cjs", "qmldir", "tooling"],
         f"{files}",
     )
     code, out = sh(SYNC, str(a), "--add", "FoamyPeerIpc")
@@ -903,6 +983,9 @@ def main():
 
     # 8. The plugin list in foamy-kit's AGENTS.md (the home repository's map).
     ok &= plugin_map_tests(base)
+
+    # 8b. The kit texts each plugin catalog holds (kit/i18n-texts.json).
+    ok &= catalog_tests(base)
 
     # 9. Design lint.
     code, out = sh(

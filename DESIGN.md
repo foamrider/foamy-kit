@@ -156,10 +156,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Choices**: `FoamyDropdown`, with `value` bound to the setting and the save in
   `onChanged`; it never assigns `value` itself. When a save fails without
   changing `value`, call its `saveFailed()` so it shows the saved choice
-  again at once. With `FoamyPrefsQueue` that is a save `save()` refuses
-  (it returns false: a value the schema rejects, a kept invalid stored
-  array, a widget with no bar entry); a CLI save that fails later rolls
-  `value` back and needs nothing. **Toggles**: `FoamyToggle`
+  again at once; when saves end one by one, pass the pick's serial from
+  `changed(value, serial)` (`saveFailed(serial)`), so a newer pick stays
+  on show. With `FoamyPrefsQueue`, link the dropdown instead (`queue:
+  prefs; queueKey: "mode"`): it then gives way by itself when the queue
+  refuses that key, whether `save()` refuses the pick (it returns false: a
+  value the schema rejects, a kept invalid stored array, a widget with no
+  bar entry) or a queued pick is refused as it runs (`failed()`); a CLI
+  save that fails later rolls `value` back and needs nothing. **Toggles**: `FoamyToggle`
   (`checked` bound, save in `onClicked`).
 - **Tab row** (`FoamyTabs`): a few views of one panel (Inbox / Today /
   Upcoming), at the top of the popup body directly under the hero band, the
@@ -176,7 +180,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   has no overflow menu, so keep the labels short. Bind `value`, change it
   in `onActivated`. One cursor stop: ←/→ move between tabs, Enter activates
   (the file header shows the key catcher wiring). Settings choices stay
-  `FoamyDropdown`.
+  `FoamyDropdown`. One exception: a footer row that switches the popup's
+  source and shows each source's brand glyph (foamy-media's Spotify and
+  YouTube tabs, with the glyph and the equalizer, which FoamyTabs cannot
+  draw). It keeps the rules screen readers and the keyboard need: the row
+  is an `Accessible.PageTabList`, each tab an `Accessible.PageTab` with
+  `Accessible.selected` on the open one, and each tab is one stop of the
+  panel cursor (←/→ along the row, Enter activates). Every other tab row is
+  `FoamyTabs`.
 - **Short values use the row form** (settings): any control whose value is
   short (a number, an enum choice, an interval, a count, a percentage) is one
   row: label (subtitle, normal weight) and an optional `description`
@@ -239,10 +250,16 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   gives them back to the panel's key catcher (FoamyPopup's `focusTarget`;
   a settings page or an editor page keeps them: `foamyKeyHome`).
   `FoamyClickAway` does it; FoamyPopup and FoamyWheelScroll put it in by
-  themselves, so a plugin adds nothing. A list that reacts to a click on
+  themselves, so a plugin adds nothing. A focused text field that hides
+  gives the keys to the same key home (the nearest one that shows). A list that reacts to a click on
   its empty space (clearing a selection) uses `FoamyWheelScroll.spaceClicked`.
   Whether it shows: `FoamySettingsState` (`show()` opens the popup on
-  Settings; resets on close, never on open).
+  Settings; resets on close, never on open). When Settings hides (Back, or
+  the reset on close), FoamyPopup gives the keys the page had back to the
+  body's key home, so Esc and the arrows work at once and after the next
+  open; a plugin needs no `onHidden` refocus, and its own still wins. An
+  item on the page that hides while the page shows (Retry, as the retry
+  starts) leaves the keys with the page, so Esc still goes back.
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
   period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
   with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
@@ -310,7 +327,11 @@ information" (the (i) button), "Updated …" in footers. Intervals: "Refresh eve
 like "30 seconds", "5 minutes". Bar options: "Show … in the bar". Counts:
 `FoamyI18n.tn("%1 devices", n)` with a plural catalog entry, never
 `n + " " + t("devices")`. Numbers through `FoamyI18n.number()` or `%1` holes.
-Dates with `Qt.locale(FoamyI18n.formatLocale)`.
+Dates with `Qt.locale(FoamyI18n.formatLocale)`. The English texts kit
+components hand the plugin to translate (paste failures, the helper's
+unavailable text, settings save errors) are listed in `kit/i18n-texts.json`;
+every catalog holds those of the components the plugin carries (`check.sh`
+fails without them).
 
 ## Lint
 

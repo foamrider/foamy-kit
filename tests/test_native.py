@@ -67,6 +67,7 @@ def sync_tests(base):
     expected = sorted(
         [
             "kit/FoamyNative.js",
+            "kit/i18n-texts.json",
             "kit/node-loader.cjs",
             "kit/qmldir",
             "kit/rust/release.toml",
@@ -182,6 +183,7 @@ def sync_tests(base):
         == [
             "kit/FoamyPrefs.js",
             "kit/FoamyPrefsQueue.qml",
+            "kit/i18n-texts.json",
             "kit/node-loader.cjs",
             "kit/qmldir",
             "kit/tooling",

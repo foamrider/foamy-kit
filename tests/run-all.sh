@@ -28,6 +28,7 @@ run python3 -I test_geometry.py
 run python3 -I test_runtime.py
 run python3 -I test_features.py
 run python3 -I test_lifecycle.py
+run python3 -I test_collector.py
 run python3 -I test_ipc_cli.py
 run python3 -I test_compare.py
 run python3 -I test_clipboard.py
@@ -40,11 +41,13 @@ run python3 -I test_i18n_runtime.py
 run python3 -I test_band.py
 run python3 -I test_band_field.py
 run python3 -I test_click_away.py
+run python3 -I test_popup_keys.py
 run python3 -I test_menu.py
 run python3 -I test_components.py
 run python3 -I test_rows.py
 run python3 -I test_tabs.py
 run python3 -I test_masked.py
+run python3 -I test_text_field.py
 run python3 -I test_text_runs.py
 run python3 -I test_text_area.py
 run python3 -I test_schedule.py

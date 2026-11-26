@@ -1,5 +1,219 @@
 # Changelog
 
+## 0.14.0 — 2026-11-22
+
+### Added
+- `foamy_helper::json::run_bytes(main, render)`: `json::run` for a
+  one-shot helper that encodes its reply line itself (foamy-vitals' sample
+  line). `main` returns the finished bytes, which go to standard output
+  under `run`'s reply lock and panic hook: a panic in another thread waits
+  until the whole line is out, a later one prints no second reply, one
+  before it prints `render` of an `INTERNAL` failure, and the process ends
+  in 101 for a panic. An `Err` from `main` prints `render(&failure)` with
+  its exit code, as `run` does. Every existing function keeps its meaning.
+  Plugin change: foamy-vitals passes its sample line to `run_bytes` and
+  drops its own panic hook. README.md: The shared crate, Panics and
+  arguments. `kit/rust/foamy-helper/src/json.rs` (tests
+  `run_bytes_prints_the_line_or_one_reply`,
+  `a_panic_while_run_bytes_writes_its_line_waits_for_it`).
+- `.github/workflows/foamy-helper.yml`, foamy-kit's own CI job for the
+  shared crate: `cargo fmt --check`, Clippy with warnings as errors for
+  each feature set and `cargo test --all-features` of
+  `kit/rust/foamy-helper`, with the toolchain `kit/rust/rust-toolchain.toml`
+  pins and read-only contents permission. Before, the crate's tests ran
+  only locally (`tests/test_native.py`). Sync never copies this file:
+  `checks.yml` is the workflow plugins get, so the job is not in it. No
+  plugin change. README.md: Tooling. `tests/test_sync_check.py` now checks
+  this workflow too (actions pinned by commit, read-only by default) and
+  fails any write permission outside verify-native.yml's attest job.
+- `kit/i18n-texts.json`: one list of the English texts kit components hand
+  a plugin to translate, each with the component that hands it out and
+  where it shows up: FoamyClipboard's three paste failures (also
+  `SafeTextField.pasteError` and `SafeTextArea.pasteError`), FoamyNative's
+  `UNAVAILABLE_TEXT`, and FoamyPrefs' four save errors
+  (`FoamyPrefsQueue.error`). Sync copies it into every plugin as it is
+  (hashed whole, like `REVIEW.md`), so a plugin's catalog test reads it
+  instead of keeping its own copy of the texts. `check.sh` (and so the
+  `design-lint` check of `tests/validate.sh`) now fails a plugin whose
+  catalog (`i18n/*.json`) lacks a text of a component the plugin carries,
+  or has it empty, naming the catalog, the text and the component
+  (`i18n/no.json lacks "…", which FoamyClipboard hands the plugin to
+  translate (kit/i18n-texts.json)`). A plural entry counts as empty
+  without a non-empty `other` form, the form `FoamyI18n.t()` shows, and
+  the message then adds `(a plural entry needs a non-empty "other")`.
+  `--lint-only` skips the check, and a plugin without catalogs needs none.
+  The kit's own labels (Settings, Back, Retry…) and the context-menu
+  labels a field passes to `translate` are not in the list. Plugin change:
+  add the missing texts to every catalog (see Upgrading); foamy-zendesk
+  (`tests/i18n.test.cjs`), foamy-teams and foamy-github
+  (`tests/runtime-panel.py`) can read the list instead of their copies.
+  README.md: Sync, Check; DESIGN.md: Copy. `tests/test_sync_check.py`;
+  the list is tied to the kit's texts in `tests/i18n.test.cjs`,
+  `tests/qml/Clipboard.qml` and `tests/qml/Lifecycle.qml`.
+- `FoamyBoundedCollector` (new component, `kit/FoamyBoundedCollector.qml`):
+  a Process's stdout or stderr with a memory bound, in place of
+  StdioCollector, which keeps the whole stream however much the child
+  prints. It keeps the start of the stream, at most `limit` characters
+  (default 65536), drops the rest as it arrives (a chunk-mode SplitParser,
+  as FoamyPrefsQueue's stderr), and sets `truncated` when it cut; `text`
+  is read in the Process's `exited` handler, and `clear()` in its
+  `started` handler begins each run. A cut never keeps half of a surrogate
+  pair, and after a cut the collector keeps no later output until
+  `clear()`, so `text` is always the start of the stream, even when the
+  cut backed off a pair and left room. Quickshell decodes each pipe read
+  on its own, so a character whose
+  UTF-8 bytes arrive in two reads shows as U+FFFD (StdioCollector decodes
+  the whole stream at once); ASCII and a stream that arrives in one read
+  are exact. Plugin change: none needed; a plugin adopts it when it
+  touches a collector (foamy-idle-suspend's probes first), after `sync.sh
+  <plugin> --add FoamyBoundedCollector`, and treats a `truncated` reply as
+  a failure, never as the whole reply. README.md: Components.
+  `tests/test_collector.py`.
+- `FoamyDropdown` pick serials: `changed(value, serial)` gives each pick a
+  new serial, and `saveFailed(serial)` drops the pick on show only when it
+  is that pick. Before, `saveFailed()` named no pick, so after quick picks
+  a caller whose saves end one by one could not drop only the one that
+  failed: a refusal of the first of the picks A, B, A dropped the second
+  A, and comparing values (foamy-power, foamy-monitor and
+  foamy-notification-center check `pickedValue`) takes a repeated value
+  for the refused one. `saveFailed()` without a serial works as before,
+  and a handler that takes only `value` needs no change. Plugin change:
+  none needed; a plugin that ends a pick on its own failed save may pass
+  the serial instead of comparing `pickedValue`. DESIGN.md: Choices.
+  `tests/test_features.py`.
+- `FoamyDropdown.queue` and `queueKey`: a dropdown linked to the
+  FoamyPrefsQueue it saves through and its key ends its pick by itself
+  when the queue refuses that key: at once when `save()` refuses the pick
+  (a value the schema rejects, a kept invalid stored array, a widget with
+  no bar entry; `save()` returns false), and when a pick that waited
+  behind a running CLI save is refused as it runs, which only `failed()`
+  reports. Before, such a pick stayed on show next to the error for up to
+  `pickHoldMs` (10 s) unless the plugin called `saveFailed()` on
+  `save()`'s false return, and the later refusal reached only `failed()`.
+  A refusal of another key leaves the pick; a dropdown without the link
+  works as before. Plugin change: none needed; a plugin that saves a
+  dropdown through FoamyPrefsQueue sets `queue` and `queueKey` and drops
+  its own `saveFailed()` call (foamy-power, foamy-monitor and
+  foamy-notification-center adopt it at their next sync). DESIGN.md:
+  Choices. `tests/test_features.py`.
+- `FoamyScheduleDay.saveFailed()`, and the same `queue`/`queueKey` link
+  as FoamyDropdown. Before, after a save that failed without changing
+  `value`, the time fields kept the unsaved range and Enter did not send
+  it again (the row had sent it already). `saveFailed()` shows `value`
+  again and lets the same range be sent again, as
+  `FoamyNumberField.saveFailed()` does; a time field edited since the
+  range was sent keeps its newer draft. A row linked to the
+  FoamyPrefsQueue it saves through calls it itself when the queue refuses
+  its key: at once when `save()` refuses the range, or later for a range
+  the row sent that the queue refuses as it runs. Plugin change: none
+  needed; foamy-train and foamy-zendesk may link their rows
+  (`queue: prefs; queueKey: modelData`). `tests/test_schedule.py`.
+
+### Changed
+- DESIGN.md, Tab row: names the one tab row that is not `FoamyTabs`: a
+  footer row that switches the popup's source and shows each source's
+  brand glyph (foamy-media's Spotify and YouTube tabs, with the glyph and
+  the equalizer, which FoamyTabs cannot draw). Such a row is an
+  `Accessible.PageTabList`, each tab an `Accessible.PageTab` with
+  `Accessible.selected` on the open one, and each tab is one stop of the
+  panel cursor. Plugin change: foamy-media gives its footer row the
+  `PageTabList` role (its tabs are `PageTab`s already); foamy-syncthing's
+  Folders / Devices row and foamy-monitor's Display / Advanced / Wireless
+  row move to `FoamyTabs`. No kit code changes.
+- `FoamyText.cap()` and `tooltip()` cut a line where a reader sees a
+  character end. Before, they cut by code point (as documented), so the
+  letter at the cut could lose its accent or vowel sign (an Arabic letter
+  kept without its fatha), an emoji its skin tone, a ZWJ sequence could
+  end in a joiner, and a flag show half (one regional indicator). The cut
+  now drops the whole cluster before the "…", with foamy-media's rules: the
+  Unicode 16 combining marks, Hangul jamo, the Thai and Lao vowel sign AM,
+  the halfwidth kana voiced sound marks, joiners, variation selectors,
+  skin tones, tags and flag pairs (Unicode's other grapheme rules, a
+  conjunct across a virama or a prepended sign, are not followed). The
+  functions, their arguments and the code-point count of `maxChars` are
+  unchanged; a cut line can come out shorter. It reaches the bar tooltips
+  of every plugin and the `FoamyAction`, `FoamyButton` and
+  `FoamyPanelFooter` tooltips. Plugin change: foamy-media can drop its own
+  copy of the rules (Model.js `scriptMarks`, `isScriptMark`,
+  `continuesCluster`, `splitsFlag`). `tests/text.test.cjs`.
+
+### Fixed
+- The preview's mock bar (`preview/qml/MockBar.qml`, since 0.1.0) has the
+  theme's bar colours, as the host's bar binds them: `foreground` and
+  `barForeground` the bar text, `background` the bar background, `urgent`
+  the bar's active colour. Before, it was white on black whatever the
+  theme, so a host part a popup draws in the bar's colours showed wrong:
+  in a light picture foamy-monitor's brightness slider had a white fill on
+  a faint white track. Renders of the demo plugin are unchanged;
+  foamy-monitor's display and trial pictures now show the slider as the
+  host does, in both themes. No plugin change is needed; a plugin test
+  that renders or reads the mock bar's colours sees the theme's. README.md:
+  Preview. `tests/test_preview.py`.
+- `SafeTextField` and `SafeTextArea` (since 0.13.1) give the keys of a
+  focused field that hides to the nearest key home that shows
+  (FoamyClickAway's `foamyKeyHome`: FoamyPopup's key catcher, a settings
+  page), as a click-away does, else to the nearest focus scope as before.
+  Before, the keys always went to the nearest focus scope, so the panel's
+  keys (Esc, arrows) did nothing after a focused field hid until the
+  plugin moved the focus itself. A key home that hides with the field (a
+  settings page closing) passes the search on. Plugin change: none needed;
+  a plugin that moves the focus after a field hides (foamy-notification-
+  center's search) can drop that at its next sync. DESIGN.md: Click-away.
+  `tests/test_text_area.py`.
+- `FoamyPopup` (since 0.1.0) gives the keys back to its body when the item
+  in the body that has them hides: a settings page left with Back, or
+  reset when the popup closes on it (FoamySettingsState). Before, Qt kept
+  the keys on the hidden page, and the host's focus on the next open went
+  back to it: the first Esc after reopening, or after Back, went to the
+  hidden page instead of closing the popup, unless the plugin refocused
+  its list in `onHidden`. Now, once the item has hidden, the keys go to
+  the nearest key home that shows: the settings page while it still shows
+  (a focused Retry that hides as its retry starts leaves Esc on the page,
+  which goes back), else the body's key home (`focusTarget`, the body
+  item by default). A plugin's own refocus, at once or later, still wins.
+  Plugin change: none needed; foamy-bolt's `onHidden` refocus can go at
+  its next sync. README.md: Components; DESIGN.md: Click-away.
+  `tests/test_popup_keys.py`.
+- `foamy_helper::favicon` cache (since 0.13.1): a cache on a file system
+  whose clock runs a little ahead of this one (NFS, SMB) reuses its icons
+  again. 0.13.1 made every file time in the future stale, so there each
+  new icon looked stale at once and every request looked it up and wrote
+  it again (up to 2 s). A time up to 60 s ahead now counts as age 0; one
+  further ahead (the clock was set back) is still stale. No source change
+  is needed. `kit/rust/foamy-helper/src/favicon/tests.rs` (test
+  `only_a_cached_icon_younger_than_a_day_is_reused`).
+
+### Upgrading
+- `kit/rust` changed (`json::run_bytes`, the favicon cache): a plugin with
+  a native helper rebuilds it after the sync (`kit/native/build-native.sh
+  .`) and commits the new binaries and `native.pin`; until then `check.sh`,
+  `tests/kit-check.sh` and `--verify` report the binaries stale.
+  `foamy-helper`'s version stays 0.1.2, so no plugin `Cargo.lock` changes.
+- `check.sh` asks each catalog for the texts in `kit/i18n-texts.json` of
+  the components a plugin carries (see Added). On the plugins' dev
+  branches (kit 0.13.1) it fails 13 plugins until they add them to
+  `en.json` and `no.json`: "The saved list in shell.json isn't valid, so it
+  wasn't replaced." (audio, bolt, clock, media, menu, monitor,
+  notification-center, power, syncthing, train, vitals, weather); the
+  three paste failures (audio, monitor, power, which carry the text field
+  through FoamySettings without showing one); "Settings can't be saved:
+  this widget has no bar entry." (menu, monitor, notification-center);
+  "That value isn't allowed." and "Couldn't save the setting." (monitor,
+  notification-center); FoamyNative's "This plugin's helper isn't
+  available for this CPU." (lock).
+- `tests/test_text_field.py` (new, `tests/qml/TextField.qml`) tests a
+  plain SafeTextField through real keys, the mouse and real pastes: the
+  13 cases foamy-bolt's and foamy-weather's `tests/tst_clipboard.qml`
+  kept because the kit had no such test (a paste dropped when the field
+  hides or is disabled, a late result after a caret move or typing, undo
+  and redo of a paste, the caret in a 34 px field, a long paste's scroll,
+  middle-click, maximumLength across pastes, refused pastes keeping the
+  selection, a second Ctrl+V, Shift+Insert of an empty clipboard, typing
+  after a paste as its own undo step, Tab, Shift+Tab and Return). No kit
+  code changed. Plugin change: foamy-bolt and foamy-weather delete
+  `tests/tst_clipboard.qml`, `tests/test_clipboard.py` and their suite and
+  README lines at their next sync.
+
 ## 0.13.1 — 2026-11-22
 
 ### Added

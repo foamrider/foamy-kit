@@ -31,7 +31,7 @@ edited in a plugin: change it here, then sync.
 | FoamyWallClock | `FoamyWallClock.qml` | Epoch-aligned seconds/minutes, with `enabled` demand gating; safe across daylight-saving fallback |
 | FoamyMotion | `FoamyMotion.qml` (singleton) | Durations through `Style.duration`, `reduceMotion`, named tokens |
 | FoamyI18n | `FoamyI18n.qml` (singleton), `FoamyI18nText.js`, `node-loader.cjs` | `t()`, `tn()` plurals, `number()`, `formatLocale`, `rightToLeft`; the shell's Translations. `FoamyI18nText.js`: its value substitution, and `translator(catalog, english)` for node tests |
-| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body` |
+| FoamyPopup | `FoamyPopup.qml` | Stock `qs.Ui.KeyboardPanel` with the foamy surface and a lazy `body`; when the item in the body that has the keys hides, they go to the nearest key home that shows: the settings page while it shows (its Retry hiding as the retry starts), else the body's (Settings closing) |
 | FoamyPopupCard | `FoamyPopupCard.qml` | Stock `qs.Ui.PopupCard` with the foamy surface (menus, tray) |
 | FoamyIpc | `FoamyIpc.qml`, `FoamyIpcResolver.js`, `FoamyIpcPreference.qml` | IpcHandler that also registers with the shell's IpcRegistry (omarchy-shell socket); `prefer/others/call`; keep a shared target |
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
@@ -46,8 +46,9 @@ edited in a plugin: change it here, then sync.
 | FoamyWheelScroll | `FoamyWheelScroll.qml` | Normal wheel/touchpad scrolling for any Flickable, `ensureVisible(item)`; a click-away under its content (`spaceClicked`, `clickAway`) |
 | FoamyClickAway | `FoamyClickAway.qml` | A click on empty space takes the keys from a focused text field and gives them to its key home (`foamyKeyHome`); in FoamyPopup's body, FoamyWheelScroll's Flickables and settings pages by default |
 | FoamyIcon | `FoamyIcon.qml` | Lucide superset, 122 names (ISC, `LICENSE-LUCIDE`); `tools/update-icons.py` |
-| FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value` (`LICENSE-OMARCHY`) |
+| FoamyDropdown | `FoamyDropdown.qml` | Stock Dropdown, foamy styled, RTL, never assigns over the caller's `value`; a pick shows until `value` catches up, ends at once on `saveFailed(serial)` or, linked to a FoamyPrefsQueue (`queue`, `queueKey`), when the queue refuses that key (`LICENSE-OMARCHY`) |
 | FoamyTabs | `FoamyTabs.qml` | Tab row under the hero band: content-width underline tabs with icon, label and count, one open; labels elide from the last tab; one cursor stop with ←/→ between tabs, RTL, never assigns over the caller's `value` |
+| FoamyBoundedCollector | `FoamyBoundedCollector.qml` | A Process's stdout or stderr with a memory bound, in place of StdioCollector: keeps the start of the stream, at most `limit` characters (65536), drops the rest as it arrives and says so (`truncated`), and after a cut keeps nothing more until `clear()`; `text` read in `exited`, `clear()` in `started`. A character split between two pipe reads shows as U+FFFD (exact for ASCII or a stream in one read). A plugin synced before 0.14.0 adds it with `sync.sh <plugin> --add FoamyBoundedCollector` |
 | FoamyClipboard | `FoamyClipboard.qml`, `clipboard.sh` | Bounded clipboard read for a plugin that draws its own input and pastes without Qt: `start(primary)`, `read(text)` / `failed(message)` signals, one read at a time; `clipboard.sh` runs `wl-paste` under a 2 s kill deadline, at most 16 KiB of text without NUL, line breaks as spaces (kept as `\n` with `multiline`) |
 | SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes; styled `runs` ({text, color}) drawn over its own glyphs, plain text when they don't match or text is selected |
 | SafeTextArea | `SafeTextArea.qml` | Multi-line SafeTextField: the same bounded paste with line breaks kept, `maximumLength`, wrapping, `minimumHeight`/`maximumHeight` (scrolls past it), Enter for a newline, `keyPressed` hook (Ctrl+Enter), `editingFinished` on focus loss |
@@ -55,8 +56,8 @@ edited in a plugin: change it here, then sync.
 | FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblems.<key>` says which), node loader for unit tests |
-| FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never splitting a surrogate pair |
-| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component, the reason of a refused paste under the row). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
+| FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never between a letter and its marks or inside an emoji sequence, a flag or a surrogate pair |
+| FoamySchedule | `FoamySchedule.js`, `FoamyScheduleDay.qml`, `node-loader.cjs` | A weekly on/off schedule (`scheduleMonday`…`scheduleSunday`, overnight ranges) with a snooze/resume override kept in a state file, and its settings row (switch, from/to fields, injectable label component, the reason of a refused paste under the row, `saveFailed()` or a FoamyPrefsQueue link, `queue`/`queueKey`, for a range that was not saved). Opt-in: `sync.sh <plugin> --add FoamySchedule` |
 | FoamyNative | `FoamyNative.js`, `node-loader.cjs`, `native/native.py`, `native/build-native.sh`, `rust/release.toml`, `rust/foamy-helper/**`, `rust-toolchain.toml` and `.github/workflows/verify-native.yml` (plugin root) | Launch the plugin's bundled helper `bin/<arch>/<name>`, the shared Rust crate `foamy-helper`, the pinned toolchain and release profile, the build tool, and the CI workflow that rebuilds and attests the binaries. Opt-in: `sync.sh <plugin> --add FoamyNative` ([Native helpers](#native-helpers)) |
 
 Each file's header documents its API. Dependencies are in `kit/components.json`.
@@ -71,7 +72,10 @@ Each file's header documents its API. Dependencies are in `kit/components.json`.
 ```
 
 Sync writes `kit/` (components, a generated `kit/qmldir` registering the
-singletons, license notices), `tests/kit-check.sh`, root `REVIEW.md`, the
+singletons, license notices, and `kit/i18n-texts.json`, copied whole: the
+English texts kit components hand the plugin to translate, each with the
+component that hands it out and where it shows up, for the plugin's own
+catalog tests), `tests/kit-check.sh`, root `REVIEW.md`, the
 [tooling](#tooling) (`tests/validate.sh`, `kit/tooling/validate.py`,
 `mise.toml`, `ruff.toml`, `.oxlintrc.json`, `.qmlformat.ini`,
 `.github/workflows/checks.yml`), the review block in `AGENTS.md`, and
@@ -141,7 +145,13 @@ Fails when plugins are on different kit versions, a stamped file, notice or
 `REVIEW.md` was edited, the `AGENTS.md` review block is missing or stale, a
 native helper doesn't match its pin ([Native helpers](#native-helpers)), a
 published plugin is missing from the plugin list in foamy-kit's `AGENTS.md`
-(not checked with `--lint-only`), or the design lint finds a violation (see DESIGN.md, "Lint"). The lint covers
+(not checked with `--lint-only`), a catalog (`i18n/*.json`) lacks a text, or
+has it empty, that a kit component the plugin carries hands it to translate
+(`kit/i18n-texts.json`: the paste failures, the helper's unavailable text,
+the settings save errors; a plural entry counts as empty without a non-empty
+`other` form, the one `FoamyI18n.t()` shows; the message names the catalog,
+the text and the component; not checked with `--lint-only`), or the design
+lint finds a violation (see DESIGN.md, "Lint"). The lint covers
 git-tracked `.qml`/`.js` outside `tests/` and `preview/`.
 
 ## Tooling
@@ -275,6 +285,15 @@ for pushes to main and dev and for pull requests, with read-only contents
 permission and no secrets; actions/checkout and jdx/mise-action are pinned by
 commit. It sits beside verify-native.yml, which still rebuilds and attests
 native helpers.
+
+foamy-kit's own CI also runs `.github/workflows/foamy-helper.yml`, which sync
+never copies: `cargo fmt --check`, Clippy with warnings as errors for each
+feature set (none, favicon, sandbox, tls, all) and `cargo test
+--all-features` of `kit/rust/foamy-helper`, with the toolchain
+`kit/rust/rust-toolchain.toml` pins, read-only contents permission and
+actions pinned by commit (`tests/test_sync_check.py` checks both). A crate
+test that needs a tool the runner lacks prints a `SKIP` line, which the job
+lists. A plugin's verify-native.yml tests its own helper crate.
 
 The design lint and the kit's test helpers (`preview/hostenv.py`,
 `harness.py`) are not synced, so in a plugin the job first fetches
@@ -691,8 +710,10 @@ subdirectory. Helpers never exit 126 or 127 themselves.
 ### Panics and arguments
 
 The release profile has `panic = "abort"`, so a panic would end in
-`SIGABRT` and a core dump. `json::run` and `json::serve` install the kit's
-panic hook (a reply where there is one, then exit 101); **every helper that
+`SIGABRT` and a core dump. `json::run`, `json::run_bytes` and `json::serve`
+install the kit's panic hook (a reply where there is one, then exit 101); a
+one-shot helper that encodes its reply line itself passes the bytes to
+`json::run_bytes` instead of keeping a hook of its own. **Every helper that
 runs its own loop or protocol calls `foamy_helper::process::exit_on_panic(101)`
 first thing in `main`**. Read argv with `std::env::args_os()` inside the
 `json::run` closure (or after the hook), never `std::env::args()` before it:
@@ -715,7 +736,7 @@ fn main() -> ExitCode {
 |---|---|
 | `hash` | `sha256`, `sha256_hex` (plain Rust, `hashlib.sha256` compatible; cache names and content hashes, not for secrets) |
 | `io` | `read_limited`, `read_stdin_limited`, `LineReader` (max line length; an overlong line is reported and skipped, the next one still reads) |
-| `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `Failure` (code, message, exit code), `error_reply` |
+| `json` | `to_line`/`write_line`/`print_line` (one compact line), `parse`, `serve` (JSON-lines loop: a reply per request, bad lines answered), `run` (one-shot entry point: always one JSON reply, also on failure and panic, which exits 101 instead of aborting), `run_bytes` (the same for a reply line the helper encodes itself: its finished bytes go out under `run`'s reply lock and panic hook), `Failure` (code, message, exit code), `error_reply` |
 | `fs` | `write_atomic` (temp file `O_EXCL\|O_NOFOLLOW`, exact mode, fsync, rename, directory fsync; refuses symlinks, foreign-owned targets and directories, and directories that are world-writable without the sticky bit; group-writable own directories, as with umask 002, are fine), `ensure_private_dir` (0700, checked), `read_file_limited` (no symlinks, FIFOs, devices) |
 | `lock` | `FileLock::try_exclusive`/`exclusive`/`exclusive_within` (`flock`; a missing lock file is created 0600, an existing one keeps its mode; owner checks), `runtime_dir(plugin)` (`$XDG_RUNTIME_DIR/<plugin>`, 0700; `NotFound` when `XDG_RUNTIME_DIR` is unset or not the user's own private directory, as `/tmp` is not), `try_runtime_lock` |
 | `child` | `Bounded`: deadline, per-stream output cap, kill of the whole process group on either, stdin feeding (all of it, also after the child closed its output), `keep_env`/`env_clear`, `new_session`, rlimits, `inherit_fd` (Python's `pass_fds`), `PR_SET_PDEATHSIG` by default; `stdin_fd` (standard input straight from an open file, still seekable), `nice`, `io_idle`; `pipe_into` → `Pipeline` (one child's standard output into another's input, moved with `splice` and counted: `run`, `run_with_progress`, `PipelineOutput`; see [Two-stage jobs](#two-stage-jobs)) |
@@ -917,7 +938,7 @@ import "../kit"
 import ".." as Plugin
 Item {
   id: preview
-  required property QtObject bar          // mock bar facade (barSize, popout, shell.updateEntryInline)
+  required property QtObject bar          // mock bar facade (barSize, the theme's bar colours, popout, shell.updateEntryInline)
   required property Item anchorItem       // the bar button on the simulated screen
   property var previewStates: ["default", "empty", "settings"]
   property string previewState: "default" // set by the harness before each capture
@@ -967,7 +988,11 @@ ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),
 code the plugin has a catalog for (`i18n/<code>.json`, or its base
 language's); without one the render stops instead of showing English.
 Omarchy's Norwegian is `no`: `--language nb` renders `no` when only
-`no.json` exists.
+`no.json` exists. The mock `bar` (preview/qml/MockBar.qml, also in tests
+through `import "harness"`) has the theme's bar colours, as the host's bar
+binds them: `foreground` and `barForeground` the bar text, `background` the
+bar background, `urgent` the bar's active colour; so a host part a popup
+draws in them (PanelSlider) looks in either theme as it does on the host.
 
 Other preview shapes (examples in `tests/fixtures/demo-plugin/preview/`):
 
@@ -1194,7 +1219,10 @@ settings state), the wall clock across the Oslo DST fallback
 (`test_clock.py`), how a prefs-queue CLI save ends
 (`test_lifecycle.py`: exit, failed start, deadline, capped stderr, stopped,
 queue destroyed, an array save's stuck child killed with it so it never
-writes late; and a peer call that can't start), a `qs ipc` argument probe, harness
+writes late; and a peer call that can't start), FoamyBoundedCollector on a
+real child's stdout and stderr (`test_collector.py`: the bound over 4 MiB of
+output, `truncated`, order across reads, a surrogate pair at the cut, also
+with more output in a later read, `clear()`), a `qs ipc` argument probe, harness
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and FoamyPopupCard height
@@ -1203,6 +1231,9 @@ pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
 light in both directions), and wheel scrolling and the settings page's focus
 follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
 notch).
+A plain SafeTextField through real keys, the mouse and real pastes
+(`test_text_field.py`: paste races and refusals, undo and redo, scrolling, the
+primary selection, maximumLength, Shift+Insert, Tab and Return).
 `tests/fixtures/demo-plugin` is a reference plugin built only from the kit.
 FoamyNative (0.5.0): `native.test.cjs` (command builder and the real `bash
 exec` launch: arguments verbatim, exit 126/127) and `test_native.py` (subdirectory

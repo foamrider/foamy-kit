@@ -5,5 +5,12 @@
   "Settings": "Indstillinger",
   "Back": "Tilbage",
   "Refresh every": "Opdater hver",
-  "Battery %1%": "Batteri %1%"
+  "Battery %1%": "Batteri %1%",
+  "Clipboard paste timed out. Copy the text again.": "Indsættelsen fra udklipsholderen tog for lang tid. Kopiér teksten igen.",
+  "Clipboard text is too large or contains invalid characters.": "Teksten i udklipsholderen er for stor eller indeholder ugyldige tegn.",
+  "Could not paste clipboard text. Copy plain text and try again.": "Kunne ikke indsætte teksten fra udklipsholderen. Kopiér almindelig tekst, og prøv igen.",
+  "That value isn't allowed.": "Den værdi er ikke tilladt.",
+  "Settings can't be saved: this widget has no bar entry.": "Indstillingerne kan ikke gemmes: denne widget har ingen post i linjen.",
+  "The saved list in shell.json isn't valid, so it wasn't replaced.": "Den gemte liste i shell.json er ugyldig, så den blev ikke erstattet.",
+  "Couldn't save the setting.": "Kunne ikke gemme indstillingen."
 }

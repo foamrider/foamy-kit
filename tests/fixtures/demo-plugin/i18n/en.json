@@ -39,5 +39,10 @@
   "Updated %1 days ago": {
     "one": "Updated %1 day ago",
     "other": "Updated %1 days ago"
-  }
+  },
+  "Clipboard paste timed out. Copy the text again.": "Clipboard paste timed out. Copy the text again.",
+  "Clipboard text is too large or contains invalid characters.": "Clipboard text is too large or contains invalid characters.",
+  "Could not paste clipboard text. Copy plain text and try again.": "Could not paste clipboard text. Copy plain text and try again.",
+  "Settings can't be saved: this widget has no bar entry.": "Settings can't be saved: this widget has no bar entry.",
+  "The saved list in shell.json isn't valid, so it wasn't replaced.": "The saved list in shell.json isn't valid, so it wasn't replaced."
 }

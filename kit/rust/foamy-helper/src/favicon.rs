@@ -57,6 +57,10 @@ pub const MAX_DATABASE_BYTES: u64 = 32 * 1024 * 1024;
 pub const LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 /// A cached icon younger than this is returned without a lookup.
 pub const CACHE_MAX_AGE: Duration = Duration::from_secs(86400);
+/// How far a cached icon's time may lie in the future and still count as
+/// written just now: a cache on a file system whose clock runs a little
+/// ahead of this one (NFS, SMB) dates every new icon slightly ahead.
+const CLOCK_AHEAD: Duration = Duration::from_secs(60);
 /// Icons kept in the cache directory (newest first).
 pub const CACHE_ENTRIES: usize = 256;
 
@@ -659,8 +663,9 @@ fn os_failure(error: io::Error) -> Failure {
 }
 
 /// A fresh cached icon at `target`: a regular file (not a symlink) younger
-/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified in the
-/// future (the clock was set back) is not fresh: its age is unknown.
+/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified up to
+/// [`CLOCK_AHEAD`] in the future counts as age 0; one further ahead (the
+/// clock was set back) is not fresh: its age is unknown.
 fn cached(target: &Path) -> bool {
     let fresh = fs::symlink_metadata(target).is_ok_and(|meta| {
         let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
@@ -668,6 +673,11 @@ fn cached(target: &Path) -> bool {
             .duration_since(UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
         let age = now - modified;
+        let age = if age < 0.0 && -age <= CLOCK_AHEAD.as_secs_f64() {
+            0.0
+        } else {
+            age
+        };
         meta.file_type().is_file() && (0.0..CACHE_MAX_AGE.as_secs_f64()).contains(&age)
     });
     fresh

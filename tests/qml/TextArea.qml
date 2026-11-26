@@ -36,6 +36,7 @@ ShellRoot {
   property int finished: 0
   property int fieldFinished: 0
   property int saves: 0
+  property int escapes: 0
   // inputActiveFocus as each field's editingFinished handler reads it.
   property var areaFocusAtFinish: null
   property var fieldFocusAtFinish: null
@@ -96,6 +97,15 @@ ShellRoot {
       width: 380
       height: column.height + 24
       color: Commons.Color.background
+      // As in a popup body: the panel's key catcher is the fields' key home.
+      readonly property Item foamyKeyHome: keys
+
+      PanelKeyCatcher {
+        id: keys
+        width: 1
+        height: 1
+        onCloseRequested: shell.escapes++
+      }
 
       Column {
         id: column
@@ -424,6 +434,8 @@ ShellRoot {
     eq(shell.finished, ended + 1, "hiding the focused area ends its edit once")
     type("x")
     eq(area.text, "", "keys typed while the area is hidden never reach it")
+    key(Qt.Key_Escape)
+    eq(shell.escapes, 1, "Esc after the focused area hides reaches the panel's key catcher, its key home")
     area.visible = true
     eq([shell.finished, area.inputActiveFocus], [ended + 1, false], "showing the area again ends nothing and takes no keys")
     after.text = ""
@@ -434,12 +446,16 @@ ShellRoot {
     eq(shell.fieldFinished, fieldEnded + 1, "hiding the focused text field ends its edit once")
     type("x")
     eq(after.text, "", "keys typed while the text field is hidden never reach it")
+    key(Qt.Key_Escape)
+    eq(shell.escapes, 2, "Esc after the focused text field hides reaches the key catcher")
     after.visible = true
     // Hidden with its parent: the same.
     area.focusInput()
     ended = shell.finished
     column.visible = false
     eq([area.inputActiveFocus, shell.finished], [false, ended + 1], "hiding the area's parent drops the keys and ends the edit once")
+    key(Qt.Key_Escape)
+    eq(shell.escapes, 3, "Esc after the area's parent hides reaches the key catcher")
     column.visible = true
     area.focusInput()
     setClipboard("delayed", function () {

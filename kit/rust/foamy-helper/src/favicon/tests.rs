@@ -689,12 +689,15 @@ fn only_a_cached_icon_younger_than_a_day_is_reused() {
     let minute = Duration::from_secs(60);
     let now = SystemTime::now();
     // (modification time, reply). No browser data, so a stale copy gives
-    // "not-found". A time in the future (the clock was set back) is stale.
+    // "not-found". A time a second ahead (a file system whose clock runs a
+    // little ahead) is fresh; a time two minutes ahead (the clock was set
+    // back) is stale.
     for (modified, status) in [
         (now - minute, "cached"),
         (now - CACHE_MAX_AGE + minute, "cached"),
         (now - CACHE_MAX_AGE - minute, "not-found"),
-        (now + minute, "not-found"),
+        (now + Duration::from_secs(1), "cached"),
+        (now + minute * 2, "not-found"),
         (now + CACHE_MAX_AGE * 2, "not-found"),
     ] {
         fs::write(&target, png(32, 100)).unwrap();

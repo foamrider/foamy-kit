@@ -42,6 +42,11 @@ STAMP_RE = re.compile(r"^(//|#) foamy-kit (\S+) ([0-9a-f]{64}) ")
 LOCK_NAME = "foamy-kit.lock"
 CHECK_NAME = "tests/kit-check.sh"
 REVIEW_NAME = "REVIEW.md"
+# English texts kit components hand a plugin to translate (paste errors,
+# FoamyNative.UNAVAILABLE_TEXT, settings save errors), each with the
+# component that hands it out: [{component, text, source}]. check.sh
+# requires each text of a component the plugin carries in every catalog.
+I18N_TEXTS = "i18n-texts.json"
 # The tooling every plugin carries (README "Tooling"): the one validation
 # command, its engine, the pinned tool versions and the shared linter and
 # formatter configuration. {path in the plugin: source in foamy-kit}. The
@@ -307,6 +312,9 @@ def planned_files(selected, components, version):
         files[rel] = stamped(rel, (KIT_ROOT / source).read_bytes(), version)
     # Hash the guide whole, like license notices, so it stays valid Markdown.
     files[REVIEW_NAME] = (KIT_ROOT / REVIEW_NAME).read_bytes()
+    # The texts kit components hand a plugin to translate, whole too (JSON
+    # has no comment line for a stamp): a plugin's tests read it.
+    files[f"kit/{I18N_TEXTS}"] = (KIT_DIR / I18N_TEXTS).read_bytes()
     return files
 
 
@@ -314,7 +322,7 @@ def lock_bytes(version, selected, files):
     lines = [
         "# foamy-kit.lock: written by foamy-kit sync.sh; do not edit.",
         "# Hashes are of each file's body (the file without its stamp line);",
-        "# notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.",
+        "# notices, REVIEW.md and kit/i18n-texts.json are hashed whole. tests/kit-check.sh verifies them.",
         f"version {version}",
         f"source {kit_revision()}",
         "components " + ",".join(selected),
@@ -932,13 +940,52 @@ def checked_plugin_map():
         return None, 1
 
 
+def catalog_problems(plugin, components):
+    """The texts of kit/i18n-texts.json whose component is in `components`
+    (the plugin's lock) and that one of the plugin's catalogs (i18n/*.json)
+    lacks: no entry, an empty one, or a plural entry without a non-empty
+    "other" form. A plugin without catalogs shows the English text, so it
+    needs none."""
+    try:
+        listed = json.loads((KIT_DIR / I18N_TEXTS).read_text(encoding="utf-8"))
+        texts = [(entry["component"], entry["text"]) for entry in listed if entry["component"] in components]
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        return [f"foamy-kit's kit/{I18N_TEXTS} is unusable: {error!r}"]
+    problems = []
+    for catalog in sorted((plugin / "i18n").glob("*.json")):
+        try:
+            entries = json.loads(catalog.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
+            problems.append(f"i18n/{catalog.name} is not a readable JSON catalog: {error}")
+            continue
+        if not isinstance(entries, dict):
+            problems.append(f"i18n/{catalog.name} is not a JSON object")
+            continue
+        for component, text in texts:
+            value = entries.get(text)
+            # FoamyI18n.t() shows a plural entry's "other" form, and the
+            # English text when that form is missing or empty.
+            plural = isinstance(value, dict)
+            shown = value.get("other") if plural else value
+            if not (isinstance(shown, str) and shown):
+                note = ' (a plural entry needs a non-empty "other")' if plural else ""
+                problems.append(
+                    f'i18n/{catalog.name} lacks "{text}"{note}, which {component} hands the plugin to translate '
+                    f"(kit/{I18N_TEXTS})"
+                )
+    return problems
+
+
 def kit_problems(plugin, lock, lock_broken, allow_unsynced, mapped):
     """check.sh's kit problems for one plugin: integrity (skipped for a
-    plugin without a lock under --allow-unsynced) and, when `mapped` is the
-    plugin list, whether a published plugin is on it."""
+    plugin without a lock under --allow-unsynced), the kit texts its
+    catalogs must hold and, when `mapped` is the plugin list, whether a
+    published plugin is on it."""
     problems = []
     if lock is not None or lock_broken or not allow_unsynced:
         problems += verify_plugin(plugin)
+    if lock is not None:
+        problems += catalog_problems(plugin, lock["components"])
     if mapped is not None:
         problems += plugin_map_problems(plugin, mapped)
     return problems
