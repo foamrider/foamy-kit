@@ -36,6 +36,9 @@ import qs.Ui
 // fails while this pick's waits), leaves it. A CLI save that fails later
 // rolls `value` back, which ends the hold by itself; a `value` bound to the
 // stored settings has nothing to roll back, and the link ends the hold.
+// Another object with a failed(key, value, error) signal can be the queue
+// too; without FoamyPrefsQueue's state the link ends the pick only for a
+// failure that names the option's value.
 // Without the link, call saveFailed() when save() returns false:
 //   onChanged: function (v) { if (!prefs.save("mode", v)) modeDropdown.saveFailed() }
 // A caller that wants an uncontrolled dropdown handles changed() itself.
@@ -171,27 +174,27 @@ Item {
   Connections {
     target: root.queue
     ignoreUnknownSignals: true
-    function onFailed(key) {
+    function onFailed(key, failedValue) {
       if (root.queueKey === "" || key !== root.queueKey)
         return
       // During changed() it is that pick, which save() refuses (it returns
-      // false): whatever the caller made of the value. Later it is the held
-      // pick's own save, refused as it ran or failed, whatever value the
-      // caller saved for it, unless the queue still holds another save: one
-      // of the key that waits (an older save of the key failed, and this
-      // pick's waits behind it), or one that runs (save() refused another
-      // value at once).
+      // false): whatever the caller made of the value.
       if (root._savingSerial !== 0)
         root.saveFailed(root._savingSerial)
-      else if (root.pickHeld && !root._queueHolds(root.queue, key))
+      else if (root.pickHeld && root._heldPickRefused(root.queue, key, failedValue))
         root.saveFailed(root._heldSerial)
     }
   }
-  // True while `queue` runs a save or keeps a save of `key` waiting
-  // (FoamyPrefsQueue's `saving` and `waiting`; another queue may have
-  // neither).
-  function _queueHolds(queue, key) {
-    return queue.saving === true || (queue.waiting || []).some(function (item) {
+  // Whether a later refusal of `key` is the held pick's own. A
+  // FoamyPrefsQueue tells by its state, whatever value the caller saved:
+  // it is, unless the queue still runs a save (save() refused another
+  // value at once) or keeps a save of the key waiting (an older save of
+  // the key failed, and this pick's waits behind it). Another queue has
+  // only failed(): the value it names must be the pick's.
+  function _heldPickRefused(queue, key, failedValue) {
+    if (typeof queue.saving !== "boolean" || !Array.isArray(queue.waiting))
+      return String(failedValue) === root.pickedValue
+    return !queue.saving && !queue.waiting.some(function (item) {
       return item.key === key
     })
   }

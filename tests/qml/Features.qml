@@ -939,6 +939,38 @@ ShellRoot {
     eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], "a refusal of the older pick then changes nothing")
   }
 
+  // Queues that are not a FoamyPrefsQueue: one with only the failed()
+  // signal, and one whose `waiting` is a count, not a list. The link has no
+  // queue state to read there, so it ends the held pick only for a failure
+  // that names the pick's value: an older pick's failure leaves the newer
+  // pick on show.
+  QtObject {
+    id: signalQueue
+    signal failed(string key, var value, string error)
+  }
+  QtObject {
+    id: countingQueue
+    property bool saving: false
+    property int waiting: 1
+    signal failed(string key, var value, string error)
+  }
+  function signalQueueLinks() {
+    serialDropdown.queueKey = "mode"
+    var queues = [[signalQueue, "a queue with only failed()"], [countingQueue, "a queue whose waiting is a count"]]
+    queues.forEach(function (entry) {
+      var queue = entry[0]
+      serialDropdown.queue = queue
+      serialDropdown.select("a")
+      serialDropdown.select("b")
+      queue.failed("mode", "a", "Couldn't save the setting.")
+      eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["b", true], entry[1] + ": the older pick's failure leaves the newer pick on show")
+      queue.failed("mode", "b", "Couldn't save the setting.")
+      eq([serialDropdown.shownValue, serialDropdown.pickHeld], ["c", false], entry[1] + ": the failure of the pick on show ends it")
+    })
+    serialDropdown.queue = null
+    serialDropdown.queueKey = ""
+  }
+
   // A dropdown disabled while its list is open (a settings page that starts
   // saving) closes the list, and nothing there picks: a key or a click on the
   // list would reach onChanged. A panel's open() on a disabled dropdown opens
@@ -1131,6 +1163,7 @@ ShellRoot {
     dropdown.select("a")
     dropdownRevert.start()
     serialPicks()
+    signalQueueLinks()
 
     // --- FoamyAction: a long tooltip wraps in a capped width ---------------------------
     wait.waitFor(function () {
