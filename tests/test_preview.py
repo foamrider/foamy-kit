@@ -208,8 +208,52 @@ def render_tests():
         ok &= bar_colour_test(plugin, host, out_root / host / "bar-colours")
         ok &= card_corner_test(plugin, host, out_root / host / "card-corners")
         ok &= card_corner_test(plugin, host, out_root / host / "card-corners-1.25", scale=1.25)
+        ok &= capture_failure_test(plugin, host, out_root / host / "thin-card")
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return ok
+
+
+# A card under a pixel wide: at scale 1.25 its capture is 0.8 px wide, and
+# grabToImage() refuses an item narrower than a pixel.
+THIN_CARD = """import QtQuick
+Item {
+  id: preview
+  required property QtObject bar
+  required property Item anchorItem
+  property var previewStates: ["thin"]
+  property string previewState: ""
+  readonly property var popup: holder
+  Item {
+    id: holder
+    readonly property Item cardItem: card
+    Rectangle {
+      id: card
+      x: 100
+      y: 100
+      width: 0.6
+      height: 40
+      color: "#336699"
+    }
+  }
+}
+"""
+
+
+def capture_failure_test(plugin, host, out):
+    """A card capture that cannot start fails the render at once, with a
+    line that says so, instead of waiting out the render's timeout (60 s
+    here) with no cause in the log."""
+    preview = plugin / "preview/ThinCard.qml"
+    preview.write_text(THIN_CARD)
+    shots = render.render(plugin, host, out, preview=preview, scale=1.25, timeout=60)
+    preview.unlink()
+    log = (out / "render.log").read_text() if (out / "render.log").is_file() else ""
+    cause = "FOAMY FAIL the card capture did not start"
+    return report(
+        f"preview {host}: a card capture that cannot start fails the render and says so",
+        shots is None and cause in log,
+        f"shots {shots is not None}, cause logged: {cause in log}",
+    )
 
 
 # A rounded card that holds an opaque rectangle without radius, as FoamyTabs'

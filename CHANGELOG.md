@@ -117,7 +117,10 @@
   transparent corners before is the same to the pixel (foamy-syncthing
   and foamy-todoist, dark and light, compared state by state;
   foamy-syncthing also at scale 1.25). A FoamyPopupCard's copy on the
-  screen picture has the screen in its corners. Plugin change: none
+  screen picture has the screen in its corners. A capture that
+  `grabToImage()` refuses (a card under a pixel wide) fails the render at
+  once with "FOAMY FAIL the card capture did not start", where the old
+  grab waited out the render's timeout. Plugin change: none
   needed; foamy-media, foamy-syncthing and foamy-todoist, whose committed
   `preview.png` has black corners, may render it again. README.md:
   Preview. `tests/test_preview.py`.

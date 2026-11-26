@@ -140,10 +140,16 @@ ShellRoot {
             scheduleUpdate()
             return
           }
-          capture.grabToImage(function(result) {
+          var started = capture.grabToImage(function(result) {
             capture.done(result)
             capture.destroy()
           })
+          // A refused grab (Qt says why in a warning just above) would never
+          // call done(): fail the render now, not at its timeout.
+          if (!started) {
+            console.log("FOAMY FAIL the card capture did not start")
+            Qt.quit()
+          }
         }
       }
       Component.onCompleted: layer.scheduleUpdate()
