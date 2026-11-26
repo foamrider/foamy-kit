@@ -106,6 +106,9 @@ ShellRoot {
   // the direct grab's size, rounded to whole device pixels, and the capture
   // that size exactly, so the layer is drawn 1:1 and the flip maps each
   // pixel row onto one row.
+  // Seen with Qt 6.12.0 (qtdeclarative's software adaptation). Remove this
+  // capture, and grab the card with grabToImage() again, once a plain
+  // grabToImage() passes tests/test_preview.py's card_corner_test.
   Component {
     id: cardCapture
     Item {
