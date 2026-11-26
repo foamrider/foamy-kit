@@ -401,7 +401,9 @@ ShellRoot {
       return minimum(FoamyPalette.onSurface(FoamyPalette[k])).toFixed(2)
     }) + ", " + minimum(FoamyPalette.secondaryText).toFixed(2) + ", " + minimum(FoamyPalette.mutedText).toFixed(2) + ")")
     // A status colour that already reads comes back unchanged, so a theme
-    // keeps its look wherever it read before (light or dark).
+    // keeps its look wherever it read before (light or dark). With
+    // onSurface always taking one step, this fails in every theme
+    // (#f38ba8 -> #ff92b0 in the preview's dark theme).
     check(["error", "warning", "success", "info"].every(function (k) {
       return minimum(FoamyPalette[k]) < 4.5 || Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette[k]), FoamyPalette[k])
     }), "a status colour that reads is returned unchanged " + ["error", "warning", "success", "info"].map(function (k) {
