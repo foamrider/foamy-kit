@@ -155,11 +155,13 @@ fn memfd_holds_the_program_for_bubblewrap() {
 }
 
 /// A stand-in for bubblewrap that copies the fd its `--seccomp` option
-/// names (`$2`) to standard output, as bubblewrap reads it.
+/// names (`$2`) to standard output, as bubblewrap reads it. A bash script:
+/// the fd can be above 9, and dash (/bin/sh on Debian and Ubuntu) refuses
+/// such a redirect ("Bad fd number").
 fn fake_bwrap(dir: &Path) -> Bwrap {
     use std::os::unix::fs::PermissionsExt;
     let program = dir.join("bwrap");
-    std::fs::write(&program, "#!/bin/sh\nexec cat <&\"$2\"\n").unwrap();
+    std::fs::write(&program, "#!/bin/bash\nexec cat <&\"$2\"\n").unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     Bwrap::new(program)
 }
@@ -191,8 +193,9 @@ fn bwrap_names_each_temporary_fd_by_its_own_duplicate() {
     let (a, b) = (dir.0.join("a"), dir.0.join("b"));
     std::fs::write(&a, b"first ").unwrap();
     std::fs::write(&b, b"second").unwrap();
+    // bash, as in fake_bwrap(): the fds can be above 9.
     let program = dir.0.join("bwrap");
-    std::fs::write(&program, "#!/bin/sh\ncat <&\"$2\" && exec cat <&\"$5\"\n").unwrap();
+    std::fs::write(&program, "#!/bin/bash\ncat <&\"$2\" && exec cat <&\"$5\"\n").unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sandbox = Bwrap::new(program)
         .ro_bind_fd(File::open(&a).unwrap(), "/a")
@@ -518,9 +521,11 @@ fn bwrap_runs_with_the_seccomp_filter_and_inherited_fds() {
         .dev("/dev")
         .remount_ro("/")
         .seccomp(&filter);
+    // bash: the check below reads bash's message for a fork that fails
+    // (dash, /usr/bin/sh on Debian and Ubuntu, says "Cannot fork").
     let run = |script: &str| {
         sandbox
-            .bounded(["/usr/bin/sh", "-c", script])
+            .bounded(["/usr/bin/bash", "-c", script])
             .env_clear()
             .env("PATH", "/usr/bin")
             .timeout(Duration::from_secs(10))

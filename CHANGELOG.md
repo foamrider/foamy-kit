@@ -105,20 +105,47 @@
   Every pixel the card fully covers is the one the old capture gave, its
   rounded edge fades out instead of into black, and a picture that had
   transparent corners before is the same to the pixel (foamy-syncthing
-  and foamy-todoist, dark and light, compared state by state; foamy-
-  syncthing also at scale 1.25). A
-  FoamyPopupCard's copy on the screen picture has the screen in its
-  corners. Plugin change: none needed; foamy-media, foamy-syncthing and
-  foamy-todoist, whose committed `preview.png` has black corners, may
-  render it again. README.md: Preview. `tests/test_preview.py`.
+  and foamy-todoist, dark and light, compared state by state;
+  foamy-syncthing also at scale 1.25). A FoamyPopupCard's copy on the
+  screen picture has the screen in its corners. Plugin change: none
+  needed; foamy-media, foamy-syncthing and foamy-todoist, whose committed
+  `preview.png` has black corners, may render it again. README.md:
+  Preview. `tests/test_preview.py`.
+- `foamy-helper`'s tests (`kit/rust/foamy-helper`) run the scripts that
+  need bash with bash. Five ran with `/bin/sh` and bash syntax or wording,
+  which dash, `/bin/sh` on Debian and Ubuntu, does not take. Four redirect
+  from a descriptor above 9 (`cat <&12`), which dash refuses with "Bad fd
+  number":
+  `child::tests::inherited_fds_reach_the_child_under_their_number` and,
+  through the fake bubblewrap,
+  `sandbox::tests::a_seccomp_memfd_serves_more_than_one_run`,
+  `bwrap_names_each_temporary_fd_by_its_own_duplicate` and
+  `bwrap_keeps_its_own_copy_of_the_fds_it_names`.
+  `bwrap_runs_with_the_seccomp_filter_and_inherited_fds` reads bash's
+  message for a fork that fails, which dash words otherwise. foamy-kit's
+  "foamy-helper crate" job (new in 0.14.0) on ubuntu-24.04 failed the
+  first three (116 passed, 3 failed): the descriptor numbers decide, and
+  the job skips the bubblewrap test. They now run `/bin/bash -c`,
+  `#!/bin/bash` scripts and `/usr/bin/bash` in the sandbox; only test code
+  changed, and the crate builds the same helper. Plugin change: a plugin
+  with a native helper rebuilds it (see Upgrading).
+  `kit/rust/foamy-helper/src/child.rs` and
+  `kit/rust/foamy-helper/src/sandbox/tests.rs`.
 
 ### Upgrading
 - The sync changes `FoamyDropdown.qml`, `FoamyNumberField.qml`,
-  `FoamyTextSettingField.qml`, `FoamySettingsPage.qml` and (a comment
-  only) `FoamyPopup.qml`. `kit/rust` and `kit/i18n-texts.json` did not
-  change: no helper is rebuilt, and `check.sh` asks the catalogs for no
-  new text.
-- No plugin must change anything. foamy-todoist (TodoSettings.qml) and
+  `FoamyTextSettingField.qml`, `FoamySettingsPage.qml` and, in comments
+  only, `FoamyPopup.qml` and `FoamyScheduleDay.qml`. `kit/i18n-texts.json`
+  did not change: `check.sh` asks the catalogs for no new text.
+- `kit/rust` changed in its tests only, but `native.pin` hashes the whole
+  vendored `kit/rust`: foamy-audio, foamy-github, foamy-lock, foamy-media,
+  foamy-monitor, foamy-notification-center, foamy-notifications,
+  foamy-power, foamy-syncthing, foamy-todoist, foamy-train, foamy-vitals,
+  foamy-weather and foamy-zendesk rebuild their helper after the sync
+  (`kit/native/build-native.sh .`) and commit the new binaries and
+  `native.pin`; until then `check.sh`, `tests/kit-check.sh` and `--verify`
+  report the binaries stale. `foamy-helper`'s version stays 0.1.2.
+- No plugin needs a code change. foamy-todoist (TodoSettings.qml) and
   foamy-lock (studio/ScenePage.qml) can call `saveFailed()` at once
   instead of through `Qt.callLater`. A plugin test that reads a settings
   field's `editing` or text inside its own `onCommitted` sees the field
