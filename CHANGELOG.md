@@ -48,6 +48,13 @@
   `tests/test_tabs.py` (the count on the hovered tab, also with the dim
   red; seen failing at 4.27:1 light and 3.93:1 dim red). Plugins see the
   change at their next sync, only in themes whose red did not read there.
+  Known limit: a destructive `FoamyAction` is measured with the popup
+  surface under its tint; in a hero band or on a selected row the fill
+  under it differs and the icon can stay under 4.5:1 (still more than the
+  raw red gave). Plugin change: a plugin's own error line should use
+  `FoamyPalette.onSurface(FoamyPalette.error)` instead of
+  `Commons.Color.urgent` (DESIGN.md: Empty / loading / error), or it shows
+  a second red beside the kit's.
 
 ## 0.15.0 — 2026-11-26
 

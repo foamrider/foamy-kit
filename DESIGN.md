@@ -179,7 +179,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (mono `bodySmall`). Open: label `text` DemiBold, icon and count in the
   accent, a 2px accent underline across the tab on the row's 1px `divider`
   hairline (the row draws the hairline). Others: `secondaryText`, counts
-  too; an urgent count is `error` (on the surface). The cursor is a
+  too; an urgent count is `error`, readable on the cursor's fill. The cursor is a
   `hoverFill` with `radius` behind the tab; nothing moves. Labels elide from
   the last tab inward; icons and counts never clip; it never scrolls and
   has no overflow menu, so keep the labels short. Bind `value`, change it
@@ -266,8 +266,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   item on the page that hides while the page shows (Retry, as the retry
   starts) leaves the keys with the page, so Esc still goes back.
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
-  period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
-  with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
+  period for short states ("No devices", "Scanning…"); errors in
+  `FoamyPalette.onSurface(FoamyPalette.error)` (the raw red does not read in
+  every theme) with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
 
 ## UX rules (4.5, mandatory)
 

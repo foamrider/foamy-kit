@@ -19,7 +19,8 @@ import "FoamyText.js" as FoamyText
 //   }
 //
 // Leading items (the default property) replace `source`. The status is one
-// line, bodySmall, secondary (`statusError` paints it urgent); it elides
+// line, bodySmall, secondary (`statusError` paints it in the error colour,
+// readable on the popup surface); it elides
 // and, if `statusTooltip` is set, shows that short hint on hover.
 // `statusClickable` makes it a link (statusClicked). The refresh button
 // spins while `refreshing` and is inert then; `showRefresh: false` hides it.
