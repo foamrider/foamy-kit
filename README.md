@@ -980,7 +980,9 @@ property, the same object. Write each read so that it adds no qmllint entry
   entry still matches; rewriting it only swaps one entry for another.
 
 Per state it writes `<state>-screen.png` (bar strip and the popup where
-FoamyPopup puts it) and `<state>.png` (the card). Options: `--states`,
+FoamyPopup puts it) and `<state>.png` (the card, with an alpha channel: the
+corners outside a rounded card are transparent, also when the card holds
+an opaque rectangle or image). Options: `--states`,
 `--theme dark|light|<colors.toml>`, `--language da`, `--position`,
 `--rounding`, `--scale 1.25` (display scale: windows get that device pixel
 ratio, PNGs are in device pixels, layout stays logical, like a 125 % output),

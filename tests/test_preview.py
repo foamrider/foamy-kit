@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Demo preview render on 4.5 (a preview that logs an error fails the
 render; the mock bar's colours are the theme's bar colours, dark and
-light), plus publish-screenshots.sh on a throwaway git repository with an
+light; a card holding an opaque rectangle keeps transparent corners and
+its own pixels), plus publish-screenshots.sh on a throwaway git repository with an
 isolated Git config: orphan branch, untouched working tree, nothing pushed
 to a local push remote, unsafe subdirs and an empty PNG dir refused."""
 
@@ -205,7 +206,76 @@ def render_tests():
         )
         ok &= broken_preview_test(plugin, out_root / host / "broken")
         ok &= bar_colour_test(plugin, host, out_root / host / "bar-colours")
+        ok &= card_corner_test(plugin, host, out_root / host / "card-corners")
     shutil.rmtree(plugin.parent, ignore_errors=True)
+    return ok
+
+
+# A rounded card holding a rectangle without radius, as FoamyTabs' open-tab
+# underline: fully opaque in the "opaque" state, alpha 254 in "translucent".
+CARD_CORNERS = """import QtQuick
+Item {
+  id: preview
+  required property QtObject bar
+  required property Item anchorItem
+  property var previewStates: ["opaque", "translucent"]
+  property string previewState: ""
+  readonly property var popup: holder
+  Item {
+    id: holder
+    readonly property Item cardItem: card
+    Rectangle {
+      id: card
+      x: 100
+      y: 100
+      width: 120
+      height: 80
+      radius: 12
+      color: "#336699"
+      Rectangle {
+        x: 10
+        y: 40
+        width: 100
+        height: 2
+        color: preview.previewState === "opaque" ? "#ff0000" : "#feff0000"
+      }
+    }
+  }
+}
+"""
+
+
+def card_corner_test(plugin, host, out):
+    """The card picture of a card that holds a fully opaque rectangle
+    without radius keeps its alpha channel: transparent corners outside
+    the rounded card, and every other pixel the one the same card has with
+    that rectangle at alpha 254. The software renderer took such a grab
+    for opaque and wrote it RGB with black corners."""
+    preview = plugin / "preview/CardCorners.qml"
+    preview.write_text(CARD_CORNERS)
+    shots = render.render(plugin, host, out, preview=preview)
+    preview.unlink()
+    if shots is None:
+        return report(f"preview {host}: a card holding an opaque rectangle renders", False)
+    width, height, opaque = read_png(out / "opaque.png")
+    _, _, translucent = read_png(out / "translucent.png")
+    corners = [opaque(0, 0), opaque(width - 1, 0), opaque(0, height - 1), opaque(width - 1, height - 1)]
+    ok = report(
+        f"preview {host}: a card holding an opaque rectangle has transparent corners",
+        (width, height) == (120, 80) and all(pixel[3] == 0 for pixel in corners),
+        f"{width}x{height}, corners {corners}",
+    )
+    differ = [
+        (x, y)
+        for y in range(height)
+        for x in range(width)
+        if not (10 <= x < 110 and 40 <= y < 42) and opaque(x, y) != translucent(x, y)
+    ]
+    ok &= report(
+        f"preview {host}: beside the rectangle, its pixels are those of the card with a translucent one",
+        not differ and opaque(60, 20) == (51, 102, 153, 255),
+        f"{len(differ)} pixels differ, first {differ[:3]}; inside {opaque(60, 20)}",
+    )
     return ok
 
 

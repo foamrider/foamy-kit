@@ -90,12 +90,63 @@ ShellRoot {
     return null
   }
 
+  // The card's picture with its alpha channel, the corners outside a
+  // rounded card transparent. The software renderer leaves out a grab's
+  // transparent fill when any node in it is opaque (Qt tests the opaque
+  // area with QRegion::contains(), which means "overlaps"), so
+  // item.grabToImage() of a card that holds an opaque rectangle without
+  // radius (FoamyTabs' open-tab underline) came out RGB with black corners.
+  // A ShaderEffectSource keeps its layer's pixmap while the size stays: a
+  // first render of an empty item gives the pixmap its alpha channel, and
+  // the card's render keeps it. The layer renders unmirrored, as
+  // grabToImage() does, so text comes out the same, and the flip back
+  // samples whole pixels (smooth: false): every pixel the card fully covers
+  // is the one grabToImage() gives.
+  Component {
+    id: cardCapture
+    Item {
+      id: capture
+      required property Item card
+      required property var done
+      // Outside the window: drawn nowhere, but rendered.
+      x: -2 * width - 100
+      width: card.width
+      height: card.height
+      Item { id: primer; width: capture.width; height: capture.height }
+      ShaderEffectSource {
+        id: layer
+        width: capture.width
+        height: capture.height
+        live: false
+        smooth: false
+        textureMirroring: ShaderEffectSource.NoMirroring
+        sourceItem: primer
+        transform: Scale { origin.y: capture.height / 2; yScale: -1 }
+        onScheduledUpdateCompleted: {
+          if (sourceItem === primer) {
+            sourceItem = capture.card
+            scheduleUpdate()
+            return
+          }
+          capture.grabToImage(function(result) {
+            capture.done(result)
+            capture.destroy()
+          })
+        }
+      }
+      Component.onCompleted: layer.scheduleUpdate()
+    }
+  }
+  function grabCard(item, done) {
+    cardCapture.createObject(item.Window.contentItem, { card: item, done: done })
+  }
+
   // A PopupWindow-based card (FoamyPopupCard): place a copy on the screen.
   function placeCardCopy(done) {
     var popup = shell.preview.popup
     var item = card()
     if (!popup || !item || !popup.anchor || !popup.anchor.rect || !popup.visible) { cardCopy.visible = false; done(); return }
-    item.grabToImage(function(result) {
+    shell.grabCard(item, function(result) {
       cardCopy.source = result.url
       // The bar window spans the screen, so its coordinates are the screen's.
       cardCopy.x = popup.anchor.rect.x
@@ -130,7 +181,7 @@ ShellRoot {
         else console.log("FOAMY SHOT " + screenPath)
         var item = shell.card()
         if (!item) { shell.index++; next.start(); return }   // service previews may have no card
-        item.grabToImage(function(tight) {
+        shell.grabCard(item, function(tight) {
           var cardPath = shell.out + "/" + name + ".png"
           var at = cardCopy.visible ? Qt.point(cardCopy.x, cardCopy.y) : item.mapToItem(sim, 0, 0)
           if (!tight.saveToFile(cardPath)) console.log("FOAMY FAIL SAVE FAILED " + cardPath)

@@ -84,6 +84,23 @@
   README.md (Components), the FoamyPopup header and 0.14.0's Upgrading
   now say so. No kit code changed. Plugin change: none needed. No test:
   only documentation changed.
+- `preview/render.py` (`PreviewShell.qml.in`, since 0.1.0) writes every
+  card picture (`<state>.png`) with its alpha channel, the corners outside
+  a rounded card transparent. Before, a card that held a fully opaque
+  rectangle without radius (FoamyTabs' open-tab underline) or an opaque
+  image came out RGB with black corners: under the software renderer
+  `grabToImage()` leaves out its transparent fill as soon as one node is
+  opaque, as Qt tests the opaque area with `QRegion::contains()`, which
+  means "overlaps". The card is now captured through a
+  ShaderEffectSource whose layer keeps an alpha channel. Every pixel the
+  card fully covers is the one the old capture gave, its rounded edge
+  fades out instead of into black, and a picture that had transparent
+  corners before is the same to the pixel (foamy-syncthing and
+  foamy-todoist, dark and light, compared state by state). A
+  FoamyPopupCard's copy on the screen picture has the screen in its
+  corners. Plugin change: none needed; foamy-media, foamy-syncthing and
+  foamy-todoist, whose committed `preview.png` has black corners, may
+  render it again. README.md: Preview. `tests/test_preview.py`.
 
 ## 0.14.0 — 2026-11-22
 
