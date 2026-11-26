@@ -98,7 +98,7 @@ Column {
       textFormat: Text.PlainText
       elide: Text.ElideRight
       horizontalAlignment: Text.AlignRight
-      color: root.statusError ? Commons.Color.urgent : FoamyPalette.secondaryText
+      color: root.statusError ? FoamyPalette.onSurface(FoamyPalette.error) : FoamyPalette.secondaryText
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.bodySmall
       font.underline: root.statusClickable && statusMouse.containsMouse

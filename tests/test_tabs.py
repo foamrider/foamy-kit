@@ -2,9 +2,9 @@
 """FoamyTabs (tests/qml/Tabs.qml) on 4.5 under a FoamyPopup's hero band:
 LTR and RTL, the standard and the wide popup (a full-width row, 420 and 560
 at scale 1.0), scale 1.0 and 1.25, pairwise (every pair of direction, width
-and scale values in the dark theme), and the light theme in both
-directions. Content-width tabs from the reading start, the first icon on
-the rows' content inset, the underline and the hairline, icons, counts
+and scale values in the dark theme), the light theme in both
+directions, and the dark theme with a dim red. Content-width tabs from
+the reading start, the first icon on the rows' content inset, the underline and the hairline, icons, counts
 and the urgent colour, labels eliding from the last tab, a press, hover and
 ←/→ + Enter/Space through PanelKeyCatcher, accessibility. Card screenshots:
 tests/out/tabs/ (FOAMY_TABS_OUT overrides)."""
@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import KIT_ROOT, harness, run_shell, synced_demo  # noqa: E402
 
 # (theme, rtl, wide, scale): every pair of rtl, wide and scale values in the
-# dark theme, and the light theme in both directions and both widths.
+# dark theme, the light theme in both directions and both widths, and a
+# dark theme with a dim red.
+THEMES = {"dim-red": KIT_ROOT / "tests/fixtures/themes/dim-red.toml"}
 CASES = [
     ("dark", False, False, 1.0),
     ("dark", True, False, 1.25),
@@ -26,6 +28,8 @@ CASES = [
     ("dark", True, True, 1.0),
     ("light", False, True, 1.0),
     ("light", True, False, 1.25),
+    # A dim red (2.70:1 on the background): status text lightens.
+    ("dim-red", False, False, 1.0),
 ]
 
 
@@ -47,7 +51,7 @@ def main():
                     scale=scale,
                     keep_pngs_to=out,
                     suffix=f"{host}-{name}",
-                    theme=theme,
+                    theme=THEMES.get(theme, theme),
                 )
             )
     shutil.rmtree(plugin.parent, ignore_errors=True)

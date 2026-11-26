@@ -356,6 +356,22 @@ ShellRoot {
       }
       var weakMuted = way(FoamyPalette.mutedText), weakSecondary = way(FoamyPalette.secondaryText)
       check(weakMuted > 0.3 && weakMuted < 0.85 && weakMuted < weakSecondary && weakSecondary < 0.99, "weak text keeps three tones, muted under .85: " + weakMuted.toFixed(2) + ", " + weakSecondary.toFixed(2))
+      darkThemeStep()
+    }))
+  }
+
+  // A dark theme with a dim red (Nord's: 3.05:1 on its background): status
+  // text lightens until it reads at 4.5:1, as the light path darkens.
+  function darkThemeStep() {
+    themeFile.setText('mode = "dark"\naccent = "#88c0d0"\nbackground = "#2e3440"\nforeground = "#d8dee9"\nred = "#bf616a"\nyellow = "#ebcb8b"\ngreen = "#a3be8c"\ncyan = "#8fbcbb"\n')
+    wait.waitFor(function () {
+      return !FoamyPalette.lightTheme && Qt.colorEqual(FoamyPalette.error, "#bf616a")
+    }, 5000, then("the palette follows a changed dark theme file", function () {
+      Commons.Color.background = "#2e3440"
+      Commons.Color.foreground = "#d8dee9"
+      var shown = FoamyPalette.onSurface(FoamyPalette.error)
+      var ratio = wcagContrast(shown, "#2e3440")
+      check(ratio >= 4.5 && !Qt.colorEqual(shown, "#bf616a"), "a dim red lightens to 4.5:1 on a dark surface: #bf616a " + wcagContrast("#bf616a", "#2e3440").toFixed(2) + " -> " + shown + " " + ratio.toFixed(2))
       ready()
     }))
   }

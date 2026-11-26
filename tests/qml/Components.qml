@@ -248,6 +248,7 @@ ShellRoot {
         property alias primary: primary
         property alias secondary: secondary
         property alias destructive: destructive
+        property alias forget: forget
         property alias lfs: lfs
         property alias toggleA: toggleA
         property alias toggleB: toggleB
@@ -335,6 +336,12 @@ ShellRoot {
             Item {
               Layout.fillWidth: true
             }
+            FoamyAction {
+              id: forget
+              iconName: "trash"
+              label: "Forget"
+              destructive: true
+            }
             FoamyButton {
               id: destructive
               text: "Remove"
@@ -416,6 +423,12 @@ ShellRoot {
       var line = r.y
       check(near(line - 1, footer.height - line - footer.refreshButton.height), "footer: row centred between hairline and bottom " + (line - 1) + " / " + (footer.height - line - footer.refreshButton.height))
       check(st.text === "Updated 3 minutes ago", "footer status text")
+      // A status error reads on the card's surface (the theme's red,
+      // lightened or darkened only where it does not).
+      footer.statusError = true
+      var statusRatio = wcagContrast(st.color, clockPopup.surfaceColor)
+      check(statusRatio >= 4.5, "a footer status error reads " + st.color + " " + statusRatio.toFixed(2))
+      footer.statusError = false
 
       // Buttons.
       var page = formPopup.bodyItem
@@ -442,6 +455,15 @@ ShellRoot {
       info.infoButton.forceActiveFocus()
       ev.keyClick(Qt.Key_Space, Qt.NoModifier, -1)
       check(info.expanded && info.note.visible, "Space on the (i) opens the note")
+      // A page's save error and a field's error: one red, readable on the
+      // card's surface.
+      page.error = "Could not save the settings"
+      page.cpu.errorText = "Enter 1 to 100"
+      var pageError = findByName(page, "settingsErrorText"), fieldError = findByName(page.cpu, "foamyFieldError")
+      var pageErrorRatio = wcagContrast(pageError.color, formPopup.surfaceColor)
+      check(pageError.visible && fieldError.visible && pageErrorRatio >= 4.5 && Qt.colorEqual(pageError.color, fieldError.color), "a settings error reads and matches the field error " + [pageError.color, fieldError.color, pageErrorRatio.toFixed(2)])
+      page.error = ""
+      page.cpu.errorText = ""
 
       // Toggle rows: plain, not boxed.
       var ta = page.toggleA
@@ -579,6 +601,89 @@ ShellRoot {
     shell.verifying = false
     clickCentre(page.secondary)
     check(shell.verifies === 1, "no longer busy, the same click verifies " + shell.verifies)
+    shell.destructivePressed()
+  }
+
+  // Calls then() once `item`'s fill has stopped animating (the same colour
+  // on three polls in a row).
+  function whenSettled(item, then, label) {
+    var last = null, same = 0
+    wait.waitFor(function () {
+      var c = item.color
+      same = last !== null && Qt.colorEqual(c, last) ? same + 1 : 0
+      last = c
+      return same >= 2
+    }, 3000, then, tag + " " + label)
+  }
+  function findWhere(item, test) {
+    if (!item)
+      return null
+    if (test(item))
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = findWhere(item.children[i], test)
+      if (found)
+        return found
+    }
+    return null
+  }
+
+  // The destructive button's label reads on its strongest fill (pressed,
+  // over the card) and keeps the colour it has at rest.
+  function destructivePressed() {
+    var button = formPopup.bodyItem.destructive
+    var label = findWhere(button, function (c) {
+      return c.text === "Remove" && c.font !== undefined
+    })
+    var rest = label.color
+    ev.mousePress(button, button.width / 2, button.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+    whenSettled(button, function () {
+      var drawn = Qt.tint(formPopup.surfaceColor, button.color)
+      var ratio = wcagContrast(label.color, drawn)
+      check(button.pressed && ratio >= 4.5 && Qt.colorEqual(label.color, rest), "a pressed destructive label reads on its fill " + label.color + " on " + drawn + " " + ratio.toFixed(2))
+      ev.mouseRelease(button, button.width / 2, button.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+      shell.destructiveAction()
+    }, "the pressed button's fill settles")
+  }
+
+  // A destructive action under the pointer, then under the keys' cursor:
+  // its red icon reads on the red tint it sits on.
+  function destructiveAction() {
+    var action = formPopup.bodyItem.forget
+    var icon = findWhere(action, function (c) {
+      return c.name === "trash"
+    })
+    ev.mouseMove(action, action.width / 2, action.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+    whenSettled(action, function () {
+      var drawn = Qt.tint(formPopup.surfaceColor, action.color)
+      var ratio = wcagContrast(icon.color, drawn)
+      check(action.hovered && action.color.a > 0 && ratio >= 4.5, "a destructive action's icon reads under the pointer " + icon.color + " on " + drawn + " " + ratio.toFixed(2))
+      ev.mouseMove(formPopup.cardItem, 1, formPopup.cardItem.height - 1, -1, Qt.NoButton, Qt.NoModifier)
+      action.hasCursor = true
+      whenSettled(action, function () {
+        var drawnByCursor = Qt.tint(formPopup.surfaceColor, action.color)
+        var cursorRatio = wcagContrast(icon.color, drawnByCursor)
+        check(!action.hovered && action.color.a > 0 && cursorRatio >= 4.5, "a destructive action's icon reads under the cursor " + icon.color + " on " + drawnByCursor + " " + cursorRatio.toFixed(2))
+        action.hasCursor = false
+        shell.finish()
+      }, "the action's cursor fill settles")
+    }, "the action's hover fill settles")
+  }
+
+  // WCAG 2 contrast ratio, written out here so the palette's own
+  // contrastRatio() is not what checks it.
+  function wcagContrast(a, b) {
+    function relative(c) {
+      var rgb = [Qt.color(c).r, Qt.color(c).g, Qt.color(c).b].map(function (v) {
+        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+      })
+      return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+    }
+    var la = relative(a), lb = relative(b)
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+  }
+
+  function finish() {
     console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
