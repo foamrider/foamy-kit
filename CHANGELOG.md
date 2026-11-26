@@ -79,8 +79,8 @@
   which after a save that ends with the popup closed now leaves the keys
   alone). Plugin change: none needed. `tests/test_popup_keys.py`.
 - The 0.14.0 notes below and the docs said three things that are not so
-  for every plugin; the 0.14.0 text is corrected (it was never released
-  beyond the local dev branch). (1) The pick serial entry said a handler
+  for every plugin; the 0.14.0 text is corrected (0.14.0 was not merged
+  to main or tagged). (1) The pick serial entry said a handler
   that takes only `value` needs no change, which is true, but code that
   emits `FoamyDropdown.changed()` itself with one argument throws
   "Insufficient arguments" since 0.14.0 (foamy-lock's studio test, the
