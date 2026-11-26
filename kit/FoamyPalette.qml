@@ -23,9 +23,11 @@ QtObject {
   // muted 4.5:1 (WCAG AA), secondary 5.5:1, so muted stays the lighter one.
   // Muted: .55 White, .58 Flexoki Light, .62 Lupine, .82 Catppuccin Latte,
   // .84 Rosé Pine. Secondary: .72, but .90 Catppuccin Latte and .93 Rosé
-  // Pine. Dark themes keep .72 and .55.
-  readonly property color secondaryText: lightTheme ? readableTint(0.72, 5.5) : Qt.tint(background, Qt.alpha(text, 0.72))
-  readonly property color mutedText: lightTheme ? readableTint(0.55, 4.5) : Qt.tint(background, Qt.alpha(text, 0.55))
+  // Pine. Dark themes keep .72 and .55. Each stops at a ceiling, so a theme
+  // whose text is weak keeps three tones (muted below .85 of the way to the
+  // text, as a field's placeholder must be) and stays under its ratio there.
+  readonly property color secondaryText: lightTheme ? readableTint(0.72, 5.5, 0.95) : Qt.tint(background, Qt.alpha(text, 0.72))
+  readonly property color mutedText: lightTheme ? readableTint(0.55, 4.5, 0.84) : Qt.tint(background, Qt.alpha(text, 0.55))
   readonly property color border: Qt.alpha(text, 0.15)
   readonly property color divider: Qt.alpha(text, 0.12)
   readonly property color hoverFill: Qt.alpha(text, 0.08)
@@ -104,16 +106,17 @@ QtObject {
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
   }
 
-  // The lightest tint of `text` over `background`, from `alpha` up in steps
-  // of .01, with at least `ratio` contrast on `background`; `text` itself
-  // when no tint reaches it.
-  function readableTint(alpha, ratio) {
-    for (let step = Math.round(alpha * 100); step < 100; step++) {
+  // The lightest tint of `text` over `background`, from `alpha` up to
+  // `limit` in steps of .01, with at least `ratio` contrast on `background`;
+  // the tint at `limit` when none reaches it.
+  function readableTint(alpha, ratio, limit) {
+    const last = Math.round(limit * 100)
+    for (let step = Math.round(alpha * 100); step < last; step++) {
       const tint = Qt.tint(background, Qt.alpha(text, step / 100))
       if (contrastRatio(tint, background) >= ratio)
         return tint
     }
-    return text
+    return Qt.tint(background, Qt.alpha(text, last / 100))
   }
 
   // Status colour readable on the popup surface, for text and thin marks

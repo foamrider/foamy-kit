@@ -77,9 +77,9 @@ preview in dark and light and look at it.
 - FoamyIcon: `mail` and `mail-open` (Lucide 1.65.0, lucide-static), 124
   names, for foamy-zendesk. No other icon changed.
 - `FoamyPalette.contrastRatio(a, b)`, the WCAG 2 contrast ratio of two
-  opaque colours, and `FoamyPalette.readableTint(alpha, ratio)`, the
-  lightest tint of `text` over `background` from `alpha` up (steps of
-  .01) with at least `ratio` contrast on `background`.
+  opaque colours, and `FoamyPalette.readableTint(alpha, ratio, limit)`,
+  the lightest tint of `text` over `background` from `alpha` up to `limit`
+  (steps of .01) with at least `ratio` contrast on `background`.
 
 ### Changed
 - `FoamyPalette.mutedText` (hints, empty states) reaches 4.5:1 (WCAG AA
@@ -93,7 +93,10 @@ preview in dark and light and look at it.
   light themes, so it stays darker than the muted tone: tint .72 gave
   3.62:1 in Catppuccin Latte and 3.49:1 in Rosé Pine, which now use .90
   and .93. White, Flexoki Light and Lupine keep .72 (9.23, 7.67 and
-  6.24:1). Dark themes keep .72. Muted text on `fieldFill`,
+  6.24:1). Dark themes keep .72. Both stop at a ceiling (muted .84,
+  secondary .95 of the way to the text), so a light theme with weak text
+  keeps three tones and a field's placeholder stays below .85; such a
+  theme stays under the ratios. Muted text on `fieldFill`,
   `hoverFill` or `noteFill` stays below 4.5:1 (3.87:1 to 4.31:1 in the
   light themes). DESIGN.md: Tokens, Text tones. Plugin change: none
   needed; plugins get it with their next sync. `tests/test_runtime.py`.
