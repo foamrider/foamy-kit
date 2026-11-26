@@ -6,7 +6,9 @@ field focused on the page when it hides; a focused Retry that hides while
 Settings stays open leaves the keys with the page, so Esc goes back; a
 plugin's own refocus in onHidden still wins; a focusBack() deferred when
 Settings showed that runs after Settings hid again takes no keys, so Esc
-closes the popup. Real keys through the host's KeyboardPanel."""
+closes the popup, and one deferred as show() opens the closed popup on
+Settings gives the page the keys, so Esc goes back. Real keys through the
+host's KeyboardPanel."""
 
 import shutil
 import sys

@@ -64,8 +64,10 @@
   opened again. FoamyPopup gives the keys back only when the item that
   has them hides, so it could not see this; the plugins' own refocus,
   which they dropped at the 0.14.0 sync, used to cover it. Now the keys
-  stay where they are. Plugin change: none needed; the six plugins'
-  deferred call is safe as it is. `tests/test_popup_keys.py`.
+  stay where they are. A call deferred as `show()` opens a closed popup on
+  Settings finds the page shown and gives it the keys, as before. Plugin
+  change: none needed; the six plugins' deferred call is safe as it is.
+  `tests/test_popup_keys.py`.
 - The 0.14.0 notes below and the docs said three things that are not so
   for every plugin; the 0.14.0 text is corrected (it was never released
   beyond the local dev branch). (1) The pick serial entry said a handler

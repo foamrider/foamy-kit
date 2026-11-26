@@ -10,8 +10,10 @@ import "plugin/kit"
 // popup, open it, Esc closes it; Esc on Settings goes back, the next Esc
 // closes; a field on the page that hides with it; a focused Retry that
 // hides while Settings stays open leaves the keys with the page; a
-// plugin that refocuses its own list in onHidden keeps that; and a
-// deferred focusBack() that runs after Settings hid again takes no keys.
+// plugin that refocuses its own list in onHidden keeps that; a deferred
+// focusBack() that runs after Settings hid again takes no keys; and one
+// deferred as show() opens the closed popup on Settings gives the page the
+// keys.
 ShellRoot {
   id: shell
   readonly property string tag: Quickshell.env("FOAMY_TAG")
@@ -292,10 +294,42 @@ ShellRoot {
         check(!inside(focused(), page), "the hidden settings page takes no keys from a late focusBack(): " + focused())
         esc()
         check(!panel.opened, "Esc closes the popup after a late focusBack()")
-        console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-        console.log("FOAMY DONE")
-        Qt.quit()
+        focusBackOnOpen()
       })
+    })
+  }
+
+  // 7. show() opens the closed popup on Settings, and the focusBack() a
+  // plugin defers when Settings shows (queued as `editing` turns true,
+  // before show() opens the panel) runs in the next turn: the page shows
+  // by then and takes the keys, so Esc goes back.
+  property bool deferOnShow: false
+  property bool openRan: false
+  Connections {
+    target: settingsState
+    function onEditingChanged() {
+      if (settingsState.editing && shell.deferOnShow)
+        Qt.callLater(function () {
+          popup.bodyItem.page.focusBack()
+          shell.openRan = true
+        })
+    }
+  }
+  function focusBackOnOpen() {
+    check(!panel.opened, "the popup is closed before Settings opens it")
+    shell.deferOnShow = true
+    settingsState.show()
+    wait.waitFor(function () {
+      return shell.openRan
+    }, 3000, function (ran) {
+      shell.deferOnShow = false
+      var page = popup.bodyItem.page
+      check(ran && panel.opened && page.visible && inside(focused(), page), "a focusBack() deferred as show() opens the popup gives the page the keys: " + focused())
+      esc()
+      check(!settingsState.editing && panel.opened, "Esc then goes back from Settings")
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
     })
   }
 }
