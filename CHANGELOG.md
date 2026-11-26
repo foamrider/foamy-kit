@@ -99,11 +99,14 @@
   `grabToImage()` leaves out its transparent fill as soon as one node is
   opaque, as Qt tests the opaque area with `QRegion::contains()`, which
   means "overlaps". The card is now captured through a
-  ShaderEffectSource whose layer keeps an alpha channel. Every pixel the
-  card fully covers is the one the old capture gave, its rounded edge
-  fades out instead of into black, and a picture that had transparent
-  corners before is the same to the pixel (foamy-syncthing and
-  foamy-todoist, dark and light, compared state by state). A
+  ShaderEffectSource whose layer keeps an alpha channel, sized to the
+  direct grab's whole device pixels, so a display scale where the card
+  covers part of a pixel (`--scale 1.25`, 382 px high) resamples nothing.
+  Every pixel the card fully covers is the one the old capture gave, its
+  rounded edge fades out instead of into black, and a picture that had
+  transparent corners before is the same to the pixel (foamy-syncthing
+  and foamy-todoist, dark and light, compared state by state; foamy-
+  syncthing also at scale 1.25). A
   FoamyPopupCard's copy on the screen picture has the screen in its
   corners. Plugin change: none needed; foamy-media, foamy-syncthing and
   foamy-todoist, whose committed `preview.png` has black corners, may

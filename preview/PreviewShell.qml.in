@@ -101,22 +101,31 @@ ShellRoot {
   // the card's render keeps it. The layer renders unmirrored, as
   // grabToImage() does, so text comes out the same, and the flip back
   // samples whole pixels (smooth: false): every pixel the card fully covers
-  // is the one grabToImage() gives.
+  // is the one grabToImage() gives. At a display scale where the card
+  // covers part of a device pixel (382 px at 1.25 is 477.5), the layer has
+  // the direct grab's size, rounded to whole device pixels, and the capture
+  // that size exactly, so the layer is drawn 1:1 and the flip maps each
+  // pixel row onto one row.
   Component {
     id: cardCapture
     Item {
       id: capture
       required property Item card
       required property var done
+      // The direct grab's size: the card's size times the device pixel
+      // ratio, rounded half up (QSizeF::toSize()).
+      readonly property int deviceWidth: Math.round(card.width * Screen.devicePixelRatio)
+      readonly property int deviceHeight: Math.round(card.height * Screen.devicePixelRatio)
       // Outside the window: drawn nowhere, but rendered.
       x: -2 * width - 100
-      width: card.width
-      height: card.height
-      Item { id: primer; width: capture.width; height: capture.height }
+      width: deviceWidth / Screen.devicePixelRatio
+      height: deviceHeight / Screen.devicePixelRatio
+      Item { id: primer; width: capture.card.width; height: capture.card.height }
       ShaderEffectSource {
         id: layer
         width: capture.width
         height: capture.height
+        textureSize: Qt.size(capture.deviceWidth, capture.deviceHeight)
         live: false
         smooth: false
         textureMirroring: ShaderEffectSource.NoMirroring

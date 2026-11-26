@@ -2,7 +2,7 @@
 """Demo preview render on 4.5 (a preview that logs an error fails the
 render; the mock bar's colours are the theme's bar colours, dark and
 light; a card holding an opaque rectangle keeps transparent corners and
-its own pixels), plus publish-screenshots.sh on a throwaway git repository with an
+a direct grab's pixels, at scale 1 and 1.25), plus publish-screenshots.sh on a throwaway git repository with an
 isolated Git config: orphan branch, untouched working tree, nothing pushed
 to a local push remote, unsafe subdirs and an empty PNG dir refused."""
 
@@ -207,74 +207,141 @@ def render_tests():
         ok &= broken_preview_test(plugin, out_root / host / "broken")
         ok &= bar_colour_test(plugin, host, out_root / host / "bar-colours")
         ok &= card_corner_test(plugin, host, out_root / host / "card-corners")
+        ok &= card_corner_test(plugin, host, out_root / host / "card-corners-1.25", scale=1.25)
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return ok
 
 
-# A rounded card holding a rectangle without radius, as FoamyTabs' open-tab
-# underline: fully opaque in the "opaque" state, alpha 254 in "translucent".
+# A rounded card that holds an opaque rectangle without radius, as FoamyTabs'
+# open-tab underline (in the card's left half, so a mirrored picture shows),
+# and a line of text. 82 high: at scale 1.25 it covers 102.5 device rows.
+CORNER_CARD = """import QtQuick
+Rectangle {
+  width: 120
+  height: 82
+  radius: 12
+  color: "#336699"
+  Rectangle {
+    x: 10
+    y: 40
+    width: 60
+    height: 2
+    color: "#ff0000"
+  }
+  Text {
+    x: 10
+    y: 12
+    text: "Card"
+    color: "#ffffff"
+  }
+}
+"""
 CARD_CORNERS = """import QtQuick
 Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["opaque", "translucent"]
+  property var previewStates: ["opaque"]
   property string previewState: ""
   readonly property var popup: holder
   Item {
     id: holder
     readonly property Item cardItem: card
-    Rectangle {
+    CornerCard {
       id: card
       x: 100
       y: 100
-      width: 120
-      height: 80
-      radius: 12
-      color: "#336699"
-      Rectangle {
-        x: 10
-        y: 40
-        width: 100
-        height: 2
-        color: preview.previewState === "opaque" ? "#ff0000" : "#feff0000"
-      }
     }
   }
 }
 """
+# The same card in a shell of its own, grabbed directly (Item.grabToImage).
+DIRECT_GRAB = """import QtQuick
+import Quickshell
+import "harness"
+import "plugin/preview"
+ShellRoot {
+  FloatingWindow {
+    implicitWidth: 400
+    implicitHeight: 300
+    color: "black"
+    CornerCard {
+      id: card
+      x: 100
+      y: 100
+    }
+  }
+  FoamyWait {
+    id: wait
+  }
+  Component.onCompleted: wait.waitFor(function () {
+    return card.Window.window !== null
+  }, 10000, function () {
+    var started = card.grabToImage(function (result) {
+      console.log(result.saveToFile(Quickshell.env("FOAMY_CARD_PNG")) ? "FOAMY DONE" : "FOAMY FAIL SAVE FAILED")
+      Qt.quit()
+    })
+    if (!started) {
+      console.log("FOAMY FAIL the direct grab did not start")
+      Qt.quit()
+    }
+  }, "the card is in its window")
+}
+"""
 
 
-def card_corner_test(plugin, host, out):
+def direct_grab(plugin, host, path, scale):
+    """Write the card's direct grab at `scale` to `path`; a run that fails
+    writes nothing there."""
+    run = harness.Run(host, DIRECT_GRAB, plugin=plugin, scale=scale, prefix=f"foamy-kit-direct-grab-{host}-")
+    run.env["FOAMY_CARD_PNG"] = str(path)
+    run.run(timeout=60)
+    run.cleanup()
+    if not run.ok:
+        path.unlink(missing_ok=True)
+
+
+def card_corner_test(plugin, host, out, scale=1.0):
     """The card picture of a card that holds a fully opaque rectangle
     without radius keeps its alpha channel: transparent corners outside
-    the rounded card, and every other pixel the one the same card has with
-    that rectangle at alpha 254. The software renderer took such a grab
-    for opaque and wrote it RGB with black corners."""
+    the rounded card, and every pixel the card fully covers the one a
+    direct grab of the card has. The software renderer took such a grab
+    for opaque and wrote it RGB with black corners. At scale 1 the card
+    covers whole device pixels, and the reference is its region of the
+    screen picture, itself a direct grab. At 1.25 it covers 102.5 device
+    rows, which a direct grab of the card resamples to 103, so there the
+    reference is a direct grab of the same card at the same scale."""
+    label = f"preview {host} at scale {scale}"
+    (plugin / "preview/CornerCard.qml").write_text(CORNER_CARD)
     preview = plugin / "preview/CardCorners.qml"
     preview.write_text(CARD_CORNERS)
-    shots = render.render(plugin, host, out, preview=preview)
+    shots = render.render(plugin, host, out, preview=preview, scale=scale)
+    if scale == 1.0:
+        reference_png, origin = out / "opaque-screen.png", 100
+    else:
+        reference_png, origin = out / "direct.png", 0
+        direct_grab(plugin, host, reference_png, scale)
     preview.unlink()
-    if shots is None:
-        return report(f"preview {host}: a card holding an opaque rectangle renders", False)
-    width, height, opaque = read_png(out / "opaque.png")
-    _, _, translucent = read_png(out / "translucent.png")
-    corners = [opaque(0, 0), opaque(width - 1, 0), opaque(0, height - 1), opaque(width - 1, height - 1)]
+    (plugin / "preview/CornerCard.qml").unlink()
+    if shots is None or not reference_png.is_file():
+        return report(f"{label}: a card holding an opaque rectangle renders, and its reference", False)
+    _, _, reference = read_png(reference_png)
+    width, height, card = read_png(out / "opaque.png")
+    corners = [card(0, 0), card(width - 1, 0), card(0, height - 1), card(width - 1, height - 1)]
+    # Qt rounds the size to device pixels half up (QSizeF::toSize()).
+    expected = (int(120 * scale + 0.5), int(82 * scale + 0.5))
     ok = report(
-        f"preview {host}: a card holding an opaque rectangle has transparent corners",
-        (width, height) == (120, 80) and all(pixel[3] == 0 for pixel in corners),
-        f"{width}x{height}, corners {corners}",
+        f"{label}: a card holding an opaque rectangle has transparent corners",
+        (width, height) == expected and all(pixel[3] == 0 for pixel in corners),
+        f"{width}x{height}, expected {expected}; corners {corners}",
     )
-    differ = [
-        (x, y)
-        for y in range(height)
-        for x in range(width)
-        if not (10 <= x < 110 and 40 <= y < 42) and opaque(x, y) != translucent(x, y)
-    ]
+    covered = [(x, y) for y in range(height) for x in range(width) if card(x, y)[3] == 255]
+    differ = [(x, y) for x, y in covered if card(x, y)[:3] != reference(origin + x, origin + y)[:3]]
+    bar = card(round(20 * scale), round(41 * scale))
     ok &= report(
-        f"preview {host}: beside the rectangle, its pixels are those of the card with a translucent one",
-        not differ and opaque(60, 20) == (51, 102, 153, 255),
-        f"{len(differ)} pixels differ, first {differ[:3]}; inside {opaque(60, 20)}",
+        f"{label}: every pixel the card fully covers is the direct grab's, the rectangle included",
+        len(covered) > width * height // 2 and not differ and bar == (255, 0, 0, 255),
+        f"{len(differ)} of {len(covered)} differ, first {differ[:3]}; rectangle pixel {bar}",
     )
     return ok
 
