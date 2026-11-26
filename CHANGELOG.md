@@ -30,6 +30,23 @@
   the failure rolls back nothing it shows. Plugin change: none needed;
   foamy-teams' dropdown works as it is. DESIGN.md: Choices.
   `tests/test_features.py`.
+- `FoamyTextSettingField` and `FoamyNumberField` (`saveFailed()`, since
+  0.3.4) show the saved value again when `saveFailed()` is called inside
+  their own `committed()`, and the same input can be sent again. Before,
+  a commit emitted `committed()` before the field settled its draft, and
+  `saveFailed()` shows `value` only in a settled field, so a save that
+  FoamyPrefsQueue refuses at once (a widget with no bar entry, a value the
+  schema refuses, a kept invalid stored list), whose `failed()` comes
+  inside the caller's `onCommitted`, left the refused text on show beside
+  the error. Now the field settles first (no draft, its text the committed
+  value) and then emits `committed()` with the same value, so the wiring
+  DESIGN.md gives (the queue's `failed()` calls the field's
+  `saveFailed()`) works as written; inside `committed()` the field is no
+  longer `editing`. Plugin change: none needed; foamy-todoist
+  (TodoSettings.qml, the Open command) and foamy-lock
+  (studio/ScenePage.qml, the colour field) can drop their
+  `Qt.callLater(… .saveFailed)` at their next sync.
+  `tests/test_features.py`.
 
 ## 0.14.0 — 2026-11-22
 

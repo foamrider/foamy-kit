@@ -58,6 +58,8 @@ Item {
   // (unless a newer draft is being edited) and the same input can be
   // committed again. Wire it to the save's failure, e.g.
   // FoamyPrefsQueue.onFailed: if (key === "x") field.saveFailed()
+  // A call inside committed() works too (FoamyPrefsQueue reports a save it
+  // refuses at once there), so it needs no Qt.callLater.
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
@@ -89,13 +91,17 @@ Item {
       return revertInvalid === true
     }
     errorText = ""
-    if (next !== value && !(hasCommitted && next === lastCommitted)) {
+    var send = next !== value && !(hasCommitted && next === lastCommitted)
+    if (send) {
       lastCommitted = next
       hasCommitted = true
-      committed(next)
     }
+    // Settled before committed(): a saveFailed() inside it (a save that
+    // FoamyPrefsQueue refuses at once) then shows `value` again.
     dirty = false
     field.text = next
+    if (send)
+      committed(next)
     return true
   }
 

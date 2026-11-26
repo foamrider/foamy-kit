@@ -326,6 +326,31 @@ ShellRoot {
         }
       }
     }
+    // Settings fields that save through a queue which refuses every save at
+    // once, wired as the fields' headers say (refusedCommits()).
+    Column {
+      x: 560
+      y: 200
+      width: 160
+      FoamyTextSettingField {
+        id: refusedText
+        width: parent.width
+        value: refusingQueue.value("name")
+        onCommitted: function (v) {
+          refusingQueue.save("name", v)
+        }
+      }
+      FoamyNumberField {
+        id: refusedNumber
+        width: parent.width
+        value: refusingQueue.value("count")
+        from: 1
+        to: 100
+        onCommitted: function (v) {
+          refusingQueue.save("count", v)
+        }
+      }
+    }
     // A dropdown disabled while its list is open, itself or through its
     // parent (disabledDropdown()); nothing lies under its list.
     Item {
@@ -712,6 +737,67 @@ ShellRoot {
         mode: "x"
       })
   }
+  // The queue of the refused fields: a widget with no bar entry, so save()
+  // refuses every value at once, inside the field's own committed().
+  FoamyPrefsQueue {
+    id: refusingQueue
+    bar: cliBar
+    moduleName: ""
+    fields: [
+      {
+        key: "name",
+        type: "string",
+        defaultValue: ""
+      },
+      {
+        key: "count",
+        type: "integer",
+        min: 1,
+        max: 100,
+        defaultValue: 1
+      }
+    ]
+    settings: ({
+        name: "saved",
+        count: 20
+      })
+  }
+  property var refusals: []
+  Connections {
+    target: refusingQueue
+    function onFailed(key) {
+      shell.refusals = shell.refusals.concat([key])
+      if (key === "name")
+        refusedText.saveFailed()
+      else if (key === "count")
+        refusedNumber.saveFailed()
+    }
+  }
+  // A save the queue refuses at once comes inside the field's own
+  // committed(): with that wiring the field shows the saved value again at
+  // once, and the same input can be sent again.
+  function refusedCommits() {
+    refusedText.field.focusInput()
+    refusedText.field.selectAll()
+    type("typed")
+    key(Qt.Key_Return)
+    eq([shell.refusals, refusedText.field.text, refusedText.editing], [["name"], "saved", false], "a text the queue refuses at once shows the saved text again")
+    refusedText.field.selectAll()
+    type("typed")
+    key(Qt.Key_Return)
+    eq(shell.refusals, ["name", "name"], "the same text can be sent again after the refusal")
+    refusedNumber.field.focusInput()
+    refusedNumber.field.selectAll()
+    type("30")
+    key(Qt.Key_Return)
+    eq([shell.refusals, refusedNumber.field.text, refusedNumber.editing], [["name", "name", "count"], "20", false], "a number the queue refuses at once shows the saved number again")
+    refusedNumber.field.selectAll()
+    type("30")
+    key(Qt.Key_Return)
+    eq(shell.refusals, ["name", "name", "count", "count"], "the same number can be sent again after the refusal")
+    longField.focusInput()
+  }
+
   // The queues of the mapped dropdowns, both through the fake CLI, which
   // fails every save of foamy.link-fail.
   readonly property var mappedFields: [
@@ -1257,6 +1343,7 @@ ShellRoot {
     retryField.field.pasteError = "Clipboard paste timed out. Copy the text again."
     eq(shell.pasteMessage, "Clipboard paste timed out. Copy the text again.", "a refused paste is reported (pasteFailed)")
     retryField.field.pasteError = ""
+    refusedCommits()
 
     // --- state switches build and destroy fields (no TypeError in the log) ----------------
     stateFlip.start()
