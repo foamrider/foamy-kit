@@ -1,0 +1,13 @@
+# The preview's dark theme with a dim red (#a54242, 2.70:1 on #1e1e2e), for
+# the status-colour checks: text and thin marks in the red must lighten to
+# 4.5:1. Values only; not a real Omarchy theme.
+mode = "dark"
+accent = "#89b4fa"
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+muted = "#585b70"
+red = "#a54242"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+cyan = "#94e2d5"
+blue = "#89b4fa"

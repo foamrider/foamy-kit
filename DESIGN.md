@@ -20,7 +20,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
 | Text tones | `FoamyPalette.text`, `secondaryText` (tint .72; in a light theme the lightest tint from .72 up with 5.5:1 on the surface, at most .95), `mutedText` (tint .55; in a light theme the lightest from .55 up with 4.5:1, at most .84) | Meta/section labels secondary; hints and empty states muted |
 | Fills | `hoverFill` .08, `fieldFill` .055, `selectedFill` accent .18, `divider` .12 | |
-| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text and thin marks (rings, icons) on the surface use `onSurface(c)`: in a light theme it darkens only until 4.5:1. Large fills (bars) keep the raw colour. Menus: `menuFill`, `menuBorder` (light: a lighter fill and a text .40 edge) |
+| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text and thin marks (rings, icons) on the surface use `onSurface(c)` (`onSurface(c, fill)` on a tinted fill; with a fill that comes and goes, such as hover or press, the strongest one, so the colour stays the same in every state): it darkens (light theme) or lightens (dark theme) only until 4.5:1, at most 1.7 times; a colour that already reads is unchanged. Large fills (bars) keep the raw colour. Menus: `menuFill`, `menuBorder` (light: a lighter fill and a text .40 edge) |
 | Disabled | `FoamyStyle.disabledOpacity` .45 | |
 | Motion | `FoamyMotion.hover` 100, `press` 160, `toggle` 120, `slider` 140, `fadeIn` 180, `fadeOut` 120, `grow` 200, `morph` 220, `slow` 300; `duration(ms)` | Every `duration:` goes through FoamyMotion *(lint)*. 0 under reduced motion |
 
@@ -179,7 +179,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (mono `bodySmall`). Open: label `text` DemiBold, icon and count in the
   accent, a 2px accent underline across the tab on the row's 1px `divider`
   hairline (the row draws the hairline). Others: `secondaryText`, counts
-  too; an urgent count is `error` (on the surface). The cursor is a
+  too; an urgent count is `error`, readable on the cursor's fill. The cursor is a
   `hoverFill` with `radius` behind the tab; nothing moves. Labels elide from
   the last tab inward; icons and counts never clip; it never scrolls and
   has no overflow menu, so keep the labels short. Bind `value`, change it
@@ -266,8 +266,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   item on the page that hides while the page shows (Retry, as the retry
   starts) leaves the keys with the page, so Esc still goes back.
 - **Empty / loading / error**: one line, bodySmall, `mutedText`, word-wrapped; no
-  period for short states ("No devices", "Scanning…"); errors in `Commons.Color.urgent`
-  with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
+  period for short states ("No devices", "Scanning…"); errors in
+  `FoamyPalette.onSurface(FoamyPalette.error)` (the raw red does not read in
+  every theme) with `Accessible.AlertMessage`, plus "Retry" when the action can be retried.
 
 ## UX rules (4.5, mandatory)
 

@@ -237,8 +237,10 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: tab.countText
         textFormat: Text.PlainText
-        // bodySmall and secondaryText: a count is read, not decoration.
-        color: tab.entryData.countUrgent === true ? FoamyPalette.onSurface(FoamyPalette.error) : (tab.selected ? FoamyPalette.accent : FoamyPalette.secondaryText)
+        // bodySmall and secondaryText: a count is read, not decoration. An
+        // urgent count reads on the cursor's fill, its strongest surface, so
+        // it keeps one colour with and without the cursor.
+        color: tab.entryData.countUrgent === true ? FoamyPalette.onSurface(FoamyPalette.error, Qt.tint(FoamyPalette.background, FoamyPalette.hoverFill)) : (tab.selected ? FoamyPalette.accent : FoamyPalette.secondaryText)
         font.family: FoamyStyle.monoFamily
         font.pixelSize: FoamyStyle.font.bodySmall
       }

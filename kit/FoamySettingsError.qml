@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import qs.Commons as Commons
 
 // A save or load error, announced to screen readers, with an optional Retry.
 //
@@ -29,7 +28,9 @@ Item {
       textFormat: Text.PlainText
       horizontalAlignment: Text.AlignLeft
       wrapMode: Text.WordWrap
-      color: Commons.Color.urgent
+      // The field errors' red (FoamyTextSettingField, FoamyNumberField), so
+      // a page shows one red, readable on the popup surface.
+      color: FoamyPalette.onSurface(FoamyPalette.error)
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.bodySmall
       Accessible.role: Accessible.AlertMessage

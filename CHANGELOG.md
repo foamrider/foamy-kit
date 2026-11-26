@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.15.1 — 2026-11-26
+
+### Fixed
+- Dark themes: `FoamyPalette.onSurface(c, surface)` returned the colour
+  unchanged (since 0.1.0, where it came in light-only), so a destructive
+  `FoamyButton` label on its strongest (pressed) tint drew 4.30:1 in the preview's dark theme, under the 4.5:1
+  the kit promises for text. In a dark theme it now lightens
+  (`Qt.lighter`) in the steps the light path darkens in, only until it
+  reads at 4.5:1 on `surface` as drawn, at most 1.7 times; the hue stays
+  (preview dark #f38ba8 -> #ff92b0, 4.73:1; Nord #bf616a, 3.05:1 on its
+  background -> #ef7984, 4.60:1, and 2.32:1 on the pressed tint ->
+  #ff97a1, 4.61:1). Light themes are unchanged. Plugins' dark looks change at their
+  next sync only where a status colour did not read: the destructive
+  label, a destructive menu row under the cursor, the urgent tab count and
+  error or status text in themes with a dim red or yellow (Nord, Kanagawa,
+  Miasma, Solitude and others). `tests/test_tabs.py` (the destructive
+  label check now runs in the dark cases, which failed at 4.30:1 before;
+  a status colour that already reads comes back unchanged; seen failing
+  when the loop always takes one step), `tests/test_runtime.py` (a live
+  switch to Nord: the red reaches 4.5:1 and changes; seen failing at
+  3.05:1 with the dark branch removed). DESIGN.md: Tokens.
+- Status text that still drew the raw red: `FoamySettingsError` (since
+  0.1.0), the `FoamyPanelFooter` status error (since 0.4.0) and the icon of
+  a destructive `FoamyAction` under the pointer or cursor (since 0.1.0).
+  In a dark theme with a dim red they stayed far under 4.5:1 (Nord 3.05:1
+  on the background, 2.67:1 on the action's tint), and a settings page
+  showed two reds: the raw one in `FoamySettingsError` beside the readable
+  one under a field. They now use `onSurface` (the action on its red tint,
+  as `FoamyButton` and `FoamyMenu` do), and `FoamySettingsError` and the
+  footer take the theme's red (`FoamyPalette.error`), as the field errors
+  do. The urgent `FoamyTabs` count (since 0.12.0) was measured on the
+  background but drawn on the cursor's fill under the cursor or pointer
+  (Nord 3.72:1, the preview's light red 4.27:1): it is now measured on
+  that fill, its strongest surface, so it keeps one colour in both states.
+  A colour that already reads there is unchanged: the preview's dark theme
+  renders the same, pixel for pixel. Light: the urgent count (#d20f39 ->
+  #c80e36, 4.62:1 on the cursor's fill) and the destructive action's icon
+  (3.79:1 -> #b70d32, 4.71:1) darken a little. Nord: the settings and
+  footer errors #bf616a -> #ef7984 (4.60:1), the action icon -> #ff8490
+  (4.65:1), the urgent count -> #ff8e99 (4.60:1 on the cursor's fill).
+  `tests/test_components.py` (now also in the light theme and a dark
+  theme with a dim red, `tests/fixtures/themes/dim-red.toml`: the pressed
+  destructive label on the real button's fill, the action's icon under
+  the pointer and the cursor, the footer status error, the settings error
+  matching the field error; each seen failing with the raw colour) and
+  `tests/test_tabs.py` (the count on the hovered tab, also with the dim
+  red; seen failing at 4.27:1 light and 3.93:1 dim red). Plugins see the
+  change at their next sync, only in themes whose red did not read there.
+  Known limit: a destructive `FoamyAction` is measured with the popup
+  surface under its tint; in a hero band or on a selected row the fill
+  under it differs and the icon can stay under 4.5:1 (still more than the
+  raw red gave). Plugin change: a plugin's own error line should use
+  `FoamyPalette.onSurface(FoamyPalette.error)` instead of
+  `Commons.Color.urgent` (DESIGN.md: Empty / loading / error), or it shows
+  a second red beside the kit's.
+
 ## 0.15.0 — 2026-11-26
 
 From the foamy-todoist UI review. Every plugin's look changes at its next

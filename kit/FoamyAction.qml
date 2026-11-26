@@ -79,7 +79,10 @@ Rectangle {
       visible: root.iconName !== ""
       width: root.iconSize
       height: width
-      color: root.destructive && (root.hasCursor || mouse.containsMouse) ? Commons.Color.urgent : root.foreground
+      // Readable on the destructive tint it sits on under the cursor, with
+      // the popup surface under the tint. (In a band or on a selected row
+      // the fill under it differs: it is measured as on the popup surface.)
+      color: root.destructive && (root.hasCursor || mouse.containsMouse) ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.14))) : root.foreground
       name: root.iconName
       anchors.verticalCenter: parent.verticalCenter
       // Only the glyph turns; the surface stays put. Off under reduced motion.

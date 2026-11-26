@@ -2,7 +2,6 @@ import QtQuick
 import QtTest
 import Quickshell
 import qs.Commons
-import qs.Commons as Commons
 import qs.Ui
 import "harness"
 import "plugin/kit"
@@ -386,13 +385,11 @@ ShellRoot {
     check(cursor.byKeys && row0.hasCursor && row0.borderTop === FoamyStyle.borderWidth && sameColor(row0.borderSpec.color, row0.accent), "the keys' cursor: an accent border " + [row0.borderTop, row0.borderSpec.color])
     cursor.byKeys = false
     cursor.index = saved
-    // Light themes: a destructive label on its strongest tint reads at
-    // 4.5:1 too (dark themes keep the raw red, 4.3:1 there: not changed
-    // here). Any theme: a
-    // primary label takes whichever of text and background reads better.
-    var urgentTint = Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))
+    // A primary label takes whichever of text and background reads better
+    // (the destructive label is checked on a real FoamyButton in
+    // Components.qml).
     var inkOther = Qt.colorEqual(FoamyPalette.accentInk, FoamyPalette.text) ? FoamyPalette.background : FoamyPalette.text
-    check((!FoamyPalette.lightTheme || FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint) >= 4.5) && FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent) >= FoamyPalette.contrastRatio(inkOther, FoamyPalette.accent), "the destructive label and the primary ink read " + [FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint).toFixed(2), FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent).toFixed(2)])
+    check(FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent) >= FoamyPalette.contrastRatio(inkOther, FoamyPalette.accent), "the primary ink reads " + FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent).toFixed(2))
     // The palette in this theme: status marks and secondary text read at
     // 4.5:1 (light themes darken only as far as that), muted hints at 4:1.
     var minimum = function (c) {
@@ -403,6 +400,15 @@ ShellRoot {
     }) && minimum(FoamyPalette.secondaryText) >= 4.5 && minimum(FoamyPalette.mutedText) >= 4, "status marks and text tones read (" + ["error", "warning", "success", "info"].map(function (k) {
       return minimum(FoamyPalette.onSurface(FoamyPalette[k])).toFixed(2)
     }) + ", " + minimum(FoamyPalette.secondaryText).toFixed(2) + ", " + minimum(FoamyPalette.mutedText).toFixed(2) + ")")
+    // A status colour that already reads comes back unchanged, so a theme
+    // keeps its look wherever it read before (light or dark). With
+    // onSurface always taking one step, this fails in every theme
+    // (#f38ba8 -> #ff92b0 in the preview's dark theme).
+    check(["error", "warning", "success", "info"].every(function (k) {
+      return minimum(FoamyPalette[k]) < 4.5 || Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette[k]), FoamyPalette[k])
+    }), "a status colour that reads is returned unchanged " + ["error", "warning", "success", "info"].map(function (k) {
+      return FoamyPalette[k] + "->" + FoamyPalette.onSurface(FoamyPalette[k])
+    }))
     check(part(s, 0, "foamyTabCount").font.family === FoamyStyle.monoFamily && part(s, 0, "foamyTabCount").font.pixelSize === FoamyStyle.font.bodySmall, "count in the mono bodySmall")
     // The open tab: DemiBold text label, accent icon, count and underline.
     check(part(s, 0, "foamyTabLabel").font.weight === Font.DemiBold && part(s, 2, "foamyTabLabel").font.weight === Font.Normal, "open label DemiBold, others normal")
@@ -410,7 +416,14 @@ ShellRoot {
     check(sameColor(part(s, 0, "foamyTabIcon").color, FoamyPalette.accent) && sameColor(part(s, 2, "foamyTabIcon").color, FoamyPalette.secondaryText), "icon colours")
     check(sameColor(part(s, 0, "foamyTabCount").color, FoamyPalette.accent), "open count in accent")
     check(sameColor(part(body.narrow, 2, "foamyTabCount").color, FoamyPalette.secondaryText), "a count on another tab in secondaryText")
-    check(sameColor(part(s, 1, "foamyTabCount").color, FoamyPalette.onSurface(FoamyPalette.error)), "urgent count in the error colour " + part(s, 1, "foamyTabCount").color)
+    // The urgent count: the theme's red, readable on the background and
+    // on the cursor's fill (checked in urgentHover); unchanged where the
+    // raw red already reads on that fill.
+    var urgent = part(s, 1, "foamyTabCount").color
+    shell.urgentCount = urgent
+    var raw = FoamyPalette.error
+    var urgentOk = FoamyPalette.contrastRatio(urgent, FoamyPalette.background) >= 4.5 && !sameColor(urgent, FoamyPalette.secondaryText) && !sameColor(urgent, FoamyPalette.accent)
+    check(urgentOk && (FoamyPalette.contrastRatio(raw, hoverSurface()) < 4.5 || sameColor(urgent, raw)), "urgent count in the error colour " + raw + " -> " + urgent + " " + FoamyPalette.contrastRatio(urgent, FoamyPalette.background).toFixed(2))
     // The underline: 2px accent across the open tab only, on the row's bottom.
     var u0 = part(s, 0, "foamyTabUnderline")
     check(sameColor(u0.color, FoamyPalette.accent) && u0.height === 2 && near(u0.width, tabs[0].width, 0.01) && near(u0.mapToItem(s, 0, 0).x, xs[0], 0.01), "underline across the open tab " + [u0.color, u0.height, u0.width])
@@ -490,7 +503,29 @@ ShellRoot {
     eq(shell.activations, ["upcoming"], "a press emits activated with its value")
     check(s.value === "inbox" && s.selectedIndex === 0 && shell.view === "inbox", "the press does not change value")
     eq([tab(s, 0).width, tab(s, 1).width, tab(s, 2).width, tab(s, 2).mapToItem(s, 0, 0).x], before, "hover and press never move the layout")
-    shot("tabs-hover", keys)
+    shot("tabs-hover", urgentHover)
+  }
+  // The popup surface under the cursor's fill, as drawn.
+  function hoverSurface() {
+    return Qt.tint(FoamyPalette.background, FoamyPalette.hoverFill)
+  }
+  property color urgentCount
+  // The pointer on the tab with the urgent count: the count sits on the
+  // cursor's fill, reads there at 4.5:1 and keeps its colour.
+  function urgentHover() {
+    var s = body.tabs
+    var g = tab(s, 1)
+    var fill = part(s, 1, "foamyTabCursor")
+    ev.mouseMove(g, g.width / 2, g.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+    wait.waitFor(function () {
+      return s.cursorIndex === 1 && sameColor(fill.color, FoamyPalette.hoverFill)
+    }, 5000, step("hover reaches the tab with the urgent count", function () {
+      var count = part(s, 1, "foamyTabCount").color
+      var drawn = Qt.tint(FoamyPalette.background, fill.color)
+      var ratio = FoamyPalette.contrastRatio(count, drawn)
+      check(ratio >= 4.5 && sameColor(count, shell.urgentCount), "the urgent count reads on the cursor's fill and keeps its colour " + count + " on " + drawn + " " + ratio.toFixed(2))
+      keys()
+    }))
   }
 
   function forward() {
@@ -529,7 +564,7 @@ ShellRoot {
     // The caller changes its state: the open tab follows.
     shell.view = "today"
     check(s.selectedIndex === 1 && part(s, 1, "foamyTabLabel").font.weight === Font.DemiBold, "the open tab follows the caller's value")
-    check(sameColor(part(s, 1, "foamyTabCount").color, FoamyPalette.onSurface(FoamyPalette.error)), "urgent count keeps the error colour when open")
+    check(sameColor(part(s, 1, "foamyTabCount").color, shell.urgentCount), "urgent count keeps the error colour when open")
     // The tab's content row lays out on the next polish.
     wait.waitFor(function () {
       return contentWidth(s, 1)
