@@ -61,6 +61,29 @@
   which they dropped at the 0.14.0 sync, used to cover it. Now the keys
   stay where they are. Plugin change: none needed; the six plugins'
   deferred call is safe as it is. `tests/test_popup_keys.py`.
+- The 0.14.0 notes below and the docs said three things that are not so
+  for every plugin; the 0.14.0 text is corrected (it was never released
+  beyond the local dev branch). (1) The pick serial entry said a handler
+  that takes only `value` needs no change, which is true, but code that
+  emits `FoamyDropdown.changed()` itself with one argument throws
+  "Insufficient arguments" since 0.14.0 (foamy-lock's studio test, the
+  runtime tests of foamy-teams and foamy-lock); 0.14.0's Upgrading now
+  says to pick with `select()` instead. (2) The queue link entry said
+  foamy-power, foamy-monitor and foamy-notification-center adopt the
+  link, but none of them saves a dropdown through FoamyPrefsQueue
+  (foamy-power saves through its helper, with a failure signal of its
+  own; foamy-notification-center through its own queue; foamy-monitor
+  through its own requests). They are now named under the pick serial
+  entry, as their own failure paths compare picks, and the link entry
+  names the eleven plugins that link a dropdown. (3) FoamyPopup's key
+  return (0.14.0) learns the item with the keys from the window's
+  `activeFocusItem`, which Qt keeps only in the active window; a test
+  that runs the popup in a window that is not active, or in none, sees no
+  key return (foamy-bolt, foamy-vitals and foamy-github had to activate
+  the window, or put the popup in one, before dropping their refocus).
+  README.md (Components), the FoamyPopup header and 0.14.0's Upgrading
+  now say so. No kit code changed. Plugin change: none needed. No test:
+  only documentation changed.
 
 ## 0.14.0 — 2026-11-22
 
@@ -139,10 +162,13 @@
   A, and comparing values (foamy-power, foamy-monitor and
   foamy-notification-center check `pickedValue`) takes a repeated value
   for the refused one. `saveFailed()` without a serial works as before,
-  and a handler that takes only `value` needs no change. Plugin change:
-  none needed; a plugin that ends a pick on its own failed save may pass
-  the serial instead of comparing `pickedValue`. DESIGN.md: Choices.
-  `tests/test_features.py`.
+  and a handler that takes only `value` needs no change; code that emits
+  `changed()` itself must pass a serial now (see Upgrading). Plugin
+  change: none needed; a plugin that ends a pick on its own failed save
+  may pass the serial instead of comparing `pickedValue`: foamy-power
+  (its helper's own failure signal), foamy-monitor (its own requests) and
+  foamy-notification-center (its own save queue) at their next sync.
+  DESIGN.md: Choices. `tests/test_features.py`.
 - `FoamyDropdown.queue` and `queueKey`: a dropdown linked to the
   FoamyPrefsQueue it saves through and its key ends its pick by itself
   when the queue refuses that key: at once when `save()` refuses the pick
@@ -155,9 +181,10 @@
   A refusal of another key leaves the pick; a dropdown without the link
   works as before. Plugin change: none needed; a plugin that saves a
   dropdown through FoamyPrefsQueue sets `queue` and `queueKey` and drops
-  its own `saveFailed()` call (foamy-power, foamy-monitor and
-  foamy-notification-center adopt it at their next sync). DESIGN.md:
-  Choices. `tests/test_features.py`.
+  its own `saveFailed()` call at its next sync (foamy-bolt, foamy-clock,
+  foamy-github, foamy-media, foamy-syncthing, foamy-teams, foamy-todoist,
+  foamy-train, foamy-vitals, foamy-weather and foamy-zendesk have such
+  dropdowns). DESIGN.md: Choices. `tests/test_features.py`.
 - `FoamyScheduleDay.saveFailed()`, and the same `queue`/`queueKey` link
   as FoamyDropdown. Before, after a save that failed without changing
   `value`, the time fields kept the unsaved range and Enter did not send
@@ -263,6 +290,20 @@
   "That value isn't allowed." and "Couldn't save the setting." (monitor,
   notification-center); FoamyNative's "This plugin's helper isn't
   available for this CPU." (lock).
+- `FoamyDropdown.changed()` has a second argument, the pick's serial (see
+  Added). A handler that takes only `value` works as before, but code
+  that emits `changed()` itself with one argument now throws
+  "Insufficient arguments" (foamy-lock's studio test and the runtime
+  tests of foamy-teams and foamy-lock did): a test or caller that emits
+  `changed()` itself picks with `select(value)` instead, which shows the
+  pick as the list does and emits `changed(value, serial)`.
+- FoamyPopup's key return (see Fixed) learns the item with the keys from
+  its window's `activeFocusItem`, which Qt keeps only in the active
+  window. On the desktop the popup's window is active; a plugin test that
+  runs the popup in a window that is not active, or in none, sees no key
+  return, so before it drops its own refocus it puts the popup in a
+  window and activates it (foamy-bolt, foamy-vitals and foamy-github had
+  to).
 - `tests/test_text_field.py` (new, `tests/qml/TextField.qml`) tests a
   plain SafeTextField through real keys, the mouse and real pastes: the
   13 cases foamy-bolt's and foamy-weather's `tests/tst_clipboard.qml`
