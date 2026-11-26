@@ -18,7 +18,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Spacing | `padding` 20, `gapTiny` 2, `gapSmall` 4, `gap` 8, `gapLarge` 12, `sectionGap` 14, `rowPadding` 10, `rowHeight` 36 | Popup card padding is 0; content insets by `padding` so lists scroll edge to edge |
 | Controls | `controlHeight` 32, `actionSize` 28, `iconSize` 15, `settingsButtonSize` 32, `settingsIconSize` 16, `iconStroke` 1.7 | |
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
-| Text tones | `FoamyPalette.text`, `secondaryText` (tint .72; in a light theme the lightest tint from .72 up with 5.5:1 on the surface), `mutedText` (tint .55; in a light theme the lightest from .55 up with 4.5:1) | Meta/section labels secondary; hints and empty states muted |
+| Text tones | `FoamyPalette.text`, `secondaryText` (tint .72; in a light theme the lightest tint from .72 up with 5.5:1 on the surface, at most .95), `mutedText` (tint .55; in a light theme the lightest from .55 up with 4.5:1, at most .84) | Meta/section labels secondary; hints and empty states muted |
 | Fills | `hoverFill` .08, `fieldFill` .055, `selectedFill` accent .18, `divider` .12 | |
 | Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text on the surface use `onSurface(c)` |
 | Disabled | `FoamyStyle.disabledOpacity` .45 | |
@@ -140,7 +140,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 122 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 124 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`. Text edited in place, where

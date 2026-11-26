@@ -344,6 +344,14 @@ ShellRoot {
       check(mutedRatio >= 4.5, "muted text has 4.5:1 on a light surface: " + mutedRatio.toFixed(2))
       var secondaryRatio = wcagContrast(FoamyPalette.secondaryText, "#eff1f5")
       check(secondaryRatio >= 5.5 && mutedRatio < secondaryRatio && secondaryRatio < wcagContrast("#4c4f69", "#eff1f5"), "secondary text has 5.5:1 on a light surface, between muted and the text: " + secondaryRatio.toFixed(2))
+      // A theme whose text itself is weak (2.8:1): the tones stop at their
+      // ceilings and stay three, muted below .85 of the way to the text.
+      Commons.Color.foreground = "#8c8fa1"
+      var way = function (c) {
+        return (Qt.color(c).g - Qt.color("#eff1f5").g) / (Qt.color("#8c8fa1").g - Qt.color("#eff1f5").g)
+      }
+      var weakMuted = way(FoamyPalette.mutedText), weakSecondary = way(FoamyPalette.secondaryText)
+      check(weakMuted > 0.3 && weakMuted < 0.85 && weakMuted < weakSecondary && weakSecondary < 0.99, "weak text keeps three tones, muted under .85: " + weakMuted.toFixed(2) + ", " + weakSecondary.toFixed(2))
       ready()
     }))
   }
