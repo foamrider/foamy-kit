@@ -102,6 +102,25 @@
   foamy-todoist, whose committed `preview.png` has black corners, may
   render it again. README.md: Preview. `tests/test_preview.py`.
 
+### Upgrading
+- The sync changes `FoamyDropdown.qml`, `FoamyNumberField.qml`,
+  `FoamyTextSettingField.qml`, `FoamySettingsPage.qml` and (a comment
+  only) `FoamyPopup.qml`. `kit/rust` and `kit/i18n-texts.json` did not
+  change: no helper is rebuilt, and `check.sh` asks the catalogs for no
+  new text.
+- No plugin must change anything. foamy-todoist (TodoSettings.qml) and
+  foamy-lock (studio/ScenePage.qml) can call `saveFailed()` at once
+  instead of through `Qt.callLater`. A plugin test that reads a settings
+  field's `editing` or text inside its own `onCommitted` sees the field
+  settled now.
+- A plugin still on 0.13.1 reads 0.14.0's Upgrading too: it now says
+  that code emitting `FoamyDropdown.changed()` itself picks with
+  `select()`, and that a test runs FoamyPopup in an active window.
+- foamy-media, foamy-syncthing and foamy-todoist may render their
+  `preview.png` again with `preview/render.py` for round corners.
+  foamy-menu's black-cornered `preview.png` comes from its own
+  `tests/launcher.py --shots`, which this does not change.
+
 ## 0.14.0 — 2026-11-22
 
 ### Added
