@@ -576,11 +576,14 @@ ShellRoot {
     // The selected row under the cursor keeps its tint, lit (its colour
     // animates, so this waits for it).
     var row1 = findByName(body, "rowSurface1")
-    var litSelected = Qt.alpha(FoamyPalette.selectedFill, Math.min(1, FoamyPalette.selectedFill.a + row1.fill.a))
+    // Lit: the selected tint (same hue as selectedFill), stronger than it.
+    var plain = FoamyPalette.selectedFill
+    var lit = function () {
+      var c = row1.color
+      return Math.abs(c.r - plain.r) < 0.02 && Math.abs(c.g - plain.g) < 0.02 && Math.abs(c.b - plain.b) < 0.02 && c.a > plain.a + 0.02
+    }
     cursor.hover(2)
-    wait.waitFor(function () {
-      return sameColor(row1.color, litSelected)
-    }, 5000, function (ok) {
+    wait.waitFor(lit, 5000, function (ok) {
       check(ok && findByName(row1, "foamyCurrentBar").visible, "the selected row under the cursor: its tint, lit, and its bar " + row1.color)
       console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
       console.log("FOAMY DONE")

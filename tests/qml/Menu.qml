@@ -671,8 +671,12 @@ ShellRoot {
                 // and the rest of the menu scrolls.
                 shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 3
                 band.openMenu(true)
+                // Wait for the end state: the card grown and no longer moving.
+                var lastHeight = -1
                 wait.waitFor(function () {
-                  return shortCard.height > shell.shortBefore + 10
+                  var settled = shortCard.height > shell.shortBefore + 10 && Math.abs(shortCard.height - lastHeight) < 0.5
+                  lastHeight = shortCard.height
+                  return settled
                 }, 5000, function (grewSome) {
                   check(grewSome && shortCard.height < shell.shortBefore + shortMenu.overlayItem.naturalHeight - 20 && shortMenu.panel.height < shortMenu.overlayItem.naturalHeight - 1, "a capped growth: the card grows less, the menu scrolls " + [shortCard.height, shell.shortBefore, shortMenu.panel.height, shortMenu.overlayItem.naturalHeight])
                   band.closeMenu()

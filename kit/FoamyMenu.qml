@@ -247,6 +247,9 @@ QtObject {
     if (!_parentEntry)
       return false
     var from = _parentEntry
+    // No highlight while the level changes (else the old index lights a
+    // row of the new level for a frame).
+    _index = -1
     _parentEntry = null
     _index = _entries.indexOf(from)
     overlay.decideGrowth()
@@ -366,10 +369,12 @@ QtObject {
         menuWheel.scrollTo(y, false)
     }
     onWidthChanged: place()
-    // The card grows after a keyboard open: keep the entry in view.
+    // The card grows after a keyboard open: keep the entry in view (only
+    // while it grows for this menu, so a wheel scroll otherwise stays).
     onHeightChanged: {
       place()
-      reveal()
+      if (root._grow)
+        reveal()
     }
     onNaturalHeightChanged: place()
 

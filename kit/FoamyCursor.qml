@@ -46,6 +46,7 @@ QtObject {
   }
   function reset() {
     index = -1
+    byKeys = false
   }
   // A letter shortcut with no Ctrl/Alt/Meta held (Shift is fine).
   function plain(modifiers) {
