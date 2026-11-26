@@ -335,11 +335,15 @@ ShellRoot {
       return FoamyPalette.lightTheme && Qt.colorEqual(FoamyPalette.warning, "#df8e1d")
     }, 5000, then("the palette follows a changed theme file", function () {
       check(Qt.colorEqual(FoamyPalette.error, "#d20f39"), "error from the new theme's red")
-      check(!Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette.error), FoamyPalette.error), "status text is darkened on a light surface")
       // The popup surface of Catppuccin Latte: muted hints reach WCAG AA
       // (tint .55 gave 2.53:1) and stay lighter than the text.
       Commons.Color.background = "#eff1f5"
       Commons.Color.foreground = "#4c4f69"
+      // Status text reads at 4.5:1 there: the yellow (2.3:1) darkens, the
+      // red (4.8:1) keeps the theme's colour.
+      var warningRatio = wcagContrast(FoamyPalette.onSurface(FoamyPalette.warning), FoamyPalette.background)
+      check(warningRatio >= 4.5 && !Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette.warning), FoamyPalette.warning), "a faint status colour darkens to 4.5:1 on the popup surface: " + warningRatio.toFixed(3))
+      check(Qt.colorEqual(FoamyPalette.onSurface(FoamyPalette.error), FoamyPalette.error) && Qt.colorEqual(FoamyPalette.onSurface("#d20f39"), FoamyPalette.error), "a status colour that reads keeps its hue, also given as text")
       var mutedRatio = wcagContrast(FoamyPalette.mutedText, "#eff1f5")
       check(mutedRatio >= 4.5, "muted text has 4.5:1 on a light surface: " + mutedRatio.toFixed(2))
       var secondaryRatio = wcagContrast(FoamyPalette.secondaryText, "#eff1f5")

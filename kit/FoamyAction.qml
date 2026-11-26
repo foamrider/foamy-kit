@@ -28,6 +28,8 @@ Rectangle {
   property bool spinning: false
   property bool actionEnabled: true
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): an accent border.
+  property bool cursorByKeys: false
   property bool focusable: false
   property bool settings: false
   property bool destructive: false
@@ -46,7 +48,7 @@ Rectangle {
   radius: FoamyStyle.radius
   opacity: enabled ? (actionEnabled ? 1 : 0.7) : FoamyStyle.disabledOpacity
   color: active && (hasCursor || mouse.containsMouse || activeFocus) ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
-  border.width: activeFocus && focusable ? 1 : 0
+  border.width: (activeFocus && focusable) || (active && hasCursor && cursorByKeys) ? 1 : 0
   border.color: Commons.Color.accent
   activeFocusOnTab: focusable && active
 

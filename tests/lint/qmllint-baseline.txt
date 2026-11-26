@@ -96,7 +96,7 @@ kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope i
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var entry = level[i]
 kit/FoamyMenu.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var h0 = root.anchorItem.mapToItem(holder, 0, 0)
 kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type FoamyMenu::_reserveHolder with type QQuickItem | _reserveHolder.foamyMenuReserve = 0
-kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type FoamyMenu::_reserveHolder with type QQuickItem | holder.foamyMenuReserve = h0.y + root.anchorItem.height + FoamyStyle.gapSmall + naturalHeight + margin
+kit/FoamyMenu.qml: missing-property: Member "foamyMenuReserve" not found on type FoamyMenu::_reserveHolder with type QQuickItem | holder.foamyMenuReserve = root._reserved
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()
 kit/FoamyMenu.qml: missing-property: Member "place" not found on type "QQuickItem" | _overlay.place()

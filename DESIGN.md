@@ -20,7 +20,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
 | Text tones | `FoamyPalette.text`, `secondaryText` (tint .72; in a light theme the lightest tint from .72 up with 5.5:1 on the surface, at most .95), `mutedText` (tint .55; in a light theme the lightest from .55 up with 4.5:1, at most .84) | Meta/section labels secondary; hints and empty states muted |
 | Fills | `hoverFill` .08, `fieldFill` .055, `selectedFill` accent .18, `divider` .12 | |
-| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text on the surface use `onSurface(c)` |
+| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text and thin marks (rings, icons) on the surface use `onSurface(c)`: in a light theme it darkens only until 4.5:1. Large fills (bars) keep the raw colour. Menus: `menuFill`, `menuBorder` (light: a lighter fill and a text .40 edge) |
 | Disabled | `FoamyStyle.disabledOpacity` .45 | |
 | Motion | `FoamyMotion.hover` 100, `press` 160, `toggle` 120, `slider` 140, `fadeIn` 180, `fadeOut` 120, `grow` 200, `morph` 220, `slow` 300; `duration(ms)` | Every `duration:` goes through FoamyMotion *(lint)*. 0 under reduced motion |
 
@@ -109,7 +109,11 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   separate window or a Controls.Menu positioned by hand. It drops from the
   button, its trailing edge on the button's trailing edge (mirrored in RTL),
   stays inside the card (opens above when there is no room below, scrolls
-  when long). Entries: icon `iconSize`, label `body`, row `rowHeight`;
+  when long). Only when it fits neither below nor above does the card grow
+  while it is open, by at most `maxGrowHeight` (9 rows) of menu. From the
+  keys it starts on the one checked entry (the current choice of a set:
+  `checked` means that), else on the first. Text on a tinted fill:
+  `onSurface(c, fill)`. Entries: icon `iconSize`, label `body`, row `rowHeight`;
   destructive entries tint urgent under the cursor; a submenu opens in place
   with a Back row. While open it has the keys and the pointer (one cursor:
   arrows/jk, Enter/Space/→ activate, ←/Backspace back, Esc back or close, a
@@ -140,7 +144,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   width). In settings: `FoamySettingsSection { info: … }`; with the note closed
   the title line is as tall as a plain section title (the (i) overhangs it),
   so the title → description gap is the same in every section.
-- **Icons**: `FoamyIcon` (Lucide superset, 124 names). Add icons to the kit
+- **Icons**: `FoamyIcon` (Lucide superset, 125 names). Add icons to the kit
   (tools/update-icons.py), not to plugins; no Nerd-font glyphs in popups.
 - **Inputs**: `SafeTextField` (never Qt's TextField: it reads the whole clipboard).
   Callers set size/alignment, never `background`. Text edited in place, where
@@ -172,10 +176,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   tabs as wide as their content from the reading start, inset `gapLarge`
   and padded `rowPadding`, so the first icon lines up with the rows'
   content below. Each tab: icon `iconSize`, label `body`, optional count
-  (mono `caption`). Open: label `text` DemiBold, icon and count in the
+  (mono `bodySmall`). Open: label `text` DemiBold, icon and count in the
   accent, a 2px accent underline across the tab on the row's 1px `divider`
   hairline (the row draws the hairline). Others: `secondaryText`, counts
-  `mutedText`; an urgent count is `error` (on the surface). The cursor is a
+  too; an urgent count is `error` (on the surface). The cursor is a
   `hoverFill` with `radius` behind the tab; nothing moves. Labels elide from
   the last tab inward; icons and counts never clip; it never scrolls and
   has no overflow menu, so keep the labels short. Bind `value`, change it
@@ -279,7 +283,14 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   cursor in `FoamyCursor`; arrows/hjkl move, Enter/Space activate, Esc closes
   (or leaves Settings), Tab/Shift-Tab call `switchPanel(direction)`, `s` opens
   Settings, `r` refreshes where there is a refresh. Pointer hover moves the same
-  cursor (one highlight on screen). Focus rings only on form controls in
+  cursor (one highlight on screen). Where the keys moved it, it has a 1 px
+  accent border (`FoamyCursor.byKeys` into `FoamyCursorSurface.byKeys`,
+  `FoamyAction.cursorByKeys`, `FoamyTabs.cursorByKeys`; set `byKeys` when a
+  key handler sets `index` itself); the selected row or view (`current`)
+  has `selectedFill`, with `currentBar` when its details show in a pane.
+  The buttons inside FoamyHeader, FoamyHeroBand, FoamyPanelFooter and
+  FoamyInfoNote keep the plain cursor look (they take no `cursorByKeys`).
+  Focus rings only on form controls in
   Settings (`focusable: true`); set `blocked` on the key catcher while a form
   or editor owns keys, and while a menu is open (`band.menuOpen`). The ⋯
   button is a cursor stop (`menuHasCursor`, `menuHovered`); Enter opens the

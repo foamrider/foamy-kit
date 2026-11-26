@@ -162,6 +162,7 @@ ShellRoot {
               value: shell.view
               model: shell.views
               hasCursor: cursor.at(0)
+              cursorByKeys: cursor.byKeys
               onHovered: cursor.hover(0)
               onActivated: function (v) {
                 shell.activations = shell.activations.concat([v])
@@ -177,12 +178,17 @@ ShellRoot {
                 width: parent.width
                 height: FoamyStyle.rowHeight
                 FoamyCursorSurface {
+                  objectName: "rowSurface" + rowItem.index
                   anchors.left: parent.left
                   anchors.leftMargin: FoamyStyle.gapLarge
                   anchors.right: parent.right
                   anchors.rightMargin: FoamyStyle.gapLarge
                   height: parent.height
                   hasCursor: cursor.at(rowItem.index + 1)
+                  byKeys: cursor.byKeys
+                  // The second row is the selected one, with its bar.
+                  current: rowItem.index === 1
+                  currentBar: true
                   onHovered: cursor.hover(rowItem.index + 1)
                   FoamyIcon {
                     id: rowIconItem
@@ -359,13 +365,51 @@ ShellRoot {
     eq([part(s, 0, "foamyTabCount").text, part(s, 1, "foamyTabCount").text], ["12", "3"], "counts")
     check(!part(s, 2, "foamyTabCount").visible, "a count below 0 shows nothing")
     check(inside(part(s, 0, "foamyTabCount"), tabs[0]) && inside(part(s, 1, "foamyTabCount"), tabs[1]), "counts not clipped")
-    check(part(s, 0, "foamyTabCount").font.family === FoamyStyle.monoFamily && part(s, 0, "foamyTabCount").font.pixelSize === FoamyStyle.font.caption, "count in the mono caption")
+    // Three looks: the selected row in selectedFill with its bar; the
+    // pointer's cursor without a border of its own; the keys' cursor with
+    // an accent border.
+    var row0 = findByName(body, "rowSurface0"), row1 = findByName(body, "rowSurface1")
+    var saved = cursor.index
+    cursor.reset()
+    check(sameColor(row1.color, FoamyPalette.selectedFill) && findByName(row1, "foamyCurrentBar").visible && !findByName(row0, "foamyCurrentBar").visible, "the selected row: selectedFill and its bar")
+    // The tab row: the keys' cursor has the accent border, the pointer's not.
+    cursor.hover(0)
+    var tabCursor = part(body.tabs, body.tabs.cursorIndex, "foamyTabCursor")
+    var pointerTab = tabCursor.border.width
+    cursor.index = 1
+    cursor.move(-1)
+    check(pointerTab === 0 && tabCursor.border.width === FoamyStyle.borderWidth, "a tab's keys' cursor has the accent border " + [pointerTab, tabCursor.border.width])
+    cursor.hover(1)
+    check(!cursor.byKeys && row0.hasCursor && !(row0.borderTop > 0 && sameColor(row0.borderSpec.color, row0.accent)), "the pointer's cursor: no accent border " + [row0.borderTop, row0.borderSpec.color])
+    cursor.index = 0
+    cursor.move(1)
+    check(cursor.byKeys && row0.hasCursor && row0.borderTop === FoamyStyle.borderWidth && sameColor(row0.borderSpec.color, row0.accent), "the keys' cursor: an accent border " + [row0.borderTop, row0.borderSpec.color])
+    cursor.byKeys = false
+    cursor.index = saved
+    // Light themes: a destructive label on its strongest tint reads at
+    // 4.5:1 too (dark themes keep the raw red, 4.3:1 there: not changed
+    // here). Any theme: a
+    // primary label takes whichever of text and background reads better.
+    var urgentTint = Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))
+    var inkOther = Qt.colorEqual(FoamyPalette.accentInk, FoamyPalette.text) ? FoamyPalette.background : FoamyPalette.text
+    check((!FoamyPalette.lightTheme || FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint) >= 4.5) && FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent) >= FoamyPalette.contrastRatio(inkOther, FoamyPalette.accent), "the destructive label and the primary ink read " + [FoamyPalette.contrastRatio(FoamyPalette.onSurface(Commons.Color.urgent, urgentTint), urgentTint).toFixed(2), FoamyPalette.contrastRatio(FoamyPalette.accentInk, FoamyPalette.accent).toFixed(2)])
+    // The palette in this theme: status marks and secondary text read at
+    // 4.5:1 (light themes darken only as far as that), muted hints at 4:1.
+    var minimum = function (c) {
+      return FoamyPalette.contrastRatio(c, FoamyPalette.background)
+    }
+    check(["error", "warning", "success", "info"].every(function (k) {
+      return minimum(FoamyPalette.onSurface(FoamyPalette[k])) >= 4.5
+    }) && minimum(FoamyPalette.secondaryText) >= 4.5 && minimum(FoamyPalette.mutedText) >= 4, "status marks and text tones read (" + ["error", "warning", "success", "info"].map(function (k) {
+      return minimum(FoamyPalette.onSurface(FoamyPalette[k])).toFixed(2)
+    }) + ", " + minimum(FoamyPalette.secondaryText).toFixed(2) + ", " + minimum(FoamyPalette.mutedText).toFixed(2) + ")")
+    check(part(s, 0, "foamyTabCount").font.family === FoamyStyle.monoFamily && part(s, 0, "foamyTabCount").font.pixelSize === FoamyStyle.font.bodySmall, "count in the mono bodySmall")
     // The open tab: DemiBold text label, accent icon, count and underline.
     check(part(s, 0, "foamyTabLabel").font.weight === Font.DemiBold && part(s, 2, "foamyTabLabel").font.weight === Font.Normal, "open label DemiBold, others normal")
     check(sameColor(part(s, 0, "foamyTabLabel").color, FoamyPalette.text) && sameColor(part(s, 2, "foamyTabLabel").color, FoamyPalette.secondaryText), "label colours")
     check(sameColor(part(s, 0, "foamyTabIcon").color, FoamyPalette.accent) && sameColor(part(s, 2, "foamyTabIcon").color, FoamyPalette.secondaryText), "icon colours")
     check(sameColor(part(s, 0, "foamyTabCount").color, FoamyPalette.accent), "open count in accent")
-    check(sameColor(part(body.narrow, 2, "foamyTabCount").color, FoamyPalette.mutedText), "a count on another tab in mutedText")
+    check(sameColor(part(body.narrow, 2, "foamyTabCount").color, FoamyPalette.secondaryText), "a count on another tab in secondaryText")
     check(sameColor(part(s, 1, "foamyTabCount").color, FoamyPalette.onSurface(FoamyPalette.error)), "urgent count in the error colour " + part(s, 1, "foamyTabCount").color)
     // The underline: 2px accent across the open tab only, on the row's bottom.
     var u0 = part(s, 0, "foamyTabUnderline")
@@ -529,9 +573,22 @@ ShellRoot {
     var before = shell.activations.length
     ev.keyClick(Qt.Key_Return, Qt.NoModifier, -1)
     eq(shell.activations.slice(before), ["today"], "Enter works again after the refill")
-    console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
-    console.log("FOAMY DONE")
-    Qt.quit()
+    // The selected row under the cursor keeps its tint, lit (its colour
+    // animates, so this waits for it).
+    var row1 = findByName(body, "rowSurface1")
+    // Lit: the selected tint (same hue as selectedFill), stronger than it.
+    var plain = FoamyPalette.selectedFill
+    var lit = function () {
+      var c = row1.color
+      return Math.abs(c.r - plain.r) < 0.02 && Math.abs(c.g - plain.g) < 0.02 && Math.abs(c.b - plain.b) < 0.02 && c.a > plain.a + 0.02
+    }
+    cursor.hover(2)
+    wait.waitFor(lit, 5000, function (ok) {
+      check(ok && findByName(row1, "foamyCurrentBar").visible, "the selected row under the cursor: its tint, lit, and its bar " + row1.color)
+      console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
+      console.log("FOAMY DONE")
+      Qt.quit()
+    })
   }
 
   function findByName(item, name) {

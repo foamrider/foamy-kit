@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.15.0 — 2026-11-26
+
+From the foamy-todoist UI review. Every plugin's look changes at its next
+sync (selected rows, tab counts, light themes): render each plugin's
+preview in dark and light and look at it.
+
+### Fixed
+- `FoamyPalette.onAccent` (since 0.1.0) is now `accentInk`. QML reads a
+  property named `on` + a capital letter as a signal handler, so it never
+  had a colour, and every primary `FoamyButton` label was black (#000000)
+  on the accent. `accentInk` is the popup's text or background, whichever
+  has more contrast on the accent (measured, so a mid-tone accent such as
+  Ethereal's or Solitude's gets the readable one). Plugin change: foamy-lock (studio/StudioButton.qml) reads
+  `FoamyPalette.onAccent`; it must read `accentInk` at its next sync.
+  `tests/test_components.py`.
+- `FoamyMenu` (since 0.4.0) anchored inside a row's `FoamyCursorSurface`
+  (or any other bordered surface) took that surface for the card and drew
+  nothing usable: the host is now the first bordered surface above the
+  popup's body (the item with `foamyMenuReserve`). Outside a FoamyPopup or
+  FoamyPopupCard it is found as before. Plugin change: a `host` set by hand
+  only for this can go. `tests/test_menu.py`.
+- `FoamyMenu.open(true)` (from the keys), and a submenu, start on the
+  checked entry when exactly one is checked (the current choice), else on
+  the first. Before, they always started on the first, so Enter twice on a
+  property (a priority, a project) picked the first option. With several
+  checked (toggles, labels) Enter would turn one off, so those start on
+  the first as before. `tests/test_menu.py`.
+
+### Changed
+- `FoamyMenu` grows its card only when the shown level (laid out first)
+  fits neither below nor above its button and growing helps, and by at
+  most `maxGrowHeight` of menu (9 rows, a new property); past it the menu
+  scrolls. A submenu, the way back, or a card still shrinking from an
+  earlier open decides again; once grown, the card keeps the largest size
+  it took while the menu is open (a shorter submenu doesn't shrink it), and
+  the entry the keys are on stays in view as the card grows. Before, every menu reserved room
+  below its button, so a long one (labels, projects) grew the card up to
+  the whole screen, also where it fit above. `tests/test_menu.py`.
+- The selected look (`FoamyCursorSurface.current`) is
+  `FoamyPalette.selectedFill` (the accent, faint) instead of the host's
+  grey, also under the cursor. New: `byKeys` draws the keys' cursor with
+  a 1 px accent border, and `currentBar` adds a 3 px accent bar at the
+  reading start of a selected row whose details show in a pane.
+  `FoamyCursor.byKeys` (true after `move()`, false after `hover()`; set it
+  when a key handler sets `index` itself), `FoamyAction.cursorByKeys` and
+  `FoamyTabs.cursorByKeys` carry it; the buttons inside FoamyHeader,
+  FoamyHeroBand, FoamyPanelFooter and FoamyInfoNote keep the plain look.
+  Plugin change, to show the keys' border: bind `byKeys`/`cursorByKeys` to
+  `cursor.byKeys`, and set `cursor.byKeys = true` where a key handler
+  moves the cursor without `move()` (FoamyTabs.moveCursor, a stop set by
+  index). Without it the pointer's look stays, as before. DESIGN.md:
+  Keyboard. `tests/test_tabs.py`, `tests/test_components.py`.
+- Light themes: `onSurface()` darkens a status colour only until it reads
+  at 4.5:1 on the popup background (`contrastRatio()`, from 0.14.2),
+  measured as drawn (8 bits a channel), at most 1.7 times darker; it was a
+  fixed `Qt.darker(c, 1.35)`, which made a red that already read darker
+  than the body text. It also takes a colour given as text, and an
+  optional `surface` for a colour drawn on a tinted fill: the destructive
+  `FoamyButton` label (on its strongest tint) and a destructive menu row
+  under the cursor use it. Menus in a light theme: `menuFill` lighter than
+  the card and a new `menuBorder` (text .40; dark: `border`), which
+  `FoamyMenu` uses (a visual change, checked in the light preview renders;
+  no test measures it). DESIGN.md: Tokens. `tests/test_tabs.py` (light
+  runs), `tests/test_runtime.py`.
+- `FoamyTabs` counts are `bodySmall` and, on a closed tab, `secondaryText`
+  (were `caption` and `mutedText`, the faintest text in the row).
+  DESIGN.md: Tab row. `tests/test_tabs.py`.
+
+### Added
+- `FoamyIcon`: `tag` (Lucide).
+
 ## 0.14.2 — 2026-11-26
 
 ### Added
