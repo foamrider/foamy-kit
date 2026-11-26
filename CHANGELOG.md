@@ -27,8 +27,11 @@
   newer pick whose save still waits, even one of the same value (a
   dropdown bound to the stored settings lost it before), and such a
   dropdown gives way when its own CLI save fails, mapped value or not, as
-  the failure rolls back nothing it shows. Plugin change: none needed;
-  foamy-teams' dropdown works as it is. DESIGN.md: Choices.
+  the failure rolls back nothing it shows. Another object linked as the
+  queue, with only a `failed(key, value, error)` signal, has no such
+  state: there the failure must name the option's value, as before, so an
+  older pick's failure leaves a newer pick on show. Plugin change: none
+  needed; foamy-teams' dropdown works as it is. DESIGN.md: Choices.
   `tests/test_features.py`.
 - `FoamyTextSettingField` and `FoamyNumberField` (`saveFailed()`, since
   0.3.4) show the saved value again when `saveFailed()` is called inside
