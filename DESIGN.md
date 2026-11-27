@@ -245,6 +245,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   write back in `onTextEdited`, reset by assigning.)
 - **Settings page**: `FoamySettingsPage` (back, "Settings", "Saving…", error +
   Retry, sections). Sections: `FoamySettingsSection`, sentence-case titles.
+  A page wider than the settings width (a Wide popup's) reads as one
+  column: set `columnWidth`; Back and the title, the error line and the
+  sections keep to the centred column, the band still runs to the card's
+  edges.
 - **Scrolling**: every scrolling list or page takes a wheel notch as a normal
   step (~3 rows: `wheelScrollLines` × `rowHeight`), however the mouse splits it,
   and touchpad pixel deltas 1:1. FoamySettingsPage does it; a plugin Flickable

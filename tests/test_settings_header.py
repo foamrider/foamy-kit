@@ -4,7 +4,8 @@ scale 1.0 and 1.25: the compact band's title action (off by default: no
 control, the same Tab chain and the same pixels with its other properties
 set; on: mark, title, chevron, click/Enter/Space with the `keyboard`
 argument, Tab order, ring and fill, role and name, a menu hanging from its
-start, Esc back to it, elide with a tooltip).
+start, Esc back to it, elide with a tooltip) and a wide FoamySettingsPage's
+column (Back, the title, the error line and Retry in the centred column).
 Screenshots: tests/out/settings-header/."""
 
 import shutil

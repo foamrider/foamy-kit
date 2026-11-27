@@ -215,6 +215,9 @@ Item {
   // --- compact settings form -------------------------------------------------------
   property bool compact: false
   property string compactTitle: FoamyI18n.t("Settings")
+  // The compact row's side padding (FoamySettingsHeader.horizontalPadding):
+  // a wide settings page sets it to its column's inset.
+  property real compactPadding: FoamyStyle.padding
   property bool saving: false
   property alias backButton: settingsHeader.backButton
   // Icon actions at the compact form's trailing end, after "Saving…" (a
@@ -437,6 +440,7 @@ Item {
       width: parent.width
       topPadding: 0
       bottomPadding: 0
+      horizontalPadding: band.compactPadding
       title: band.compactTitle
       saving: band.saving
       titleAction: band.compactTitleAction

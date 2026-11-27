@@ -7,7 +7,8 @@ import "harness"
 import "plugin/kit"
 
 // kit 0.16.0: the compact band's title action (FoamySettingsHeader's
-// titleAction through FoamyHeroBand) in a real FoamyPopup.
+// titleAction through FoamyHeroBand) in a real FoamyPopup, and a wide
+// FoamySettingsPage's column (columnWidth).
 // - Off (the default): no title control, Tab goes from Back to the trailing
 //   action; with the action's other properties set while off the band
 //   draws the same pixels (band-off.png, band-off-set.png).
@@ -18,7 +19,10 @@ import "plugin/kit"
 //   hangs under it from its start; Esc gives the keys back to it; a long
 //   title elides within the room left, with a tooltip on hover no wider
 //   than the header.
-// FOAMY_RTL=1 mirrors.
+// - The column: on a wide page Back and the title, the error line and its
+//   Retry, and the sections keep to the centred column while the band runs
+//   to the page's edges; a page of the settings width keeps its padding.
+// FOAMY_RTL=1 mirrors the bands (a settings page mirrors with the language).
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -204,6 +208,55 @@ ShellRoot {
     }
   }
 
+  // A wide page (a Wide popup's 880) with a settings-wide column, and one
+  // of the settings width with the default column; both with an error and
+  // Retry.
+  FloatingWindow {
+    id: pages
+    implicitWidth: 1400
+    implicitHeight: 500
+    color: "black"
+    Item {
+      anchors.fill: parent
+      LayoutMirroring.enabled: shell.rtl
+      LayoutMirroring.childrenInherit: true
+      FoamySettingsPage {
+        id: widePage
+        width: 880
+        height: 400
+        columnWidth: 400
+        error: "Couldn't save the setting."
+        retryable: true
+        FoamySettingsSection {
+          id: wideSection
+          width: parent.width
+          title: "Panel"
+          FoamyToggle {
+            width: parent.width
+            label: "A toggle"
+          }
+        }
+      }
+      FoamySettingsPage {
+        id: narrowPage
+        x: 900
+        width: 420
+        height: 400
+        error: "Couldn't save the setting."
+        retryable: true
+        FoamySettingsSection {
+          id: narrowSection
+          width: parent.width
+          title: "Panel"
+          FoamyToggle {
+            width: parent.width
+            label: "A toggle"
+          }
+        }
+      }
+    }
+  }
+
   readonly property var body: popup.bodyItem
   readonly property var ev: body ? body.ev : null
 
@@ -378,7 +431,57 @@ ShellRoot {
       wait.after(300, function () {
         shell.check(!shell.find(short, "foamyTitleActionTip").visible, "no tooltip for a title that fits")
         shell.ev.mouseMove(shell.body, 2, shell.body.height - 2, -1, Qt.NoButton, Qt.NoModifier)
-        shell.finish()
+        shell.columnChecks()
+      })
+    })
+  }
+
+  // --- the column ----------------------------------------------------------------
+  // The shown Text item under `item` that says `text`.
+  function shownText(item, text) {
+    if (item.text === text && item.visible && item.font !== undefined)
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = shownText(item.children[i], text)
+      if (found)
+        return found
+    }
+    return null
+  }
+  function columnChecks() {
+    var inset = (widePage.width - widePage.columnWidth) / 2
+    var band = find(widePage, "foamyHeroBandSurface").parent
+    var back = widePage.backTarget
+    var title = shownText(band, widePage.title)
+    var errorText = find(widePage, "settingsErrorText")
+    var retry = errorText.parent.children[1]
+    var b = span(band, widePage)
+    check(near(b.start, 0) && near(b.end, widePage.width), "wide: the band runs to the page's edges " + JSON.stringify(b))
+    check(near(span(back, widePage).start, inset), "wide: Back starts at the column's edge " + JSON.stringify([span(back, widePage), inset]))
+    check(title && span(title, widePage).end <= widePage.width - inset + 1, "wide: the title ends in the column")
+    var e = span(errorText, widePage)
+    var r = span(retry, widePage)
+    check(errorText.visible && near(e.start, inset), "wide: the error starts at the column's edge " + JSON.stringify([e, inset]))
+    check(retry.visible && near(r.end, widePage.width - inset), "wide: Retry ends at the column's edge " + JSON.stringify([r, widePage.width - inset]))
+    var w = span(wideSection, widePage)
+    check(near(w.start, inset) && near(w.end, widePage.width - inset), "wide: the section fills the column " + JSON.stringify(w))
+    // A settings-width page: the padding, as before.
+    var pad = FoamyStyle.padding
+    var nb = narrowPage.backTarget
+    var ne = find(narrowPage, "settingsErrorText")
+    var nr = ne.parent.children[1]
+    check(near(narrowPage.columnInset, pad) && near(span(nb, narrowPage).start, pad) && near(span(ne, narrowPage).start, pad) && near(span(nr, narrowPage).end, narrowPage.width - pad), "narrow: Back, the error and Retry at the padding")
+    var ns = span(narrowSection, narrowPage)
+    check(near(ns.start, pad) && near(ns.end, narrowPage.width - pad), "narrow: the section at the padding " + JSON.stringify(ns))
+    // A column wider than the page: the padding, never less.
+    widePage.columnWidth = 2000
+    wait.waitFor(function () {
+      return shell.near(shell.span(wideSection, widePage).start, pad)
+    }, 2000, function (ok) {
+      shell.check(ok && shell.near(widePage.columnInset, pad), "a column wider than the page keeps the padding")
+      widePage.columnWidth = 400
+      wait.after(100, function () {
+        shell.grab(widePage, "wide-page", shell.finish)
       })
     })
   }

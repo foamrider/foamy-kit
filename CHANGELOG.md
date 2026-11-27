@@ -37,6 +37,22 @@ nothing changes: the demo plugin's preview states render the same as with
   with the control shown and on the Tab path while off (3 checks and 110
   pixels); with the anchor as wide as the control (the menu's place); and
   with the off title taking the icon colour (592 pixels).
+- `FoamySettingsPage.columnWidth` (default: the page's width less its
+  side paddings) and `columnInset`, for a page wider than the settings
+  width (foamy-todoist's Wide page, 880 with a settings-wide column): Back
+  and the title start at the column's edge, the error line with Retry and
+  the sections keep to the column, centred; the band's surface still runs
+  to the card's edges. `FoamyHeroBand.compactPadding` (default
+  `FoamyStyle.padding`) is the compact row's side padding the page sets.
+  A page of the settings width is unchanged (the demo's settings and
+  settings-error states, and foamy-todoist's Small settings, pixel for
+  pixel). DESIGN.md: Settings page. `tests/test_settings_header.py`: on
+  an 880 page with a 400 column, the band to the edges, Back and the error
+  at the column's start, the title and Retry inside its end, the section
+  filling it; a 420 page at the padding; a column wider than the page
+  keeps the padding. Seen failing with the page's paddings back at
+  `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the error and
+  Retry across the card, the section 840 wide).
 
 ## 0.15.1 — 2026-11-26
 
