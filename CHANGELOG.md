@@ -2,9 +2,11 @@
 
 ## 0.16.0 — 2026-11-27
 
-From the foamy-todoist UI review. New optional interfaces; with them off
-nothing changes: the demo plugin's preview states render the same as with
-0.15.1, pixel for pixel, dark and light. No plugin must change.
+From the foamy-todoist UI review and the plugins' keyboard reviews. New
+optional interfaces; with them off nothing changes: the demo plugin's
+preview states render the same as with 0.15.1, pixel for pixel, dark and
+light. No plugin must change, except one whose `FoamySettingsPage`
+declares its own `columnWidth` (Plugin change below).
 
 ### Added
 - `FoamyTitleAction` (new component, in `components.json`): a title that
@@ -91,6 +93,91 @@ nothing changes: the demo plugin's preview states render the same as with
   same checks hold from the right. Seen failing with the page's paddings
   back at `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the
   error and Retry across the card, the section 840 wide).
+  Plugin change: a plugin page that declared its own property named
+  `columnWidth` on a `FoamySettingsPage` (foamy-zendesk's settings) must
+  remove it and set the kit's `columnWidth` instead; qmllint reports
+  "Property columnWidth already exists in base type".
+- The keys' cursor border on every kit control that takes the cursor
+  (0.15.0 had it on FoamyCursorSurface, FoamyAction and FoamyTabs only):
+  `cursorByKeys` (default false; bind it to `FoamyCursor.byKeys`) on
+  `FoamyButton`, `FoamyToggle`, `FoamyDropdown`, `FoamyNumberField`,
+  `FoamyTextSettingField`, `SafeTextField` and `SafeTextArea`. With the
+  cursor on the control, the control's own 1 px outline is drawn in the
+  accent: a button's border (a primary's, since an accent border can't be
+  seen on its accent fill, in the text or the background colour,
+  whichever reads better on the fill inside it: the hover fill, or an
+  inert or disabled button's own), the
+  toggle row's fill (as its focus ring), the dropdown's trigger and a
+  field's border at the cursor border's width. Nothing moves: no width
+  changes. A text field with the text focus keeps the focus look (the
+  caret shows where the keys are). The components that own buttons pass
+  the flag on with one `cursorByKeys` each: `FoamyHeader` and
+  `FoamyHeroBand` (the ⋯ and Settings buttons), `FoamyPanelFooter` (the
+  refresh button), `FoamyInfoNote` (the (i)); a plugin's own trailing or
+  leading actions take their own. An inert or disabled `FoamyAction` or
+  `FoamyButton` under the keys' cursor now draws the keys' border too
+  (FoamyAction's faded with it, .7 and .45, as FoamyTabs fades; a
+  button's at full strength, as its focus ring), and still no hover
+  fill and the plain pointer; before, an inert FoamyAction showed no
+  cursor at all. A primary's border against the fill inside it, active /
+  inert / disabled: dark preview 9.24 / 4.64 / 4.27:1, light 3.67 / 4.55
+  / 5.29:1 (the text colour alone read 1.23 / 2.44 dark and 1.92 light
+  active; `accentInk` alone 2.66 dark disabled, 1.55 and 1.33 light inert
+  and disabled). DESIGN.md: Keyboard.
+  Plugin change, to show the keys' cursor on these: bind `cursorByKeys:
+  cursor.byKeys` on each such control that has a stop in the panel's
+  cursor, and on the FoamyHeroBand, FoamyHeader, FoamyPanelFooter or
+  FoamyInfoNote whose buttons do. Without it the pointer's look stays,
+  as before.
+  A pointer move inside a control takes the cursor back from the keys:
+  while the keys' look is on (`cursorByKeys`, `FoamyCursorSurface.byKeys`)
+  each control that reports the pointer reports it again on a real move
+  inside, as it does on entering, so the panel's existing hover wiring
+  runs (`cursor.hover(i)`); before, only entering did, so a pointer that
+  already rested on the control the keys came to could not clear the
+  look. FoamyAction and FoamyButton emit `hoveredChanged` again (`hovered`
+  stays true), FoamyToggle and FoamyDropdown `hovered(true)`,
+  FoamyCursorSurface and FoamyTabs `hovered()`; FoamyHeader, FoamyHeroBand,
+  FoamyPanelFooter and FoamyInfoNote pass it on through their
+  `…Hovered(true)`. A move is a changed scene position: when items move
+  under a resting pointer (a keys-driven scroll or reflow) Qt re-sends
+  hover, and that reports nothing. With the look off a move reports
+  nothing, as before. No plugin change is needed. The text and number
+  fields report no pointer, as before.
+  `tests/test_keys_border.py` (new; dark and light, from the card's
+  pixels): every such control, each FoamyButton kind and FoamyAction
+  active, inert and disabled, and the four components' buttons, with the
+  cursor and the flag: the outline in the stated colour at the control's
+  strength and apart from the fill inside it (a primary's at least 3:1
+  against it); with the cursor alone or
+  the flag alone: not that colour, and the flag alone draws the rest look;
+  inside the outline the pixels are the pointer cursor's, every control
+  keeps its place and size, and an inert or disabled one has no hover
+  fill. Seen failing, one edit at a time: with the 0.15.0 FoamyAction
+  (inert and disabled: no border, 8 checks), without the action's or the
+  button's keys' border (36 and 28 checks: every action, the band's,
+  header's, note's and footer's buttons; every button), a primary's in
+  the accent, in the text colour (3 checks: dark active and inert, light
+  active) or in `accentInk` (3: dark disabled, light inert and
+  disabled), the toggle's, the dropdown's, a text field's or text area's
+  left out, each component's forwarding left out (2 to 8 checks each),
+  the button's keys' border 2 px (place, size and the inside: 40
+  checks), an inert action with the hover fill, the border on the flag
+  alone or on the pointer's cursor (36 and 18 checks). The 0.16.0 kit
+  before this change cannot load the scene (no `cursorByKeys`).
+  The pointer, on every control above that reports it (not the disabled
+  ones, which take no pointer, nor the fields) and on FoamyCursorSurface
+  and FoamyTabs: with the pointer resting inside and the keys' look on,
+  the pointer reported again at the same place, and the body moving 2 px
+  under the still pointer (a probe sees Qt re-send hover), report
+  nothing; a 3 px move inside reports the pointer once and clears the
+  look; with the pointer's look a move reports nothing. Seen failing:
+  with the kit before this change (a move reports nothing: 18 checks a
+  theme, every control), with item positions instead of scene positions
+  (36: the moving body reports, and so the look is gone), with no
+  position check (21: the moving body on every control, the same place
+  on the three with a HoverHandler) and without the look's gate (18: a
+  move with the pointer's look reports).
 
 ## 0.15.2 — 2026-11-27
 

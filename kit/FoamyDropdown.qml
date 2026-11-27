@@ -119,6 +119,10 @@ Item {
   // Emits `hovered(bool)` on pointer enter/leave so the panel can keep
   // its cursor state in sync with the mouse.
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): the trigger's
+  // border in the accent, at the cursor border's width (nothing moves).
+  // Focus keeps its own look.
+  property bool cursorByKeys: false
 
   // popupOpen + open()/close()/toggle() let a parent panel know when the
   // dropdown owns keys (its embedded ListView is active) and suspend its
@@ -342,7 +346,16 @@ Item {
 
       readonly property bool _focused: trigger.activeFocus
       readonly property bool _hot: triggerHover.hovered || root.hasCursor
-      readonly property var _borderSpec: Border.controlSpec(trigger._focused ? "focus" : (trigger._hot ? "hover-cursor" : "normal"), root.foreground, root.accent)
+      readonly property var _borderSpec: !trigger._focused && root.hasCursor && root.cursorByKeys ? _keysBorder : Border.controlSpec(trigger._focused ? "focus" : (trigger._hot ? "hover-cursor" : "normal"), root.foreground, root.accent)
+      readonly property var _keysBorder: ({
+          "color": root.accent,
+          "widths": Border.controlWidths("hover-cursor"),
+          "gradient": {
+            "colors": [],
+            "angle": 0,
+            "enabled": false
+          }
+        })
 
       color: Style.controlFill(trigger._focused, trigger._hot, root.foreground, root.accent)
       borderSpec: _borderSpec
@@ -352,9 +365,23 @@ Item {
       Accessible.name: root.Accessible.name !== "" ? root.Accessible.name : root.label
       Accessible.description: root.description
 
+      // While the keys drew the cursor (`cursorByKeys`), a real pointer
+      // move inside reports the pointer again (hovered(true)), as entering
+      // does. A scene position that changed: Qt re-sends hover when items
+      // move under a resting pointer, which is no move.
       HoverHandler {
         id: triggerHover
-        onHoveredChanged: root.hovered(hovered)
+        property point scenePoint
+        onHoveredChanged: {
+          scenePoint = point.scenePosition
+          root.hovered(hovered)
+        }
+        onPointChanged: {
+          const at = point.scenePosition
+          if (hovered && root.cursorByKeys && (at.x !== scenePoint.x || at.y !== scenePoint.y))
+            root.hovered(true)
+          scenePoint = at
+        }
       }
 
       Keys.onPressed: function (event) {

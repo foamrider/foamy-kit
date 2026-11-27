@@ -27,6 +27,9 @@ Item {
   property string placeholderText: ""
   property bool trim: true
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): the field's
+  // border in the accent (SafeTextField.cursorByKeys).
+  property bool cursorByKeys: false
   // true, or false / a message for an invalid draft.
   property var validate: null
   property string invalidText: FoamyI18n.t("That value isn't allowed.")
@@ -146,6 +149,7 @@ Item {
       id: field
       width: parent.width
       hasCursor: root.hasCursor
+      cursorByKeys: root.cursorByKeys
       placeholderText: root.placeholderText
       translate: FoamyI18n.t
       horizontalAlignment: Text.AlignLeft

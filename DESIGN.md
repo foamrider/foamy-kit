@@ -308,12 +308,21 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (or leaves Settings), Tab/Shift-Tab call `switchPanel(direction)`, `s` opens
   Settings, `r` refreshes where there is a refresh. Pointer hover moves the same
   cursor (one highlight on screen). Where the keys moved it, it has a 1 px
-  accent border (`FoamyCursor.byKeys` into `FoamyCursorSurface.byKeys`,
-  `FoamyAction.cursorByKeys`, `FoamyTabs.cursorByKeys`; set `byKeys` when a
-  key handler sets `index` itself); the selected row or view (`current`)
+  accent border (`FoamyCursor.byKeys` into `FoamyCursorSurface.byKeys` and
+  the `cursorByKeys` of every other control that takes the cursor:
+  FoamyAction, FoamyButton, FoamyTabs, FoamyToggle, FoamyDropdown, the text
+  and number fields; set `byKeys` when a key handler sets `index` itself);
+  on a primary button the border is the text or the background colour,
+  whichever reads better on the fill inside it (at least 3:1). It
+  is the control's own outline and never changes its size, and an inert or
+  disabled control shows it too (with no hover fill). FoamyHeader,
+  FoamyHeroBand, FoamyPanelFooter and FoamyInfoNote pass their
+  `cursorByKeys` on to their own buttons (⋯, Settings, refresh, the (i));
+  bind it once on each. While the look is on, a real pointer move inside
+  a control reports the pointer again, as entering does, so the same
+  hover wiring takes the cursor back; items moving under a still pointer
+  (a keys-driven scroll) are no move. The selected row or view (`current`)
   has `selectedFill`, with `currentBar` when its details show in a pane.
-  The buttons inside FoamyHeader, FoamyHeroBand, FoamyPanelFooter and
-  FoamyInfoNote keep the plain cursor look (they take no `cursorByKeys`).
   Focus rings only on form controls in
   Settings (`focusable: true`); set `blocked` on the key catcher while a form
   or editor owns keys, and while a menu is open (`band.menuOpen`). The ⋯

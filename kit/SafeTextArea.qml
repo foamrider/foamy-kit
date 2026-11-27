@@ -47,7 +47,7 @@ import qs.Ui
 //   that shows (FoamyClickAway's `foamyKeyHome`), else to the nearest focus
 //   scope.
 // - Styled like SafeTextField (foamy radius, control fill and border), with
-//   its `quiet` mode for text edited in place.
+//   its `quiet` mode for text edited in place and its `cursorByKeys`.
 //   clipboardScript resolves relative to FoamyClipboard.qml unless absolute.
 
 Flickable {
@@ -65,9 +65,23 @@ Flickable {
   property real cornerRadius: FoamyStyle.radius
   property color selectionTint: Style.selectionFillFor(foreground, accent)
   property bool hasCursor: false
+  // The keys moved the panel's cursor here (FoamyCursor.byKeys) and the
+  // field has no text focus: its border in the accent, at the cursor
+  // border's width (the text never moves). With the focus, the caret shows
+  // where the keys are and the focus look stays.
+  property bool cursorByKeys: false
   readonly property bool _focused: editor.activeFocus
   readonly property bool _hot: editor.hovered || hasCursor
-  readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  readonly property var _borderSpec: !_focused && hasCursor && cursorByKeys ? _keysBorder : Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  readonly property var _keysBorder: ({
+      "color": accent,
+      "widths": Border.controlWidths("hover-cursor"),
+      "gradient": {
+        "colors": [],
+        "angle": 0,
+        "enabled": false
+      }
+    })
   // Quiet: text edited in place (a title that reads as text). At rest it
   // has no fill and no border; hover, the cursor or the focus show the
   // usual field. The border keeps its width, so the text never moves.

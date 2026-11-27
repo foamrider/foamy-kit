@@ -262,11 +262,25 @@ Item {
     }
 
     // Pointer: hover moves the panel cursor here, a press activates.
+    // While the keys drew the cursor (`cursorByKeys`), a real pointer move
+    // inside reports the pointer again, as entering does. A scene position
+    // that changed: Qt re-sends hover when items move under a resting
+    // pointer, which is no move.
     HoverHandler {
+      property point scenePoint
       cursorShape: Qt.PointingHandCursor
       onHoveredChanged: if (hovered) {
+        scenePoint = point.scenePosition
         root.cursorIndex = tab.index
         root.hovered()
+      }
+      onPointChanged: {
+        const at = point.scenePosition
+        if (hovered && root.cursorByKeys && (at.x !== scenePoint.x || at.y !== scenePoint.y)) {
+          root.cursorIndex = tab.index
+          root.hovered()
+        }
+        scenePoint = at
       }
     }
     TapHandler {
