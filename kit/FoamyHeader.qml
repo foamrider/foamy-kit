@@ -57,6 +57,10 @@ Item {
   // false hides the icon and the title/meta column (FoamyHeroBand `centered`
   // draws them itself); the buttons stay at the trailing end.
   property bool showTitle: true
+  // The title/meta column at most this wide (-1, the default: all the room
+  // the row leaves); the row's buttons stay at the trailing end. FoamyHeroBand
+  // sets it while a field in its slot (`fieldX`, `fieldWidth`) shows.
+  property real titleMaxWidth: -1
   // Insets around the row (FoamyHeroBand sets the vertical ones to 0).
   property real horizontalPadding: FoamyStyle.padding
   property real topPadding: FoamyStyle.padding
@@ -341,6 +345,7 @@ Item {
       id: textColumn
       visible: root.showTitle
       Layout.fillWidth: true
+      Layout.maximumWidth: root.titleMaxWidth >= 0 ? root.titleMaxWidth : Number.POSITIVE_INFINITY
       Layout.alignment: Qt.AlignVCenter
       spacing: FoamyStyle.gapTiny
       Text {
@@ -366,8 +371,10 @@ Item {
         font.pixelSize: FoamyStyle.font.bodySmall
       }
     }
+    // The room the title column leaves (none, or capped by titleMaxWidth):
+    // the buttons stay at the trailing end.
     Item {
-      visible: !root.showTitle
+      visible: !root.showTitle || root.titleMaxWidth >= 0
       Layout.fillWidth: true
     }
 

@@ -614,98 +614,114 @@ ShellRoot {
       // Capture the open menu for screenshots (Snooze under the pointer).
       card.grabToImage(function (result) {
         result.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu.png")
-        // A press outside the menu closes it and doesn't reach the row below.
-        var presses = body.rowBelow.children[0].presses
-        ev.mouseClick(body.rowBelow, 10, body.rowBelow.height - 10, Qt.LeftButton, Qt.NoModifier, -1)
-        check(!menu.opened, "press outside closes")
-        eq(body.rowBelow.children[0].presses, presses, "the press doesn't reach what is under the menu")
-        // A click on ⋯ while open closes it (toggle).
-        nc.openMenu(false)
-        ev.mouseClick(nc.menuButton, nc.menuButton.width / 2, nc.menuButton.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
-        check(!menu.opened, "⋯ toggles the menu closed")
-        // Closing the popup body (hidden header) closes the menu.
-        nc.openMenu(true)
-        nc.visible = false
-        check(!menu.opened, "hiding the header closes the menu")
-        nc.visible = true
-        // Short card: grows for the menu, shrinks after. The card's height
-        // follows the menu's reserve over a few frames: wait for the end state.
-        shell.shortBefore = shortPopup.cardItem.height
-        var band = shortPopup.bodyItem
-        var shortMenu = band.menu
-        var shortCard = shortPopup.cardItem
-        var grown = function () {
-          return shortCard.height > shell.shortBefore + 40
-        }
-        var fits = function () {
-          return near(shortMenu.panel.height, shortMenu.overlayItem.naturalHeight)
-        }
-        var inside = function () {
-          return shortMenu.panel.mapToItem(shortCard, 0, 0).y + shortMenu.panel.height <= shortCard.height
-        }
-        band.openMenu(true)
-        wait.waitFor(function () {
-          return grown() && fits() && inside()
-        }, 5000, function () {
-          check(grown(), "a short card grows for the menu " + shell.shortBefore + " -> " + shortCard.height)
-          check(fits(), "the menu fits without scrolling " + shortMenu.panel.height + " / " + shortMenu.overlayItem.naturalHeight)
-          check(inside(), "and stays inside the card")
-          // A shorter level (a submenu) doesn't shrink the grown card under
-          // the open menu (a shrink would show within half a second).
-          var grownHeight = shortCard.height
-          shortMenu.activate(shortMenu.entries.length - 1)
-          check(shortMenu.inSubmenu, "the short menu's submenu opened")
+        // Raised: the same menu over a shadow on a clearer fill (the
+        // Python side compares the two shots around the panel's box).
+        menu.raised = true
+        var p = menu.panel.mapToItem(card, 0, 0)
+        console.log("FOAMY NOTE panel " + JSON.stringify([p.x, p.y, menu.panel.width, menu.panel.height, card.width]))
+        card.grabToImage(function (raised) {
+          raised.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-raised.png")
+          menu.raised = false
+          shell.afterRaised()
+        })
+      })
+    }
+  }
+  function afterRaised() {
+    var body = popup.bodyItem
+    var nc = body.nc
+    var menu = nc.menu
+    var card = popup.cardItem
+    // A press outside the menu closes it and doesn't reach the row below.
+    var presses = body.rowBelow.children[0].presses
+    ev.mouseClick(body.rowBelow, 10, body.rowBelow.height - 10, Qt.LeftButton, Qt.NoModifier, -1)
+    check(!menu.opened, "press outside closes")
+    eq(body.rowBelow.children[0].presses, presses, "the press doesn't reach what is under the menu")
+    // A click on ⋯ while open closes it (toggle).
+    nc.openMenu(false)
+    ev.mouseClick(nc.menuButton, nc.menuButton.width / 2, nc.menuButton.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+    check(!menu.opened, "⋯ toggles the menu closed")
+    // Closing the popup body (hidden header) closes the menu.
+    nc.openMenu(true)
+    nc.visible = false
+    check(!menu.opened, "hiding the header closes the menu")
+    nc.visible = true
+    // Short card: grows for the menu, shrinks after. The card's height
+    // follows the menu's reserve over a few frames: wait for the end state.
+    shell.shortBefore = shortPopup.cardItem.height
+    var band = shortPopup.bodyItem
+    var shortMenu = band.menu
+    var shortCard = shortPopup.cardItem
+    var grown = function () {
+      return shortCard.height > shell.shortBefore + 40
+    }
+    var fits = function () {
+      return near(shortMenu.panel.height, shortMenu.overlayItem.naturalHeight)
+    }
+    var inside = function () {
+      return shortMenu.panel.mapToItem(shortCard, 0, 0).y + shortMenu.panel.height <= shortCard.height
+    }
+    band.openMenu(true)
+    wait.waitFor(function () {
+      return grown() && fits() && inside()
+    }, 5000, function () {
+      check(grown(), "a short card grows for the menu " + shell.shortBefore + " -> " + shortCard.height)
+      check(fits(), "the menu fits without scrolling " + shortMenu.panel.height + " / " + shortMenu.overlayItem.naturalHeight)
+      check(inside(), "and stays inside the card")
+      // A shorter level (a submenu) doesn't shrink the grown card under
+      // the open menu (a shrink would show within half a second).
+      var grownHeight = shortCard.height
+      shortMenu.activate(shortMenu.entries.length - 1)
+      check(shortMenu.inSubmenu, "the short menu's submenu opened")
+      wait.waitFor(function () {
+        return shortCard.height < grownHeight - 1
+      }, 500, function (shrank) {
+        check(!shrank, "a shorter submenu keeps the grown card " + [grownHeight, shortCard.height])
+        shortMenu.leaveSubmenu()
+        shortCard.grabToImage(function (shot) {
+          shot.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
+          band.closeMenu()
           wait.waitFor(function () {
-            return shortCard.height < grownHeight - 1
-          }, 500, function (shrank) {
-            check(!shrank, "a shorter submenu keeps the grown card " + [grownHeight, shortCard.height])
-            shortMenu.leaveSubmenu()
-            shortCard.grabToImage(function (shot) {
-              shot.saveToFile(Quickshell.env("FOAMY_OUT") + "/menu-short.png")
+            return near(shortCard.height, shell.shortBefore)
+          }, 5000, function (ok) {
+            check(ok, "the card shrinks back after " + shortCard.height)
+            // Capped: the card grows by at most maxGrowHeight of menu,
+            // and the rest of the menu scrolls.
+            shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 3
+            band.openMenu(true)
+            // Wait for the end state: the card grown and no longer moving.
+            var lastHeight = -1
+            wait.waitFor(function () {
+              var settled = shortCard.height > shell.shortBefore + 10 && Math.abs(shortCard.height - lastHeight) < 0.5
+              lastHeight = shortCard.height
+              return settled
+            }, 5000, function (grewSome) {
+              check(grewSome && shortCard.height < shell.shortBefore + shortMenu.overlayItem.naturalHeight - 20 && shortMenu.panel.height < shortMenu.overlayItem.naturalHeight - 1, "a capped growth: the card grows less, the menu scrolls " + [shortCard.height, shell.shortBefore, shortMenu.panel.height, shortMenu.overlayItem.naturalHeight])
               band.closeMenu()
+              shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 9
               wait.waitFor(function () {
                 return near(shortCard.height, shell.shortBefore)
-              }, 5000, function (ok) {
-                check(ok, "the card shrinks back after " + shortCard.height)
-                // Capped: the card grows by at most maxGrowHeight of menu,
-                // and the rest of the menu scrolls.
-                shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 3
-                band.openMenu(true)
-                // Wait for the end state: the card grown and no longer moving.
-                var lastHeight = -1
+              }, 5000, function () {
+                // Room above, none below: above, and no growth.
+                shortPopup.open = false
+                lowPopup.open = true
                 wait.waitFor(function () {
-                  var settled = shortCard.height > shell.shortBefore + 10 && Math.abs(shortCard.height - lastHeight) < 0.5
-                  lastHeight = shortCard.height
-                  return settled
-                }, 5000, function (grewSome) {
-                  check(grewSome && shortCard.height < shell.shortBefore + shortMenu.overlayItem.naturalHeight - 20 && shortMenu.panel.height < shortMenu.overlayItem.naturalHeight - 1, "a capped growth: the card grows less, the menu scrolls " + [shortCard.height, shell.shortBefore, shortMenu.panel.height, shortMenu.overlayItem.naturalHeight])
-                  band.closeMenu()
-                  shortMenu.maxGrowHeight = FoamyStyle.rowHeight * 9
+                  return lowPopup.bodyItem && lowPopup.cardItem && lowPopup.cardItem.height > FoamyStyle.rowHeight * 12
+                }, 5000, function () {
+                  var lowCard = lowPopup.cardItem
+                  var lowBefore = lowCard.height
+                  var low = lowPopup.bodyItem.menu
+                  low.open(true)
                   wait.waitFor(function () {
-                    return near(shortCard.height, shell.shortBefore)
+                    return low.opened && low.panel.height > 0
                   }, 5000, function () {
-                    // Room above, none below: above, and no growth.
-                    shortPopup.open = false
-                    lowPopup.open = true
-                    wait.waitFor(function () {
-                      return lowPopup.bodyItem && lowPopup.cardItem && lowPopup.cardItem.height > FoamyStyle.rowHeight * 12
-                    }, 5000, function () {
-                      var lowCard = lowPopup.cardItem
-                      var lowBefore = lowCard.height
-                      var low = lowPopup.bodyItem.menu
-                      low.open(true)
-                      wait.waitFor(function () {
-                        return low.opened && low.panel.height > 0
-                      }, 5000, function () {
-                        var button = low.anchorItem.mapToItem(lowCard, 0, 0)
-                        var panel = low.panel.mapToItem(lowCard, 0, 0)
-                        check(near(lowCard.height, lowBefore) && panel.y + low.panel.height <= button.y + 1 && near(low.panel.height, low.overlayItem.naturalHeight), "room above: the menu opens above, the card keeps its height " + [lowBefore, lowCard.height, panel.y, low.panel.height, button.y])
-                        low.close()
-                        lowPopup.open = false
-                        shortPopup.open = true
-                        step7.start()
-                      })
-                    })
+                    var button = low.anchorItem.mapToItem(lowCard, 0, 0)
+                    var panel = low.panel.mapToItem(lowCard, 0, 0)
+                    check(near(lowCard.height, lowBefore) && panel.y + low.panel.height <= button.y + 1 && near(low.panel.height, low.overlayItem.naturalHeight), "room above: the menu opens above, the card keeps its height " + [lowBefore, lowCard.height, panel.y, low.panel.height, button.y])
+                    low.close()
+                    lowPopup.open = false
+                    shortPopup.open = true
+                    step7.start()
                   })
                 })
               })
@@ -713,7 +729,7 @@ ShellRoot {
           })
         })
       })
-    }
+    })
   }
 
   property real shortBefore: 0

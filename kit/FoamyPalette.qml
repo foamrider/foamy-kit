@@ -38,6 +38,10 @@ QtObject {
   // draws there to set them apart).
   readonly property color menuFill: lightTheme ? Qt.tint(background, Qt.alpha("#ffffff", 0.7)) : Qt.tint(background, Qt.alpha(text, 0.035))
   readonly property color menuBorder: lightTheme ? Qt.alpha(text, 0.40) : border
+  // A raised menu (FoamyMenu `raised`, a list that hangs from a field over
+  // the rows): a clearer step above the card, with a FoamyShadow under it.
+  // Light themes keep menuFill, already lighter than the card.
+  readonly property color raisedMenuFill: lightTheme ? menuFill : Qt.tint(background, Qt.alpha(text, 0.07))
   // Inline help notes (FoamyInfoNote): a subtle surface under a heading.
   readonly property color noteFill: Qt.alpha(text, 0.045)
   // Text on an accent fill (FoamyButton primary): the popup's text or its

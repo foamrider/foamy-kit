@@ -87,6 +87,13 @@ import QtQuick.Layouts
 //   input or focus, settingsHasCursor/menuHasCursor light nothing, and the
 //   ⋯ menu closes and won't open. Drop the band's stops (Settings, ⋯,
 //   trailing) from your FoamyCursor while !buttonsActive.
+// - A field slot (`fieldX`, `fieldWidth`; off by default): the open field
+//   spans just that part of the row (a wide panel's list column), growing
+//   there from its origin. The title row stays: the title column ends a
+//   gap before the field (cut with "…" when longer), and the buttons stay
+//   shown, usable and in the cursor (`buttonsActive` stays true). Keep the
+//   slot clear of the buttons. `fieldRect` is the open field's rectangle
+//   in the band, slotted or not, for what hangs from it.
 // - The keys are the caller's: open and close with fieldOpen, focus the
 //   field when it opens (field.focusInput()) and give the focus back when it
 //   closes; Esc, Enter and the rest are the field's keyPressed/accepted.
@@ -145,7 +152,18 @@ Item {
   property Item field: null
   property Item fieldOrigin: null
   property bool fieldOpen: false
-  readonly property bool buttonsActive: !(_fieldMode && fieldOpen)
+  // A field slot (off by default: fieldWidth < 0): the open field spans
+  // fieldX to fieldX + fieldWidth (band coordinates as drawn; mirror them
+  // yourself in RTL) instead of the whole row. The title row then stays:
+  // the title column ends a gap before the field, the buttons stay shown
+  // and usable.
+  property real fieldX: 0
+  property real fieldWidth: -1
+  readonly property bool _fieldSlotted: fieldWidth >= 0
+  // The open field's rectangle in the band (what hangs from the field, a
+  // suggestion list or an error, places itself by it).
+  readonly property rect fieldRect: _fieldTo
+  readonly property bool buttonsActive: !(_fieldMode && fieldOpen) || _fieldSlotted
   readonly property bool fieldShown: _fieldMode && (fieldOpen || _fieldProgress > 0)
   readonly property real fieldProgress: _fieldProgress
   readonly property bool _fieldMode: field !== null && !compact && !centered
@@ -165,6 +183,8 @@ Item {
   // The open field: the title row's slot between the side paddings.
   readonly property rect _fieldTo: {
     var h = Math.min(header.height, FoamyStyle.controlHeight)
+    if (band._fieldSlotted)
+      return Qt.rect(band.fieldX, header.y + (header.height - h) / 2, band.fieldWidth, h)
     return Qt.rect(FoamyStyle.padding, header.y + (header.height - h) / 2, Math.max(0, band.width - FoamyStyle.padding * 2), h)
   }
   // The closed field: the origin action's rectangle in the band, summed up
@@ -186,6 +206,13 @@ Item {
         return Qt.rect(x, y, origin.width, origin.height)
     }
     return Qt.rect(band.mirrored ? to.x : to.x + to.width - to.height, to.y, to.height, to.height)
+  }
+  // A slotted field's title room: from the row's reading start to a gap
+  // before the field, less the padding and the icon.
+  readonly property real _titleRoom: {
+    var before = band.mirrored ? band.width - (band.fieldX + band.fieldWidth) : band.fieldX
+    var icon = band.iconName !== "" || band.iconGlyph !== "" ? FoamyStyle.headerIconSize + FoamyStyle.gapLarge : 0
+    return Math.max(0, before - header.horizontalPadding - icon - FoamyStyle.gapLarge)
   }
   property Item _adoptedField: null
   function _adoptField() {
@@ -512,9 +539,11 @@ Item {
   FoamyHeader {
     id: header
     visible: !band.compact
-    // Field mode: faded out and inert while the field is open.
+    // Field mode: faded out and inert while the field is open (a slotted
+    // field leaves it: the title stops before the field).
     enabled: band.buttonsActive
-    opacity: 1 - Math.min(1, band._fieldProgress / band._headerFadeEnd)
+    opacity: band._fieldSlotted ? 1 : 1 - Math.min(1, band._fieldProgress / band._headerFadeEnd)
+    titleMaxWidth: band._fieldSlotted && band.fieldShown ? band._titleRoom : -1
     y: FoamyStyle.bandPaddingTop
     width: parent.width
     height: implicitHeight

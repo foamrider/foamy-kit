@@ -20,7 +20,7 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 | Colours | `Commons.Color.*` | Always qualified *(lint)*: on Qt 6.12 (installed) a bare `Color.popups` is `undefined` |
 | Text tones | `FoamyPalette.text`, `secondaryText` (tint .72; in a light theme the lightest tint from .72 up with 5.5:1 on the surface, at most .95), `mutedText` (tint .55; in a light theme the lightest from .55 up with 4.5:1, at most .84) | Meta/section labels secondary; hints and empty states muted |
 | Fills | `hoverFill` .08, `fieldFill` .055, `selectedFill` accent .18, `divider` .12 | |
-| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text and thin marks (rings, icons) on the surface use `onSurface(c)` (`onSurface(c, fill)` on a tinted fill; with a fill that comes and goes, such as hover or press, the strongest one, so the colour stays the same in every state): it darkens on a light surface or lightens on a dark one (the end, black or white, with more contrast on that surface, whatever the theme) in the smallest step that reaches 4.5:1, keeping the hue as long as it can (a colour near black on a dark surface, or one on a mid grey, mixes toward that end), so it always reads at 4.5:1; a colour that already reads is unchanged. Large fills (bars) keep the raw colour. Menus: `menuFill`, `menuBorder` (light: a lighter fill and a text .40 edge) |
+| Status | `FoamyPalette.warning/success/error/info` | Theme `yellow/green/red/cyan` from colors.toml, falling back to `urgent`/`accent`. No hex literals outside FoamyPalette *(lint)*. For text and thin marks (rings, icons) on the surface use `onSurface(c)` (`onSurface(c, fill)` on a tinted fill; with a fill that comes and goes, such as hover or press, the strongest one, so the colour stays the same in every state): it darkens on a light surface or lightens on a dark one (the end, black or white, with more contrast on that surface, whatever the theme) in the smallest step that reaches 4.5:1, keeping the hue as long as it can (a colour near black on a dark surface, or one on a mid grey, mixes toward that end), so it always reads at 4.5:1; a colour that already reads is unchanged. Large fills (bars) keep the raw colour. Menus: `menuFill`, `menuBorder` (light: a lighter fill and a text .40 edge); raised menus `raisedMenuFill` |
 | Disabled | `FoamyStyle.disabledOpacity` .45 | `FoamyButton` does not fade: inert and disabled draw the kind's fill at .7 and .45 of its alpha (still see-through), with a label that reads at 4.5:1 (inert) and 3:1 (disabled) on it over the popup background |
 | Motion | `FoamyMotion.hover` 100, `press` 160, `toggle` 120, `slider` 140, `fadeIn` 180, `fadeOut` 120, `grow` 200, `morph` 220, `slow` 300; `duration(ms)` | Every `duration:` goes through FoamyMotion *(lint)*. 0 under reduced motion |
 
@@ -83,7 +83,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     (`buttonsActive`); the panel owns the keys (Esc closes, the focus goes
     back to the key catcher). Closing, the field is inert at once and drops
     the focus. Field mode is for bands with a title row: a centred band
-    ignores `fieldOpen`.
+    ignores `fieldOpen`. A wide panel whose columns make a full-width field
+    a slab (a rail, a list, a pane) gives it a slot (`fieldX`,
+    `fieldWidth`: the list column): the title stays over the rail, cut
+    before the field, and the buttons stay over the pane, usable while the
+    field is open (+ gives the keys back to the field). What hangs from
+    the field places itself by `fieldRect`.
   - **Centred** (`centered: true`): for a panel about one big value read at a
     glance (clock: the time; weather: the temperature and sky). No title icon;
     the hero comes first, centred (give hero items `Layout.alignment:
@@ -121,7 +126,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   destructive entries tint urgent under the cursor; a submenu opens in place
   with a Back row. While open it has the keys and the pointer (one cursor:
   arrows/jk, Enter/Space/→ activate, ←/Backspace back, Esc back or close, a
-  press outside closes); focus returns where it was.
+  press outside closes); focus returns where it was. A menu or list that
+  hangs over busy content (rows, a tab row) is **raised**: `FoamyMenu.raised`,
+  or for a list of your own `FoamyPalette.raisedMenuFill` with `menuBorder`
+  over a `FoamyShadow` (the shadow is drawn without effects, so it shows
+  under the software renderer too). A list that hangs from a field (Quick
+  Add suggestions, the field's error) starts `gapSmall` under it.
 - **Rows**: `FoamyCursorSurface` (stock CursorSurface, foamy radius), insets
   `gapLarge`, icon `iconSize`, name `body`, detail `caption` secondary.
 - **Actions**: `FoamyAction` (28, icon 15, hover fill, tooltip). Settings button =
