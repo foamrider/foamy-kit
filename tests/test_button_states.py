@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """FoamyButton's states as drawn (tests/qml/ButtonStates.qml) on 4.5, in the
-preview's dark and light themes and a dark theme with a dim red: for each
-kind (primary, secondary, destructive), the label's colour on the fill,
-both read from the card's pixels. Inert (actionEnabled: false) reads at
-4.5:1 or more, disabled (enabled: false) at 3:1 or more, and the states
-stay apart: the fill moves toward the surface from active to inert to
-disabled, each step is weaker by a clear margin, and a disabled label reads
-less than an inert one. The QML side checks the icon's colour, the pointer
-on an inert button and busy. Card screenshots: tests/out/button-states/
+preview's dark and light themes and three dark fixtures (a dim red, a mid
+accent, an accent near the background): for each kind (primary,
+secondary, destructive), the label's colour on the fill, both read from
+the card's pixels. Inert (actionEnabled: false) reads at 4.5:1 or more,
+disabled (enabled: false) at 3:1 or more, and the states stay apart: the
+fill moves toward the surface from active to inert to disabled, each step
+is weaker by a clear margin, and a disabled label reads less than an
+inert one; where the accent's own ink reads by .8, an inert primary keeps
+the active ink. The QML side checks the icon's colour, the pointer on an
+inert button, busy, the border and focus ring, and the label on the fill
+through each change of state. Card screenshots: tests/out/button-states/
 (FOAMY_BUTTON_STATES_OUT overrides)."""
 
 import json
@@ -24,23 +27,33 @@ THEMES = {
     "light": "light",
     # A dim red (2.70:1 on the background): the destructive ink lightens.
     "dim-red": KIT_ROOT / "tests/fixtures/themes/dim-red.toml",
+    # A mid accent (Tokyo Night): the dark ink falls short at .7, the inert
+    # fill steps up.
+    "mid-accent": KIT_ROOT / "tests/fixtures/themes/mid-accent.toml",
+    # An accent near the background: no ink reads on it, the fills step down.
+    "dim-accent": KIT_ROOT / "tests/fixtures/themes/dim-accent.toml",
 }
 KINDS = ("primary", "secondary", "destructive")
 # The least contrast a label must have on its fill, per state.
 FLOORS = {"inert": 4.5, "disabled": 3.0}
+# Themes whose accent's own ink reads at a mix from .7 to .8: an inert
+# primary keeps the active one's look, a dimmer accent with the same ink
+# (dark or light), instead of turning to the text's.
+KEEPS_INK = {"dark", "dim-red", "mid-accent"}
 # A weaker state differs from the stronger one by at least this factor in
 # the fill's contrast on the surface or the label's on the fill.
 MARGIN = 1.1
 
 
+def relative(p):
+    """WCAG 2 relative luminance of an 8-bit RGB pixel."""
+    rgb = [v / 255 for v in p[:3]]
+    rgb = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+
+
 def contrast(a, b):
     """WCAG 2 contrast ratio of two 8-bit RGB pixels."""
-
-    def relative(p):
-        rgb = [v / 255 for v in p[:3]]
-        rgb = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in rgb]
-        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
-
     la, lb = relative(a), relative(b)
     return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
 
@@ -67,7 +80,7 @@ def measure(png, info):
     return out
 
 
-def check_theme(tag, drawn):
+def check_theme(tag, theme, drawn):
     results = []
     lines = []
     for kind in KINDS:
@@ -104,6 +117,18 @@ def check_theme(tag, drawn):
                 f"{ratios['inert'][0]:.2f} -> {ratios['disabled'][0]:.2f}",
             )
         )
+    if theme in KEEPS_INK:
+        sides = []
+        for state in ("active", "inert"):
+            fill, ink, _ = drawn[f"primary-{state}"]
+            sides.append("dark" if relative(ink) < relative(fill) else "light")
+        results.append(
+            report(
+                f"button-states {tag} primary inert keeps the active ink",
+                sides[0] == sides[1],
+                f"active {sides[0]}, inert {sides[1]} on the fill",
+            )
+        )
     print("    " + "\n    ".join(lines))
     return all(results)
 
@@ -130,7 +155,7 @@ def run(host, theme, source, plugin, out_dir):
     png = out_dir / f"button-states-{host}-{theme}.png"
     shutil.copyfile(r.out / "card.png", png)
     r.cleanup()
-    return check_theme(tag, measure(png, info))
+    return check_theme(tag, theme, measure(png, info))
 
 
 def main():

@@ -12,33 +12,60 @@
   inert 2.92 / 2.08 / 2.92, disabled 1.60 / 1.34 / 1.60; secondary inert
   5.87 / 3.36 / 5.87, disabled 3.34 / 2.09 / 3.34; destructive inert
   4.05 / 3.81 / 3.33, disabled 2.60 / 2.36 / 2.15. The button no longer
-  fades: each state draws an opaque fill, the kind's fill at its strength
-  (.7, .45) mixed toward the background, and a label measured on it at 8
-  bits a channel, inert 4.5:1 and disabled 3:1. The label is the faded
-  ink where that reads (dark secondary: unchanged), else the faintest of
-  the kind's ink, the text and the background that does. Where no ink
-  reads on the fill, the fill steps further toward the background: a
-  light-theme primary turns to a pale accent with the text's ink, and its
-  disabled fill starts no stronger than its inert one. After: primary
-  inert 4.53 / 4.50 / 4.53, disabled 3.01 / 3.00 / 3.01; secondary inert
-  5.88 / 4.59 / 5.88, disabled 3.35 / 3.06 / 3.35; destructive inert
-  4.55 / 4.52 / 4.53, disabled 3.04 / 3.03 / 3.00. The border fades as
-  before; the focus ring keeps full strength. Active and busy buttons
-  render the same, pixel for pixel; inert keeps no hover or press and the
-  plain cursor. `foreground` is now the label's colour in the current
-  state (foamy-lock's `IconButton` draws its icon in it, so it follows
-  without a change). Known limits: the active light-preview primary label
-  is 4.34:1 (`accentInk` takes the better of two inks, with no floor),
-  and an inert or disabled `FoamyAction` still fades (text icon on the
+  fades: each state draws the kind's fill with its alpha times the
+  state's mix (.7, .45), so it still tints the surface under it, and a
+  label measured on that fill over the popup background at 8 bits a
+  channel, with the fill one level nearer the label for the renderer's
+  rounding: inert 4.5:1, disabled 3:1. The label is the faded ink where
+  that reads (dark secondary: unchanged), else the faintest of the kind's
+  ink, the text and the background that does. Where the kind's own ink
+  falls just short at .7 (a dark-ink primary in a dark theme: the dark
+  preview, Tokyo Night), the inert fill steps up, at most to .8, so inert
+  keeps the active look with the same ink. Where no ink reads, the fill
+  steps toward the background: a light-theme primary turns to a pale
+  accent with the text's ink, as does a dark-theme primary whose accent
+  reads weakly on the background (Nord, Gruvbox: about .3 to .45).
+  Disabled starts no stronger than inert; a dark-theme primary's disabled
+  label is mostly the text's ink, light where inert's is dark (the dark
+  preview). After, from pixels (dark / light / dim red / mid accent / dim
+  accent): primary inert 4.59 / 4.55 / 4.59 / 4.57 / 4.61, disabled 3.08
+  / 3.06 / 3.08 / 3.07 / 3.15; secondary inert 5.89 / 4.58 / 5.89 / 4.63
+  / 5.89, disabled 3.38 / 3.06 / 3.38 / 3.14 / 3.38; destructive inert
+  4.59 / 4.61 / 4.53 / 4.59 / 4.59, disabled 3.11 / 3.03 / 3.06 / 3.07 /
+  3.11. A change of state draws the new fill and the new label together,
+  at once; hover and press of an active button still animate. (A fill
+  that animated for 100 ms under the new label read 1.57:1 just after
+  inert to active and 1.09:1 after active to disabled, light primary; a
+  secondary passed a half-opaque grey.) The border fades as before; the
+  focus ring keeps full strength. Active and busy buttons render the
+  same, pixel for pixel; inert keeps no hover or press and the plain
+  cursor. `foreground` is now the label's colour in the current state.
+  Plugin change: content a plugin places inside a `FoamyButton` no longer
+  fades with it; colour it `foreground` (foamy-lock's `IconButton` does)
+  and fade a picture in the plugin. Known limits: the label is measured
+  over the popup background; on a tinted surface it reads less (hero
+  band, light and mid accent: secondary inert 3.97 and 4.00, disabled
+  2.68 and 2.70; dark `menuFill`: destructive inert 4.26, disabled 2.86).
+  Inert is close to active where the active label has little headroom:
+  dim-red destructive label 5.32 active, 4.53 inert, fill 1.08 and 1.07
+  on the surface. The active light-preview primary label is 4.34:1, and
+  3.38:1 with an accent near the background (`accentInk` takes the better
+  of two inks, with no floor), so there inert reads better than active.
+  An inert or disabled `FoamyAction` still fades (text icon on the
   background: inert 6.24 dark, 3.45 light; disabled 3.41 dark, 2.09
   light; computed, not measured from pixels). DESIGN.md: Tokens
   (Disabled), Components (Buttons). `tests/test_button_states.py` (new:
-  each kind in each state in a popup and a settings page, in dark, light
-  and the dim red; the label and fill read from the card's pixels, the
-  states weaker in order, the icon in the label's colour, an inert
-  button under the pointer, busy as active; on the 0.15.1 button 14 of
-  the 18 label checks failed, all but the secondary in the two dark
-  themes, e.g. light primary inert 2.08:1).
+  each kind in each state in a popup and a settings page, in dark, light,
+  the dim red and two new dark fixtures, `mid-accent.toml` (Tokyo Night's
+  colours) and `dim-accent.toml`; the label and fill read from the card's
+  pixels, the states weaker in order, an inert primary with the active
+  ink where the accent's ink reads by .8, the icon in the label's
+  colour, an inert button under the pointer, busy as active, the border
+  at .7 and .45 of the active one, a focused inert button's full ring,
+  and each change between the three states sampled from its first moment
+  for 150 ms; on the 0.15.1 button 14 of the 18 label checks failed, all
+  but the secondary in the two dark themes, e.g. light primary inert
+  2.08:1).
 
 ## 0.15.1 — 2026-11-26
 

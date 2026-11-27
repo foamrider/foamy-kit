@@ -15,9 +15,11 @@ import "plugin/kit"
 // card's pixels; the settings grid has real labels and icons, for the
 // pictures. Here: the icon draws in the label's colour, an inert button
 // keeps its look and the plain cursor under the pointer and takes no
-// click, a busy one draws as an active one, and the states keep the
-// active button's size. Prints FOAMY BUTTONS <json> (where each button and
-// its label are on the card) and saves the card to FOAMY_OUT/card.png.
+// click, a busy one draws as an active one, the states keep the active
+// button's size, the border fades with the state but a focus ring does
+// not, and a change of state never shows the new label on the old fill.
+// Prints FOAMY BUTTONS <json> (where each button and its label are on the
+// card) and saves the card to FOAMY_OUT/card.png.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -236,7 +238,8 @@ ShellRoot {
   function pointer(k) {
     if (k === kinds.length) {
       check(clicks === 0, "no inert button took a click " + clicks)
-      finish()
+      borders()
+      transition(0, 0)
       return
     }
     var b = button(popup.bodyItem.blocks, kinds[k], "inert")
@@ -259,6 +262,102 @@ ShellRoot {
         shell.pointer(k + 1)
       })
     }, tag + " " + kinds[k] + " pointer")
+  }
+
+  // Inert and disabled fade the border as the fill (.7, .45); a focus ring
+  // keeps full strength: a focused button that turns inert (a Verify that
+  // runs) still shows where the focus is.
+  function borders() {
+    var blocks = popup.bodyItem.blocks
+    for (var k = 0; k < kinds.length; k++) {
+      var active = button(blocks, kinds[k], "active")
+      var edge = active.border.color
+      var faded = [["inert", 0.7], ["disabled", FoamyStyle.disabledOpacity]]
+      for (var f = 0; f < faded.length; f++) {
+        var b = button(blocks, kinds[k], faded[f][0])
+        var c = b.border.color
+        check(Math.abs(c.a - edge.a * faded[f][1]) < 0.01 && Math.abs(c.r - edge.r) < 0.01 && Math.abs(c.g - edge.g) < 0.01 && Math.abs(c.b - edge.b) < 0.01, kinds[k] + " " + faded[f][0] + ": the border is the active one at " + faded[f][1] + " " + edge + " -> " + c)
+      }
+      var inert = button(blocks, kinds[k], "inert")
+      active.focusable = true
+      inert.focusable = true
+      active.forceActiveFocus()
+      var ring = [String(active.border.color), active.border.width]
+      inert.forceActiveFocus()
+      var shown = [String(inert.border.color), inert.border.width]
+      check(active.activeFocus === false && inert.activeFocus && JSON.stringify(shown) === JSON.stringify(ring), kinds[k] + ": a focused inert button shows the full focus ring " + ring + " / " + shown)
+      inert.focus = false
+      active.focusable = false
+      inert.focusable = false
+    }
+  }
+
+  // A change of state draws the new fill with the new label: sampled right
+  // after each change (before the next frame) and through the next 150 ms,
+  // the label on the fill as drawn over the card never reads worse than in
+  // the weaker of the two states, settled. With motion on: an animated
+  // fill under the new label read 1.57:1 (light primary, inert to active).
+  readonly property var moves: [["active", "inert"], ["inert", "disabled"], ["disabled", "inert"], ["inert", "active"], ["active", "disabled"], ["disabled", "active"]]
+  property var settledRatios: ({})
+  function drawnRatio(b) {
+    var fill = Qt.color(Qt.tint(popup.surfaceColor, b.color).toString())
+    return FoamyPalette.contrastRatio(label(b).color, fill)
+  }
+  function setState(b, state) {
+    b.enabled = state !== "disabled"
+    b.actionEnabled = state !== "inert"
+  }
+  function transition(k, m) {
+    if (k === kinds.length) {
+      finish()
+      return
+    }
+    if (m === moves.length) {
+      setState(button(popup.bodyItem.blocks, kinds[k], "active"), "active")
+      transition(k + 1, 0)
+      return
+    }
+    check(FoamyMotion.hover > 0, "motion is on")
+    var blocks = popup.bodyItem.blocks
+    // The active button is the probe; each state's ratio, settled, comes
+    // from the grid before the first change.
+    var probe = button(blocks, kinds[k], "active")
+    if (m === 0)
+      settledRatios = {
+        active: drawnRatio(probe),
+        inert: drawnRatio(button(blocks, kinds[k], "inert")),
+        disabled: drawnRatio(button(blocks, kinds[k], "disabled"))
+      }
+    var from = moves[m][0], to = moves[m][1]
+    var floor = Math.min(settledRatios[from], settledRatios[to])
+    var name = kinds[k] + " " + from + " -> " + to
+    // The probe starts settled in `from` (a fill that still moves would
+    // be the last change's).
+    var last = "", same = 0
+    wait.waitFor(function () {
+      var now = String(probe.color) + String(label(probe).color)
+      same = now === last ? same + 1 : 0
+      last = now
+      return same >= 2
+    }, 3000, function (ok) {
+      check(ok, name + ": the probe settles")
+      setState(probe, to)
+      var worst = drawnRatio(probe)
+      var start = Date.now()
+      var sampler = wait.timer.createObject(shell, {
+        interval: 5
+      })
+      sampler.triggered.connect(function () {
+        worst = Math.min(worst, drawnRatio(probe))
+        if (Date.now() - start < FoamyMotion.hover + 50)
+          return
+        sampler.stop()
+        sampler.destroy()
+        check(worst >= floor - 0.005, name + ": the label reads on the fill through the change " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
+        shell.transition(k, m + 1)
+      })
+      sampler.start()
+    })
   }
 
   function finish() {

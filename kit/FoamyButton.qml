@@ -21,10 +21,11 @@ import "FoamyText.js" as FoamyText
 // accent). Enter/Space activate. `busy` spins the icon (or shows a spinner
 // glyph when there is none) and keeps the button inert; actionEnabled: false
 // keeps it visible but inert; enabled: false greys it out.
-// Inert and disabled are drawn weaker, not faded: an opaque fill mixed
-// toward the popup background and a label that still reads on it (inert
-// 4.5:1, disabled 3:1). `foreground` is the label's colour in the current
-// state, for a button that draws its own content.
+// Inert and disabled are drawn weaker, not faded: a lighter tint of the
+// kind's fill and a label that still reads on it over the popup
+// background (inert 4.5:1, disabled 3:1). `foreground` is the label's
+// colour in the current state: content a button draws itself takes it,
+// since nothing fades with the button.
 // `tooltipText` only for a short hint; never for paragraphs (DESIGN.md).
 Rectangle {
   id: root
@@ -56,29 +57,46 @@ Rectangle {
   readonly property color _ink: primary ? FoamyPalette.accentInk : destructive ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))) : FoamyPalette.text
   // How strongly a state draws: active and busy 1, inert .7, disabled .45.
   readonly property real _strength: enabled ? (actionEnabled || busy ? 1 : 0.7) : FoamyStyle.disabledOpacity
-  // Inert or disabled: { fill, label }, both opaque; null when active.
+  // Inert or disabled: { fill (see-through, as drawn), label (opaque) };
+  // null when active.
   readonly property var _quiet: _strength < 1 ? _quietLook() : null
 
   // Fading the whole item moved the fill toward the very colour a primary
   // label has (accentInk is often the background): 2.08:1 inert in the
-  // light preview. Each state instead gets the kind's fill at its strength,
-  // mixed toward the background, and a label measured on it, as drawn
-  // (8 bits a channel). Where no ink reaches the state's ratio on that fill
-  // (a primary in a light theme), the fill steps further toward the
-  // background until one does; disabled starts no stronger than inert, so
-  // it stays the weaker. The label is the faded ink (as before) where that
+  // light preview. Each state instead draws the kind's fill with its alpha
+  // times the state's mix (inert .7, disabled .45), so it tints the
+  // surface under it as the active fill does, and a label measured on that
+  // fill over the popup background as drawn (8 bits a channel), with the
+  // fill one level nearer the label for the renderer's own rounding of the
+  // blend. Where the kind's own ink falls just short at .7 (a dark-ink
+  // primary in a dark theme: the dark preview, Tokyo Night), inert's fill
+  // steps up, at most to .8, so inert keeps the active button's look. Where
+  // it still doesn't read, the fill steps toward the background until an
+  // ink does: a primary in a light theme, or with an accent that reads
+  // weakly on the background (Nord, Gruvbox: about .3 to .45, with the
+  // text's ink). Disabled starts no stronger than inert, so it stays the
+  // weaker; a dark-theme primary's disabled label is mostly the text's ink,
+  // light where inert's is dark. The label is the faded ink where that
   // reads, else the faintest that does.
   function _quietLook() {
     const inert = 0.7
     const disabled = FoamyStyle.disabledOpacity
-    const inks = [_ink, FoamyPalette.text, FoamyPalette.background]
-    const fillAt = mix => Qt.color(Qt.tint(FoamyPalette.background, Qt.alpha(_restFill, _restFill.a * mix)).toString())
-    // The strongest fill from `start` down on which an ink reaches `ratio`;
+    const under = FoamyPalette.background
+    // For a primary, the kind's ink is the text or the background: once.
+    const inks = [_ink, FoamyPalette.text, FoamyPalette.background].filter((c, i, all) => all.findIndex(o => Qt.colorEqual(o, c)) === i)
+    const drawn = mix => Qt.alpha(_restFill, _restFill.a * mix)
+    const shown = mix => Qt.color(Qt.tint(under, drawn(mix)).toString())
+    const reads = (label, fill, ratio) => {
+      const step = (FoamyPalette.luminance(label) > FoamyPalette.luminance(fill) ? 1 : -1) / 255
+      const nearer = Qt.rgba(Math.min(1, Math.max(0, fill.r + step)), Math.min(1, Math.max(0, fill.g + step)), Math.min(1, Math.max(0, fill.b + step)), 1)
+      return FoamyPalette.contrastRatio(label, nearer) >= ratio
+    }
+    // The strongest mix from `start` down at which an ink reaches `ratio`;
     // on the background itself, the ink that reads best.
     const pick = (start, ratio) => {
       for (let step = Math.round(start * 100); step > 0; step--) {
-        const fill = fillAt(step / 100)
-        const ink = inks.find(c => FoamyPalette.contrastRatio(c, fill) >= ratio)
+        const fill = shown(step / 100)
+        const ink = inks.find(c => reads(c, fill, ratio))
         if (ink !== undefined)
           return {
             mix: step / 100,
@@ -86,46 +104,102 @@ Rectangle {
             ink: ink
           }
       }
-      const under = fillAt(0)
-      const best = inks.reduce((a, b) => FoamyPalette.contrastRatio(b, under) > FoamyPalette.contrastRatio(a, under) ? b : a)
+      const bare = shown(0)
       return {
         mix: 0,
-        fill: under,
-        ink: best
+        fill: bare,
+        ink: inks.reduce((a, b) => FoamyPalette.contrastRatio(b, bare) > FoamyPalette.contrastRatio(a, bare) ? b : a)
       }
     }
-    let look = pick(inert, 4.5)
+    // The weakest mix from .7 up to .8 at which the kind's own ink reads.
+    const rise = () => {
+      for (let step = Math.round(inert * 100); step <= 80; step++) {
+        const fill = shown(step / 100)
+        if (reads(_ink, fill, 4.5))
+          return {
+            mix: step / 100,
+            fill: fill,
+            ink: _ink
+          }
+      }
+      return null
+    }
+    let look = rise() || pick(inert, 4.5)
     if (!enabled)
       look = pick(Math.min(disabled, look.mix * disabled / inert), 3)
     const ratio = enabled ? 4.5 : 3
+    let label = look.ink
     for (let step = Math.round(_strength * 100); step <= 100; step++) {
-      const label = Qt.color(Qt.tint(look.fill, Qt.alpha(look.ink, step / 100)).toString())
-      if (FoamyPalette.contrastRatio(label, look.fill) >= ratio)
-        return {
-          fill: look.fill,
-          label: label
-        }
+      const faded = Qt.color(Qt.tint(look.fill, Qt.alpha(look.ink, step / 100)).toString())
+      if (reads(faded, look.fill, ratio)) {
+        label = faded
+        break
+      }
     }
     return {
-      fill: look.fill,
-      label: look.ink
+      fill: drawn(look.mix),
+      label: label
     }
+  }
+
+  // The fill of the current state, and which state that is. Hover and
+  // press of an active button animate; a change of state draws its fill
+  // at once, with its label, so the label never sits on the other state's
+  // fill (an animated fill under the new label read 1.57:1 just after
+  // inert to active in the light preview). `color` is set from it by
+  // _drawFill(), not bound.
+  readonly property var _fillTarget: {
+    if (_quiet)
+      return {
+        look: String(_strength),
+        fill: _quiet.fill
+      }
+    let fill
+    if (primary) {
+      const base = Commons.Color.accent
+      fill = root.pressed && root.active ? Qt.darker(base, 1.12) : root.hot ? Qt.lighter(base, 1.1) : base
+    } else if (destructive) {
+      fill = Qt.alpha(Commons.Color.urgent, root.pressed && root.active ? 0.26 : root.hot ? 0.2 : 0.12)
+    } else {
+      fill = root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14) : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
+    }
+    return {
+      look: "active",
+      fill: fill
+    }
+  }
+  property string _drawnLook: ""
+  on_FillTargetChanged: _drawFill()
+  Component.onCompleted: _drawFill()
+
+  function _drawFill() {
+    const target = _fillTarget
+    const animate = target.look === "active" && _drawnLook === "active" && FoamyMotion.hover > 0
+    _drawnLook = target.look
+    // The binding above re-runs for changes that keep the fill: let a
+    // running hover or press go on to the same colour.
+    if (animate && fillMotion.running && Qt.colorEqual(fillMotion.to, target.fill))
+      return
+    fillMotion.stop()
+    if (animate && !Qt.colorEqual(color, target.fill)) {
+      fillMotion.from = color
+      fillMotion.to = target.fill
+      fillMotion.start()
+    } else {
+      color = target.fill
+    }
+  }
+
+  ColorAnimation {
+    id: fillMotion
+    target: root
+    property: "color"
+    duration: FoamyMotion.hover
   }
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight
   radius: FoamyStyle.radius
-  color: {
-    if (_quiet)
-      return _quiet.fill
-    if (primary) {
-      var base = Commons.Color.accent
-      return root.pressed && root.active ? Qt.darker(base, 1.12) : root.hot ? Qt.lighter(base, 1.1) : base
-    }
-    if (destructive)
-      return Qt.alpha(Commons.Color.urgent, root.pressed && root.active ? 0.26 : root.hot ? 0.2 : 0.12)
-    return root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14) : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
-  }
   border.width: activeFocus && focusable ? 2 : FoamyStyle.borderWidth
   // Inert and disabled fade the border as the fill; the focus ring stays.
   border.color: {
@@ -137,12 +211,6 @@ Rectangle {
     return _strength < 1 ? Qt.alpha(edge, edge.a * _strength) : edge
   }
   activeFocusOnTab: focusable && active
-
-  Behavior on color {
-    ColorAnimation {
-      duration: FoamyMotion.hover
-    }
-  }
 
   Accessible.role: Accessible.Button
   Accessible.name: text || tooltipText

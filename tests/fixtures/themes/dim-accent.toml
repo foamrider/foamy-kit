@@ -1,0 +1,14 @@
+# The preview's dark theme with an accent near the background (#6c7086,
+# 3.36:1 on #1e1e2e): no ink reads 4.5:1 on the accent, so FoamyButton's
+# inert and disabled primary fills step toward the background until the
+# text does. Values only; not a real Omarchy theme.
+mode = "dark"
+accent = "#6c7086"
+background = "#1e1e2e"
+foreground = "#cdd6f4"
+muted = "#585b70"
+red = "#f38ba8"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+cyan = "#94e2d5"
+blue = "#89b4fa"
