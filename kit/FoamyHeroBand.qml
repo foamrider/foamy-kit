@@ -41,7 +41,9 @@ import QtQuick.Layouts
 //
 // Overflow: `menuItems`, `maxButtons`, `menuHasCursor`, `menuOpen`,
 // `openMenu(keyboard)`, `menuHovered` are FoamyHeader's (at most three
-// buttons top right; see FoamyHeader).
+// buttons top right; see FoamyHeader). So is `cursorByKeys: cursor.byKeys`:
+// the ⋯ and Settings buttons draw the keys' accent border while they have
+// the cursor (set your trailing actions' own).
 //
 // Background: the foamy wash by default (FoamyPalette.band*: accent-tinted
 // diagonal wash, a soft glow at the trailing top corner). A plugin may bring
@@ -109,6 +111,8 @@ Item {
   property string meta: ""
   property bool showSettings: true
   property bool settingsHasCursor: false
+  // The keys moved the cursor (FoamyCursor.byKeys): FoamyHeader's.
+  property bool cursorByKeys: false
   property alias trailing: header.trailing
   property alias settingsButton: header.settingsButton
   signal settingsClicked
@@ -525,6 +529,7 @@ Item {
     showSettings: band.showSettings
     settingsHasCursor: band.settingsHasCursor && band.buttonsActive
     menuHasCursor: band.menuHasCursor && band.buttonsActive
+    cursorByKeys: band.cursorByKeys
     onSettingsClicked: band.settingsClicked()
     onSettingsHovered: function (hovered) {
       band.settingsHovered(hovered)

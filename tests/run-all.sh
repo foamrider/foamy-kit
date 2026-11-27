@@ -48,6 +48,7 @@ run python3 -I test_components.py
 run python3 -I test_button_states.py
 run python3 -I test_rows.py
 run python3 -I test_tabs.py
+run python3 -I test_keys_border.py
 run python3 -I test_masked.py
 run python3 -I test_text_field.py
 run python3 -I test_text_runs.py

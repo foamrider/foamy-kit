@@ -14,6 +14,8 @@ import qs.Ui
 // hasCursor, rounded, foreground, accent, fontFamily, titleSize,
 // descriptionSize, clicked(), hovered(bool). The row never flips `checked`
 // itself; bind it and save in onClicked.
+// `cursorByKeys: cursor.byKeys` draws the keys' cursor with the focus
+// ring's 1 px accent border on the row's fill, also on a disabled row.
 Item {
   id: root
 
@@ -21,6 +23,8 @@ Item {
   property string description: ""
   property bool checked: false
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): an accent border.
+  property bool cursorByKeys: false
   property bool divider: false
   property bool rounded: FoamyStyle.rounded
   property color foreground: FoamyPalette.text
@@ -63,7 +67,7 @@ Item {
     height: parent.height
     radius: FoamyStyle.radius
     color: root.hot || root.activeFocus ? FoamyPalette.hoverFill : "transparent"
-    border.width: root.activeFocus ? 1 : 0
+    border.width: root.activeFocus || (root.hasCursor && root.cursorByKeys) ? 1 : 0
     border.color: root.accent
     Behavior on color {
       ColorAnimation {

@@ -21,6 +21,10 @@ import "FoamyText.js" as FoamyText
 // accent). Enter/Space activate. `busy` spins the icon (or shows a spinner
 // glyph when there is none) and keeps the button inert; actionEnabled: false
 // keeps it visible but inert; enabled: false greys it out.
+// `cursorByKeys: cursor.byKeys` draws the keys' cursor: the 1 px border in
+// the accent (a primary: in the text colour, as its focus ring), at full
+// strength also on an inert, busy or disabled button, which still shows no
+// hover fill. The border keeps its width, so nothing moves.
 // Inert and disabled are drawn weaker, not faded: a lighter tint of the
 // kind's fill and a label that still reads on it over the popup
 // background (inert 4.5:1, disabled 3:1). `foreground` is the label's
@@ -37,6 +41,8 @@ Rectangle {
   property bool busy: false
   property bool actionEnabled: true
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): an accent border.
+  property bool cursorByKeys: false
   property bool focusable: false
   property Item keyTarget: null
   property string fontFamily: FoamyStyle.fontFamily
@@ -172,9 +178,10 @@ Rectangle {
   implicitHeight: FoamyStyle.controlHeight
   radius: FoamyStyle.radius
   border.width: activeFocus && focusable ? 2 : FoamyStyle.borderWidth
-  // Inert and disabled fade the border as the fill; the focus ring stays.
+  // Inert and disabled fade the border as the fill; the focus ring and the
+  // keys' border stay.
   border.color: {
-    if (activeFocus && focusable)
+    if ((activeFocus && focusable) || (hasCursor && cursorByKeys))
       return primary ? FoamyPalette.text : Commons.Color.accent
     if (primary)
       return "transparent"

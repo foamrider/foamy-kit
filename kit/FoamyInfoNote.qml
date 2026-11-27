@@ -23,7 +23,8 @@ import QtQuick.Layouts
 // open() / close(); don't bind it.
 //
 // Keyboard: in a settings form the (i) is `focusable` (Tab, Enter/Space);
-// in a PanelKeyCatcher panel set `buttonHasCursor` and route `buttonHovered`.
+// in a PanelKeyCatcher panel set `buttonHasCursor` and route `buttonHovered`,
+// and `cursorByKeys: cursor.byKeys` for the keys' accent border on the (i).
 // When it opens inside a scrolling FoamySettingsPage (or anything with an
 // `ensureVisible(item)` function above it) the note is scrolled into view.
 ColumnLayout {
@@ -35,6 +36,8 @@ ColumnLayout {
   property bool showHeader: true
   property bool focusable: true
   property bool buttonHasCursor: false
+  // The keys moved the cursor (FoamyCursor.byKeys): the (i)'s.
+  property bool cursorByKeys: false
   property string buttonTooltip: FoamyI18n.t("More information")
   readonly property alias infoButton: infoButton
   readonly property alias note: note
@@ -104,6 +107,7 @@ ColumnLayout {
         iconSize: FoamyStyle.iconSize - 2
         focusable: root.focusable
         hasCursor: root.buttonHasCursor
+        cursorByKeys: root.cursorByKeys
         foreground: root.expanded ? FoamyPalette.text : FoamyPalette.secondaryText
         color: active && (root.expanded || hasCursor || hovered || activeFocus) ? FoamyPalette.hoverFill : "transparent"
         tooltipText: ""

@@ -2,9 +2,11 @@
 
 ## 0.16.0 — 2026-11-27
 
-From the foamy-todoist UI review. New optional interfaces; with them off
-nothing changes: the demo plugin's preview states render the same as with
-0.15.1, pixel for pixel, dark and light. No plugin must change.
+From the foamy-todoist UI review and the plugins' keyboard reviews. New
+optional interfaces; with them off nothing changes: the demo plugin's
+preview states render the same as with 0.15.1, pixel for pixel, dark and
+light. No plugin must change, except one whose `FoamySettingsPage`
+declares its own `columnWidth` (Plugin change below).
 
 ### Added
 - `FoamyTitleAction` (new component, in `components.json`): a title that
@@ -91,6 +93,56 @@ nothing changes: the demo plugin's preview states render the same as with
   same checks hold from the right. Seen failing with the page's paddings
   back at `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the
   error and Retry across the card, the section 840 wide).
+  Plugin change: a plugin page that declared its own property named
+  `columnWidth` on a `FoamySettingsPage` (foamy-zendesk's settings) must
+  remove it and set the kit's `columnWidth` instead; qmllint reports
+  "Property columnWidth already exists in base type".
+- The keys' cursor border on every kit control that takes the cursor
+  (0.15.0 had it on FoamyCursorSurface, FoamyAction and FoamyTabs only):
+  `cursorByKeys` (default false; bind it to `FoamyCursor.byKeys`) on
+  `FoamyButton`, `FoamyToggle`, `FoamyDropdown`, `FoamyNumberField`,
+  `FoamyTextSettingField`, `SafeTextField` and `SafeTextArea`. With the
+  cursor on the control, the control's own 1 px outline is drawn in the
+  accent: a button's border (a primary's in the text colour, as its focus
+  ring, since an accent border can't be seen on its accent fill), the
+  toggle row's fill (as its focus ring), the dropdown's trigger and a
+  field's border at the cursor border's width. Nothing moves: no width
+  changes. A text field with the text focus keeps the focus look (the
+  caret shows where the keys are). The components that own buttons pass
+  the flag on with one `cursorByKeys` each: `FoamyHeader` and
+  `FoamyHeroBand` (the ⋯ and Settings buttons), `FoamyPanelFooter` (the
+  refresh button), `FoamyInfoNote` (the (i)); a plugin's own trailing or
+  leading actions take their own. An inert or disabled `FoamyAction` or
+  `FoamyButton` under the keys' cursor now draws the keys' border too
+  (FoamyAction's faded with it, .7 and .45, as FoamyTabs fades; a
+  button's at full strength, as its focus ring), and still no hover
+  fill and the plain pointer; before, an inert FoamyAction showed no
+  cursor at all. A primary button in a dark theme with a light accent
+  shows its text-coloured border weakly against its hover fill (1.23:1 in
+  the dark preview; 6.4:1 against the popup). DESIGN.md: Keyboard.
+  Plugin change, to show the keys' cursor on these: bind `cursorByKeys:
+  cursor.byKeys` on each such control that has a stop in the panel's
+  cursor, and on the FoamyHeroBand, FoamyHeader, FoamyPanelFooter or
+  FoamyInfoNote whose buttons do. Without it the pointer's look stays,
+  as before.
+  `tests/test_keys_border.py` (new; dark and light, from the card's
+  pixels): every such control, each FoamyButton kind and FoamyAction
+  active, inert and disabled, and the four components' buttons, with the
+  cursor and the flag: the outline in the stated colour at the control's
+  strength and apart from the fill inside it; with the cursor alone or
+  the flag alone: not that colour, and the flag alone draws the rest look;
+  inside the outline the pixels are the pointer cursor's, every control
+  keeps its place and size, and an inert or disabled one has no hover
+  fill. Seen failing, one edit at a time: with the 0.15.0 FoamyAction
+  (inert and disabled: no border, 8 checks), without the action's or the
+  button's keys' border (36 and 28 checks: every action, the band's,
+  header's, note's and footer's buttons; every button), a primary's in
+  the accent, the toggle's, the dropdown's, a text field's or text area's
+  left out, each component's forwarding left out (2 to 8 checks each),
+  the button's keys' border 2 px (place, size and the inside: 40
+  checks), an inert action with the hover fill, the border on the flag
+  alone or on the pointer's cursor (36 and 18 checks). The 0.16.0 kit
+  before this change cannot load the scene (no `cursorByKeys`).
 
 ## 0.15.2 — 2026-11-27
 

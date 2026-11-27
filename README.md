@@ -1235,7 +1235,10 @@ read through each change of state, also under the pointer, and their
 see-through fills on a tinted surface (`test_button_states.py`),
 the tab row (`test_tabs.py`: 6 runs that cover every
 pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
-light in both directions), and wheel scrolling and the settings page's focus
+light in both directions), the keys' cursor border on every control
+that takes the cursor and on the buttons the band, header, footer and
+info note own, measured from the drawn card in dark and light
+(`test_keys_border.py`), and wheel scrolling and the settings page's focus
 follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
 notch).
 A plain SafeTextField through real keys, the mouse and real pastes

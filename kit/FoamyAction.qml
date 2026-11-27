@@ -16,6 +16,10 @@ import "FoamyText.js" as FoamyText
 //
 // actionEnabled: false keeps the button visible with its tooltip but inert
 // (for "nothing to do right now"); enabled: false greys it out entirely.
+// `cursorByKeys: cursor.byKeys` draws the keys' cursor with a 1 px accent
+// border, also on an inert or disabled button (faded with it), so the keys'
+// place always shows; an inert one still has no hover fill and the plain
+// pointer.
 //
 // The tooltip is at most Style.space(320) wide and shows at most 3 lines of
 // 200 characters of tooltipText, cut with "…"; Accessible.name keeps it all.
@@ -48,7 +52,7 @@ Rectangle {
   radius: FoamyStyle.radius
   opacity: enabled ? (actionEnabled ? 1 : 0.7) : FoamyStyle.disabledOpacity
   color: active && (hasCursor || mouse.containsMouse || activeFocus) ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
-  border.width: (activeFocus && focusable) || (active && hasCursor && cursorByKeys) ? 1 : 0
+  border.width: (activeFocus && focusable) || (hasCursor && cursorByKeys) ? 1 : 0
   border.color: Commons.Color.accent
   activeFocusOnTab: focusable && active
 
