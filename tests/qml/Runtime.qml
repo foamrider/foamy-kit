@@ -356,6 +356,8 @@ ShellRoot {
       }
       var weakMuted = way(FoamyPalette.mutedText), weakSecondary = way(FoamyPalette.secondaryText)
       check(weakMuted > 0.3 && weakMuted < 0.85 && weakMuted < weakSecondary && weakSecondary < 0.99, "weak text keeps three tones, muted under .85: " + weakMuted.toFixed(2) + ", " + weakSecondary.toFixed(2))
+      Commons.Color.foreground = "#4c4f69"
+      surfaceSweep("light")
       darkThemeStep()
     }))
   }
@@ -372,8 +374,59 @@ ShellRoot {
       var shown = FoamyPalette.onSurface(FoamyPalette.error)
       var ratio = wcagContrast(shown, "#2e3440")
       check(ratio >= 4.5 && !Qt.colorEqual(shown, "#bf616a"), "a dim red lightens to 4.5:1 on a dark surface: #bf616a " + wcagContrast("#bf616a", "#2e3440").toFixed(2) + " -> " + shown + " " + ratio.toFixed(2))
+      surfaceSweep("dark")
       ready()
     }))
+  }
+
+  // onSurface(c, surface) on any opaque surface, in the current theme:
+  // greys from black to white (a light surface in a dark theme and the
+  // reverse), the popup's own tints (a hero band's glow under the pointer,
+  // as foamy-audio draws it; the destructive press tint; a selected row;
+  // a menu) and, as colours, the theme's status colours, black and white.
+  // Every result reads at 4.5:1; a colour that reads is returned as it is;
+  // one that doesn't moves only about as far as it must (under 5.25:1) and
+  // keeps its hue while it still has one. Before 0.16.1 it stepped by the
+  // theme's light or dark, at most 1.7 times: 1.00:1 for the status colours
+  // on white in a dark theme, a dim red at 3.54:1 on the band's glow.
+  function surfaceSweep(theme) {
+    const P = FoamyPalette
+    const shown = c => Qt.color(Qt.tint(P.background, c).toString())
+    const surfaces = [Qt.color(Qt.tint(Qt.tint(P.bandFill, P.bandGlow), P.hoverFill).toString()), shown(Qt.alpha(P.urgent, 0.26)), shown(P.selectedFill), shown(P.menuFill)]
+    for (let v = 0; v <= 255; v += 17)
+      surfaces.push(Qt.rgba(v / 255, v / 255, v / 255, 1))
+    const colours = [P.error, P.warning, P.success, P.info, P.urgent, Qt.color("#000000"), Qt.color("#ffffff")]
+    const hue = c => Qt.color(c).hsvHue
+    const short = [], moved = [], kept = [], lost = []
+    let most = 0
+    for (const s of surfaces)
+      for (const c of colours) {
+        const out = P.onSurface(c, s)
+        const ratio = wcagContrast(out, s)
+        const what = c + " on " + s + " -> " + out + " " + ratio.toFixed(2)
+        if (ratio < 4.5)
+          short.push(what)
+        if (wcagContrast(c, s) >= 4.5) {
+          if (!Qt.colorEqual(out, c))
+            kept.push(what)
+          continue
+        }
+        most = Math.max(most, ratio)
+        if (ratio >= 5.25)
+          moved.push(what)
+        // A hue is still there when the result has colour and light
+        // enough for 8 bits a channel to hold it.
+        const o = Qt.color(out), base = Qt.color(c)
+        if (base.hsvSaturation >= 0.1 && o.hsvSaturation >= 0.1 && o.hsvValue >= 0.25) {
+          const turn = Math.abs(hue(o) - hue(base))
+          if (Math.min(turn, 1 - turn) > 0.02)
+            lost.push(what)
+        }
+      }
+    check(short.length === 0, theme + ": onSurface reads at 4.5:1 on every surface (" + short.length + " short: " + short.slice(0, 4).join(", ") + ")")
+    check(kept.length === 0, theme + ": onSurface returns a colour that reads unchanged, on every surface (" + kept.slice(0, 4).join(", ") + ")")
+    check(moved.length === 0, theme + ": onSurface moves a colour only as far as it must, the most " + most.toFixed(2) + " (" + moved.slice(0, 4).join(", ") + ")")
+    check(lost.length === 0, theme + ": onSurface keeps the hue (" + lost.slice(0, 4).join(", ") + ")")
   }
 
   // WCAG 2 contrast ratio, written out here so the palette's own

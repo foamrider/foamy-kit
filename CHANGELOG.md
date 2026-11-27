@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.16.1 — 2026-11-27
+
+### Fixed
+- `FoamyPalette.onSurface(c, surface)` (since 0.15.0) stepped a colour at
+  most 1.7 times, so a dim colour on a tinted surface stayed under the
+  4.5:1 it promises. It now steps until 4.5:1 on the given surface, in
+  the same steps (Qt.lighter or Qt.darker by 1 + n × .05, the smallest
+  that reads, found by halving the range from 1 to 20 times), so the
+  hue stays as long as the colour has one; a colour that Qt.lighter can't
+  lift (near black on a dark surface) or that is on a mid grey then
+  mixes toward white or black in steps of .01. Every colour now reaches
+  4.5:1 on every opaque surface. Before / after: the dim-red fixture's
+  #a54242 on the hero band's glow under the pointer (as foamy-audio draws
+  its muted microphone) 3.88 -> #ff9898 4.60 and 3.54 -> #ffa9a9 4.74;
+  the light preview's yellow on the destructive press tint 3.67 ->
+  #6f470e 4.60 (green 4.41 -> #255b19 4.59) and on the band's glow
+  under the pointer 4.23 -> #7c4f10 4.60 and 3.97 -> #754b0f 4.65.
+  A colour that reached 4.5:1 within 1.7 times gets the same step as
+  before, pixel for pixel.
+- `onSurface` took its direction from the theme: it darkened in a light
+  theme and lightened in a dark one whatever surface it was given, so a
+  light surface in a dark theme (or the reverse) moved the colour toward
+  the surface. It now moves toward the end, white or black, with more
+  contrast on the given surface (the only one that can reach 4.5:1).
+  Before / after: dark preview status colours on white 1.00 (all went to
+  white) -> 4.56 to 4.60 (#f38ba8 -> #a86074), on #d0d0d0 1.54 -> 4.52
+  to 4.63; light preview #d20f39 on #303030 1.21 -> #ff6385 4.64, on
+  black 1.92 -> #e7103f 4.54. On the popup background nothing changes:
+  in the dark and light previews and the dim-red and mid-accent fixtures
+  every status colour and `urgent` gives the 0.16.0 result. The only
+  results that change where 0.16.0 already read are on a mid grey
+  (#767676), where black reads better than white: #ffffff 4.54 ->
+  near black 4.50 to 4.52.
+- A focused primary `FoamyButton`'s focus ring (since 0.4.0) was the text
+  colour, which reads poorly on a light accent: 1.46:1 on the dark
+  preview's accent, 1.63:1 on the light one's. It now takes the rule of
+  the keys' border (0.16.0): the text or the background colour, whichever
+  reads better on the fill drawn inside it (settled: rest, hover or
+  press; inert: its own). From pixels, at rest / under the cursor /
+  inert, before -> after: dark and dim red 1.46 / 1.23 / 2.44 -> 7.79 /
+  9.24 / 4.64; light 1.63 / 1.92 / 4.55 -> 4.34 / 3.67 / 4.55; mid accent
+  1.19 / 1.01 / 1.77 -> 6.79 / 8.19 / 4.57; dim accent 3.38 / 2.88 /
+  4.90 -> 3.38 / 3.94 / 4.90. The light preview's inert primary keeps
+  the text colour (its fill is a pale accent); the active one turns to
+  the background colour. Other kinds keep the accent ring.
+  DESIGN.md: Tokens (Status), Keyboard.
+  The kit demo's preview states render the same as with 0.16.0, pixel for
+  pixel, dark and light (no state shows a focused primary).
+  `tests/test_runtime.py` (`onSurface` in the light and dark live themes
+  on 16 greys from black to white and the popup's tints, with the status
+  colours, `urgent`, black and white: every result reads at 4.5:1, a
+  colour that reads is returned as it is, one that doesn't lands under
+  5.25:1 and keeps its hue). Seen failing: with the 0.16.0 palette (70
+  results short in the light theme, 66 in the dark one), without the
+  early return for a colour that reads (a reading colour changed), with
+  the last step always taken (up to 21.00:1) and with steps toward the
+  text colour (the hue turns). `tests/test_button_states.py` (a focused
+  primary's ring against the fill inside it, at least 3:1, from pixels,
+  in all five themes). Seen failing with the 0.16.0 button (12 checks:
+  every theme at rest and under the cursor but dim accent's rest, and
+  inert in the dark themes). Changed check: "a focused inert button shows
+  the full focus ring" compared the inert ring's colour with the active
+  one's; for a primary it now checks the width, full opacity and that
+  the ring is the text or the background colour, since the light
+  preview's two differ by design.
+
 ## 0.16.0 — 2026-11-27
 
 From the foamy-todoist UI review and the plugins' keyboard reviews. New

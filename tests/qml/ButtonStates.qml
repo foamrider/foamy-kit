@@ -272,7 +272,7 @@ ShellRoot {
     if (i === kinds.length * pointed.length) {
       check(clicks === 0, "no inert or busy button took a click " + clicks)
       borders()
-      transition(0, 0)
+      focusRings(0)
       return
     }
     var kind = kinds[Math.floor(i / pointed.length)]
@@ -327,11 +327,54 @@ ShellRoot {
       var ring = [String(active.border.color), active.border.width]
       inert.forceActiveFocus()
       var shown = [String(inert.border.color), inert.border.width]
-      check(active.activeFocus === false && inert.activeFocus && JSON.stringify(shown) === JSON.stringify(ring), kinds[k] + ": a focused inert button shows the full focus ring " + ring + " / " + shown)
+      // Full strength: the active ring's width, opaque. A primary's ring
+      // colour follows the fill inside it (the text or the background:
+      // the light preview's inert primary is pale, its ring the text);
+      // test_button_states.py reads it against the fill.
+      var same = kinds[k] === "primary" ? inert.border.color.a === 1 && [FoamyPalette.text, FoamyPalette.background].some(function (c) {
+        return Qt.colorEqual(inert.border.color, c)
+      }) : shown[0] === ring[0]
+      check(active.activeFocus === false && inert.activeFocus && same && shown[1] === ring[1], kinds[k] + ": a focused inert button shows the full focus ring " + ring + " / " + shown)
       inert.focus = false
       active.focusable = false
       inert.focusable = false
     }
+  }
+
+  // A primary's focus ring on the fill drawn inside it, focused at rest,
+  // under the cursor (the hover fill) and inert: each drawn settled and
+  // saved to FOAMY_OUT/focus-<case>.png, with the button's place in FOAMY
+  // FOCUS; test_button_states.py reads the ring against the fill.
+  readonly property var ringCases: ["rest", "hover", "inert"]
+  property var ringInfo: ({})
+  function focusRings(i) {
+    var blocks = popup.bodyItem.blocks
+    if (i === ringCases.length) {
+      console.log("FOAMY FOCUS " + JSON.stringify({
+        card: [popup.cardItem.width, popup.cardItem.height],
+        buttons: ringInfo
+      }))
+      transition(0, 0)
+      return
+    }
+    var name = ringCases[i]
+    var b = button(blocks, "primary", name === "inert" ? "inert" : "active")
+    b.focusable = true
+    b.forceActiveFocus()
+    b.hasCursor = name === "hover"
+    wait.after(FoamyMotion.hover + 100, function () {
+      check(b.activeFocus && b.border.width === 2, "primary " + name + ": focused, with the 2 px ring " + [b.activeFocus, b.border.width])
+      ringInfo[name] = rect(b)
+      popup.cardItem.grabToImage(function (result) {
+        result.saveToFile(Quickshell.env("FOAMY_OUT") + "/focus-" + name + ".png")
+        b.hasCursor = false
+        b.focus = false
+        b.focusable = false
+        wait.after(FoamyMotion.hover + 100, function () {
+          shell.focusRings(i + 1)
+        })
+      })
+    })
   }
 
   // A change of state draws the new fill with the new label: sampled right
