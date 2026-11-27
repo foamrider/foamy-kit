@@ -18,7 +18,14 @@ and FoamyInfoNote own (`cursorByKeys` on the component):
 - the keys' border changes only the outline: inside it, the pixels are the
   pointer cursor's, and every control keeps its place and size;
 - an inert or disabled control shows the keys' border, but the cursor
-  gives it no hover fill: inside the outline it is drawn as at rest.
+  gives it no hover fill: inside the outline it is drawn as at rest;
+- the pointer (in the QML, its own FOAMY FAIL checks), for every control
+  that reports it, FoamyCursorSurface and FoamyTabs too: with the pointer
+  resting inside and the keys' look on, the pointer reported again at the
+  same place and the body moving under the still pointer report nothing,
+  a real move inside reports the pointer (which clears the look, as a
+  panel's cursor.hover(i) does), and with the pointer's look a move
+  reports nothing.
 
 Card screenshots: tests/out/keys-border/ (FOAMY_KEYS_BORDER_OUT overrides)."""
 

@@ -365,9 +365,23 @@ Item {
       Accessible.name: root.Accessible.name !== "" ? root.Accessible.name : root.label
       Accessible.description: root.description
 
+      // While the keys drew the cursor (`cursorByKeys`), a real pointer
+      // move inside reports the pointer again (hovered(true)), as entering
+      // does. A scene position that changed: Qt re-sends hover when items
+      // move under a resting pointer, which is no move.
       HoverHandler {
         id: triggerHover
-        onHoveredChanged: root.hovered(hovered)
+        property point scenePoint
+        onHoveredChanged: {
+          scenePoint = point.scenePosition
+          root.hovered(hovered)
+        }
+        onPointChanged: {
+          const at = point.scenePosition
+          if (hovered && root.cursorByKeys && (at.x !== scenePoint.x || at.y !== scenePoint.y))
+            root.hovered(true)
+          scenePoint = at
+        }
       }
 
       Keys.onPressed: function (event) {

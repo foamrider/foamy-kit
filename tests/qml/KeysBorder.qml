@@ -1,4 +1,5 @@
 import QtQuick
+import QtTest
 import Quickshell
 import qs.Commons as Commons
 import "harness"
@@ -16,6 +17,14 @@ import "plugin/kit"
 // outline is on the card, per mode, which colour its keys' border is to be
 // drawn in ("accent", or "text" on an accent fill) and at what strength
 // (the control's own fading); test_keys_border.py reads the pixels.
+//
+// Then the pointer, per control that reports it (each report clears the
+// keys' look, as a panel's cursor.hover(i) does): with the pointer resting
+// inside, the keys come to the control; the pointer reported again at the
+// same place and the body moving 2 px under the still pointer (Qt re-sends
+// hover, seen by a probe) report nothing, a real 3 px move inside
+// reports the pointer and clears the keys' look, and with the pointer's
+// look a move reports nothing.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -33,7 +42,22 @@ ShellRoot {
   readonly property var modes: ["rest", "elsewhere", "pointer", "keys"]
   property string mode: "rest"
   readonly property bool cursorOn: mode === "pointer" || mode === "keys"
-  readonly property bool byKeys: mode === "elsewhere" || mode === "keys"
+  // A pointer report takes the cursor from the keys (FoamyCursor.hover()).
+  property bool pointerTook: false
+  readonly property bool byKeys: (mode === "elsewhere" || mode === "keys") && !pointerTook
+  property var reports: []
+  function pointer(name) {
+    reports = reports.concat([name])
+    pointerTook = true
+  }
+  // The body's shift under a still pointer, and the hover Qt re-sends then.
+  property real shift: 0
+  property int probeMoves: 0
+  property int frames: 0
+  FrameAnimation {
+    running: true
+    onTriggered: shell.frames++
+  }
 
   FloatingWindow {
     id: window
@@ -66,6 +90,7 @@ ShellRoot {
     open: true
     body: Component {
       Column {
+        id: bodyColumn
         property alias band: band
         property alias header: header
         property alias actions: actions
@@ -78,7 +103,17 @@ ShellRoot {
         property alias textArea: textArea
         property alias note: note
         property alias footer: footer
+        property alias surface: surface
+        property alias tabs: tabs
         spacing: FoamyStyle.gap
+        transform: Translate {
+          x: shell.shift
+        }
+        // A probe: Qt's hover under the still pointer as the body moves.
+        HoverHandler {
+          onPointChanged: if (hovered)
+            shell.probeMoves++
+        }
 
         FoamyHeroBand {
           id: band
@@ -94,6 +129,14 @@ ShellRoot {
           settingsHasCursor: shell.cursorOn
           menuHasCursor: shell.cursorOn
           cursorByKeys: shell.byKeys
+          onSettingsHovered: function (hovered) {
+            if (hovered)
+              shell.pointer("band-settings")
+          }
+          onMenuHovered: function (hovered) {
+            if (hovered)
+              shell.pointer("band-menu")
+          }
         }
         FoamyHeader {
           id: header
@@ -108,6 +151,32 @@ ShellRoot {
           settingsHasCursor: shell.cursorOn
           menuHasCursor: shell.cursorOn
           cursorByKeys: shell.byKeys
+          onSettingsHovered: function (hovered) {
+            if (hovered)
+              shell.pointer("header-settings")
+          }
+          onMenuHovered: function (hovered) {
+            if (hovered)
+              shell.pointer("header-menu")
+          }
+        }
+        FoamyTabs {
+          id: tabs
+          width: parent.width
+          value: "one"
+          model: [
+            {
+              value: "one",
+              text: "One"
+            },
+            {
+              value: "two",
+              text: "Two"
+            }
+          ]
+          hasCursor: shell.cursorOn
+          cursorByKeys: shell.byKeys
+          onHovered: shell.pointer("tabs")
         }
         Column {
           x: FoamyStyle.padding
@@ -128,6 +197,8 @@ ShellRoot {
                 enabled: modelData !== "disabled"
                 hasCursor: shell.cursorOn
                 cursorByKeys: shell.byKeys
+                onHoveredChanged: if (hovered)
+                  shell.pointer(objectName)
               }
             }
           }
@@ -147,8 +218,18 @@ ShellRoot {
                 enabled: stateName !== "disabled"
                 hasCursor: shell.cursorOn
                 cursorByKeys: shell.byKeys
+                onHoveredChanged: if (hovered)
+                  shell.pointer("button-" + objectName)
               }
             }
+          }
+          FoamyCursorSurface {
+            id: surface
+            width: parent.width
+            height: FoamyStyle.rowHeight
+            hasCursor: shell.cursorOn
+            byKeys: shell.byKeys
+            onHovered: shell.pointer("surface")
           }
           FoamyToggle {
             id: toggle
@@ -157,6 +238,10 @@ ShellRoot {
             checked: true
             hasCursor: shell.cursorOn
             cursorByKeys: shell.byKeys
+            onHovered: function (isHovered) {
+              if (isHovered)
+                shell.pointer("toggle")
+            }
           }
           FoamyDropdown {
             id: dropdown
@@ -176,6 +261,10 @@ ShellRoot {
             ]
             hasCursor: shell.cursorOn
             cursorByKeys: shell.byKeys
+            onHovered: function (isHovered) {
+              if (isHovered)
+                shell.pointer("dropdown")
+            }
           }
           FoamyNumberField {
             id: number
@@ -217,6 +306,10 @@ ShellRoot {
             text: "The keys' cursor has an accent border."
             buttonHasCursor: shell.cursorOn
             cursorByKeys: shell.byKeys
+            onButtonHovered: function (hovered) {
+              if (hovered)
+                shell.pointer("note-button")
+            }
           }
           FoamyPanelFooter {
             id: footer
@@ -225,6 +318,10 @@ ShellRoot {
             status: "Updated now"
             refreshHasCursor: shell.cursorOn
             cursorByKeys: shell.byKeys
+            onRefreshHovered: function (hovered) {
+              if (hovered)
+                shell.pointer("footer-refresh")
+            }
           }
         }
       }
@@ -298,7 +395,9 @@ ShellRoot {
   function show(i) {
     if (i >= modes.length) {
       console.log("FOAMY KEYS " + JSON.stringify(info))
-      finish()
+      mode = "keys"
+      pointerTook = true
+      moves(moveCases(), 0)
       return
     }
     mode = modes[i]
@@ -330,6 +429,85 @@ ShellRoot {
     }, tag + " " + modes[i] + " drawn")
   }
 
+  // name: the item the pointer moves in. A disabled control takes no
+  // pointer at all, so it reports nothing either way.
+  function moveCases() {
+    var body = popup.bodyItem
+    var out = []
+    for (var s = 0; s < 2; s++) {
+      out.push(["action-" + states[s], find(body.actions, "action-" + states[s])])
+      for (var k = 0; k < kinds.length; k++)
+        out.push(["button-" + kinds[k] + "-" + states[s], find(body.buttons, kinds[k] + "-" + states[s])])
+    }
+    out.push(["surface", body.surface], ["tabs", find(body.tabs, "foamyTab1")], ["toggle", body.toggle], ["dropdown", body.dropdown.triggerItem], ["band-settings", body.band.settingsButton], ["band-menu", body.band.menuButton], ["header-settings", body.header.settingsButton], ["header-menu", body.header.menuButton], ["note-button", body.note.infoButton], ["footer-refresh", body.footer.refreshButton])
+    return out
+  }
+  // Waits `count` frames, then calls then().
+  function frameWait(count, then) {
+    var until = frames + count
+    wait.waitFor(function () {
+      return frames >= until
+    }, 5000, then, "frames drawn")
+  }
+  function moves(list, i) {
+    if (i >= list.length) {
+      finish()
+      return
+    }
+    var name = list[i][0], item = list[i][1]
+    var next = function () {
+      shell.shift = 0
+      // Off every control, to enter the next one afresh.
+      ev.mouseMove(popup.cardItem, 1, popup.cardItem.height - 1, -1, Qt.NoButton, Qt.NoModifier)
+      frameWait(2, function () {
+        shell.moves(list, i + 1)
+      })
+    }
+    pointerTook = true
+    reports = []
+    ev.mouseMove(item, item.width / 2, item.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+    var at = item.mapToItem(null, item.width / 2, item.height / 2)
+    wait.waitFor(function () {
+      return reports.indexOf(name) >= 0
+    }, 2000, function (entered) {
+      check(entered, name + ": entering reports the pointer " + JSON.stringify(reports))
+      // The keys come here, the pointer resting inside.
+      pointerTook = false
+      reports = []
+      frameWait(2, function () {
+        // The pointer reported again where it rests: no move.
+        ev.mouseMove(item, item.width / 2, item.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+        frameWait(3, function () {
+          check(reports.length === 0 && byKeys, name + ": the pointer at the same place keeps the keys' look " + JSON.stringify(reports))
+          probeMoves = 0
+          shift = 2
+          wait.waitFor(function () {
+            return probeMoves > 0
+          }, 2000, function (resent) {
+            check(resent, name + ": Qt re-sends hover as the body moves under the pointer")
+            frameWait(3, function () {
+              check(reports.length === 0 && byKeys, name + ": the body moving under a still pointer keeps the keys' look " + JSON.stringify(reports))
+              var here = item.mapFromItem(null, at.x, at.y)
+              ev.mouseMove(item, here.x + 3, here.y, -1, Qt.NoButton, Qt.NoModifier)
+              wait.waitFor(function () {
+                return !byKeys
+              }, 2000, function (cleared) {
+                check(cleared && reports.length === 1 && reports[0] === name, name + ": a move inside reports the pointer and clears the keys' look " + JSON.stringify(reports))
+                // The pointer's look: a move reports nothing more.
+                reports = []
+                ev.mouseMove(item, here.x + 5, here.y, -1, Qt.NoButton, Qt.NoModifier)
+                frameWait(3, function () {
+                  check(reports.length === 0, name + ": with the pointer's look a move reports nothing " + JSON.stringify(reports))
+                  next()
+                })
+              })
+            })
+          })
+        })
+      })
+    }, tag + " " + name + " entered")
+  }
+
   Component.onCompleted: wait.waitFor(function () {
     return popup.bodyItem && popup.cardItem.opacity === 1 && popup.bodyItem.band.menuButton.visible
   }, 5000, function (ok) {
@@ -350,5 +528,12 @@ ShellRoot {
     console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
+  }
+
+  Item {
+    parent: popup.bodyItem
+    TestEvent {
+      id: ev
+    }
   }
 }

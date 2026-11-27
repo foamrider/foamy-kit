@@ -317,7 +317,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   disabled control shows it too (with no hover fill). FoamyHeader,
   FoamyHeroBand, FoamyPanelFooter and FoamyInfoNote pass their
   `cursorByKeys` on to their own buttons (⋯, Settings, refresh, the (i));
-  bind it once on each. The selected row or view (`current`)
+  bind it once on each. While the look is on, a real pointer move inside
+  a control reports the pointer again, as entering does, so the same
+  hover wiring takes the cursor back; items moving under a still pointer
+  (a keys-driven scroll) are no move. The selected row or view (`current`)
   has `selectedFill`, with `currentBar` when its details show in a pane.
   Focus rings only on form controls in
   Settings (`focusable: true`); set `blocked` on the key catcher while a form

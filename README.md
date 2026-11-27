@@ -1237,8 +1237,9 @@ the tab row (`test_tabs.py`: 6 runs that cover every
 pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
 light in both directions), the keys' cursor border on every control
 that takes the cursor and on the buttons the band, header, footer and
-info note own, measured from the drawn card in dark and light
-(`test_keys_border.py`), and wheel scrolling and the settings page's focus
+info note own, measured from the drawn card in dark and light, and a
+pointer move inside a control taking the keys' look back while items
+moving under a still pointer do not (`test_keys_border.py`), and wheel scrolling and the settings page's focus
 follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
 notch).
 A plain SafeTextField through real keys, the mouse and real pastes

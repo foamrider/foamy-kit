@@ -125,6 +125,21 @@ declares its own `columnWidth` (Plugin change below).
   cursor, and on the FoamyHeroBand, FoamyHeader, FoamyPanelFooter or
   FoamyInfoNote whose buttons do. Without it the pointer's look stays,
   as before.
+  A pointer move inside a control takes the cursor back from the keys:
+  while the keys' look is on (`cursorByKeys`, `FoamyCursorSurface.byKeys`)
+  each control that reports the pointer reports it again on a real move
+  inside, as it does on entering, so the panel's existing hover wiring
+  runs (`cursor.hover(i)`); before, only entering did, so a pointer that
+  already rested on the control the keys came to could not clear the
+  look. FoamyAction and FoamyButton emit `hoveredChanged` again (`hovered`
+  stays true), FoamyToggle and FoamyDropdown `hovered(true)`,
+  FoamyCursorSurface and FoamyTabs `hovered()`; FoamyHeader, FoamyHeroBand,
+  FoamyPanelFooter and FoamyInfoNote pass it on through their
+  `…Hovered(true)`. A move is a changed scene position: when items move
+  under a resting pointer (a keys-driven scroll or reflow) Qt re-sends
+  hover, and that reports nothing. With the look off a move reports
+  nothing, as before. No plugin change is needed. The text and number
+  fields report no pointer, as before.
   `tests/test_keys_border.py` (new; dark and light, from the card's
   pixels): every such control, each FoamyButton kind and FoamyAction
   active, inert and disabled, and the four components' buttons, with the
@@ -143,6 +158,19 @@ declares its own `columnWidth` (Plugin change below).
   checks), an inert action with the hover fill, the border on the flag
   alone or on the pointer's cursor (36 and 18 checks). The 0.16.0 kit
   before this change cannot load the scene (no `cursorByKeys`).
+  The pointer, on every control above that reports it (not the disabled
+  ones, which take no pointer, nor the fields) and on FoamyCursorSurface
+  and FoamyTabs: with the pointer resting inside and the keys' look on,
+  the pointer reported again at the same place, and the body moving 2 px
+  under the still pointer (a probe sees Qt re-send hover), report
+  nothing; a 3 px move inside reports the pointer once and clears the
+  look; with the pointer's look a move reports nothing. Seen failing:
+  with the kit before this change (a move reports nothing: 18 checks a
+  theme, every control), with item positions instead of scene positions
+  (36: the moving body reports, and so the look is gone), with no
+  position check (21: the moving body on every control, the same place
+  on the three with a HoverHandler) and without the look's gate (18: a
+  move with the pointer's look reports).
 
 ## 0.15.2 — 2026-11-27
 

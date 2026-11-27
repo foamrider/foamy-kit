@@ -134,6 +134,21 @@ Item {
     cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
     onClicked: if (root.enabled)
       root.clicked()
-    onContainsMouseChanged: root.hovered(containsMouse)
+    // While the keys drew the cursor (`cursorByKeys`), a real pointer move
+    // inside reports the pointer again, as entering does, so the panel's
+    // hover handler takes the cursor back. In scene coordinates: Qt re-sends
+    // hover when items move under a resting pointer (a keys-driven scroll),
+    // which is no move.
+    property point scenePoint
+    onContainsMouseChanged: {
+      scenePoint = mapToItem(null, mouseX, mouseY)
+      root.hovered(containsMouse)
+    }
+    onPositionChanged: function (event) {
+      const at = mapToItem(null, event.x, event.y)
+      if (containsMouse && root.cursorByKeys && Math.abs(at.x - scenePoint.x) + Math.abs(at.y - scenePoint.y) > 0.01)
+        root.hovered(true)
+      scenePoint = at
+    }
   }
 }
