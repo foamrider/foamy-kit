@@ -36,12 +36,21 @@ import qs.Commons as Commons
 // Focus returns to whatever had it when the menu opened.
 //
 // It closes when the anchor is hidden (popup closed, settings opened).
+//
+// `raised: true` (off by default) draws it on a clearer surface
+// (FoamyPalette.raisedMenuFill) over a soft shadow (FoamyShadow), for a
+// menu that hangs over busy content; off, it looks as it always did.
 QtObject {
   id: root
 
   property Item anchorItem: null
   default property list<QtObject> items
   property real menuWidth: FoamyStyle.menuWidth
+  // A raised menu (off by default): a clearer surface
+  // (FoamyPalette.raisedMenuFill) with a soft shadow under it (FoamyShadow),
+  // for a menu that hangs over busy content.
+  property bool raised: false
+  readonly property color fill: raised ? FoamyPalette.raisedMenuFill : FoamyPalette.menuFill
   // The most menu a card grows for; past it the menu scrolls.
   property real maxGrowHeight: FoamyStyle.rowHeight * 9
   // Where the overlay lives; found from anchorItem (the popup card, else the
@@ -460,6 +469,16 @@ QtObject {
       }
     }
 
+    FoamyShadow {
+      objectName: "foamyMenuShadow"
+      visible: root.raised
+      LayoutMirroring.enabled: false
+      x: menuPanel.x
+      y: menuPanel.y
+      width: menuPanel.width
+      height: menuPanel.height
+      radius: menuPanel.radius
+    }
     Rectangle {
       id: menuPanel
       objectName: "foamyMenuPanel"
@@ -470,7 +489,7 @@ QtObject {
       width: Math.max(0, Math.min(root.menuWidth, overlay.width - overlay.margin * 2))
       height: overlay.menuHeight
       radius: FoamyStyle.radius
-      color: FoamyPalette.menuFill
+      color: root.fill
       border.width: FoamyStyle.borderWidth
       border.color: FoamyPalette.menuBorder
       clip: true
@@ -547,7 +566,7 @@ QtObject {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: FoamyStyle.rowPadding
                 opacity: row.usable || row.separator ? 1 : FoamyStyle.disabledOpacity
-                readonly property color tone: row.modelData.destructive && row.current ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.menuFill, Qt.alpha(Commons.Color.urgent, 0.14))) : FoamyPalette.text
+                readonly property color tone: row.modelData.destructive && row.current ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(root.fill, Qt.alpha(Commons.Color.urgent, 0.14))) : FoamyPalette.text
                 FoamyIcon {
                   name: row.modelData.iconName || "settings"
                   visible: !!row.modelData.iconName

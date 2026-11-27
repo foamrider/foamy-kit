@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.17.0 — 2026-11-27
+
+From the foamy-todoist UI review (B2, B3): menus that float over busy
+content, and a band field that leaves the title row. New optional
+interfaces; with them off nothing changes: the demo plugin's preview
+states (Preview, MenuPreview, ServicePreview: 7 states, 14 pictures a
+theme) render the same as with 0.16.0, pixel for pixel, dark and light.
+No plugin must change.
+
+### Added
+- `FoamyShadow` (new component, in `components.json`): a soft drop
+  shadow under a surface that floats over the card, drawn without
+  effects (MultiEffect draws nothing under the software renderer): five
+  stacked rounded rectangles, each a step larger and faint, darkest at
+  the surface's edge. `spread` (gapLarge) past the sides and bottom,
+  `offsetY` (gapSmall) down, `strength` (.42 dark, .16 light), `radius`.
+  Static; it takes no pointer input. DESIGN.md: Menus.
+- `FoamyPalette.raisedMenuFill`: a raised menu's surface, a clearer step
+  above the card (dark: the text at .07 over the background, where
+  `menuFill` is .035); light themes keep `menuFill`, already lighter than
+  the card.
+- `FoamyMenu.raised` (off by default): the menu on `raisedMenuFill` over
+  a FoamyShadow, for a menu that hangs over busy content; `fill` is the
+  surface it draws (a destructive entry's tint is measured on it). Off,
+  it draws as before. `tests/test_menu.py` (LTR and RTL, scale 1.0 and
+  1.25): the same open menu shot flat and raised: just under the panel
+  every pixel of a row across it is darker raised, inside it the fill
+  changed, and nothing changed 40 px or more away. Seen failing with the
+  shadow not drawn (0 of 216 and 274 pixels darker). `run_shell`
+  (tests/common.py) hands the scene's `FOAMY NOTE` lines to the caller
+  (`notes_to`).
+- FoamyIcon: `corner-down-left` and `arrow-big-up` (Lucide 1.65.0,
+  lucide-static), 127 names, for key caps (Enter, Shift). No other icon
+  changed.
+
 ## 0.16.0 — 2026-11-27
 
 From the foamy-todoist UI review and the plugins' keyboard reviews. New
