@@ -21,6 +21,10 @@ import "FoamyText.js" as FoamyText
 // accent). Enter/Space activate. `busy` spins the icon (or shows a spinner
 // glyph when there is none) and keeps the button inert; actionEnabled: false
 // keeps it visible but inert; enabled: false greys it out.
+// Inert and disabled are drawn weaker, not faded: an opaque fill mixed
+// toward the popup background and a label that still reads on it (inert
+// 4.5:1, disabled 3:1). `foreground` is the label's colour in the current
+// state, for a button that draws its own content.
 // `tooltipText` only for a short hint; never for paragraphs (DESIGN.md).
 Rectangle {
   id: root
@@ -44,15 +48,76 @@ Rectangle {
 
   signal clicked
 
-  // Destructive: readable on its strongest (pressed) tint, so the label
-  // doesn't change on hover.
-  readonly property color foreground: primary ? FoamyPalette.accentInk : destructive ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))) : FoamyPalette.text
+  readonly property color foreground: _quiet ? _quiet.label : _ink
+
+  // The kind's fill at rest and its label's ink. Destructive: readable on
+  // its strongest (pressed) tint, so the label doesn't change on hover.
+  readonly property color _restFill: primary ? Commons.Color.accent : destructive ? Qt.alpha(Commons.Color.urgent, 0.12) : FoamyPalette.fieldFill
+  readonly property color _ink: primary ? FoamyPalette.accentInk : destructive ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.26))) : FoamyPalette.text
+  // How strongly a state draws: active and busy 1, inert .7, disabled .45.
+  readonly property real _strength: enabled ? (actionEnabled || busy ? 1 : 0.7) : FoamyStyle.disabledOpacity
+  // Inert or disabled: { fill, label }, both opaque; null when active.
+  readonly property var _quiet: _strength < 1 ? _quietLook() : null
+
+  // Fading the whole item moved the fill toward the very colour a primary
+  // label has (accentInk is often the background): 2.08:1 inert in the
+  // light preview. Each state instead gets the kind's fill at its strength,
+  // mixed toward the background, and a label measured on it, as drawn
+  // (8 bits a channel). Where no ink reaches the state's ratio on that fill
+  // (a primary in a light theme), the fill steps further toward the
+  // background until one does; disabled starts no stronger than inert, so
+  // it stays the weaker. The label is the faded ink (as before) where that
+  // reads, else the faintest that does.
+  function _quietLook() {
+    const inert = 0.7
+    const disabled = FoamyStyle.disabledOpacity
+    const inks = [_ink, FoamyPalette.text, FoamyPalette.background]
+    const fillAt = mix => Qt.color(Qt.tint(FoamyPalette.background, Qt.alpha(_restFill, _restFill.a * mix)).toString())
+    // The strongest fill from `start` down on which an ink reaches `ratio`;
+    // on the background itself, the ink that reads best.
+    const pick = (start, ratio) => {
+      for (let step = Math.round(start * 100); step > 0; step--) {
+        const fill = fillAt(step / 100)
+        const ink = inks.find(c => FoamyPalette.contrastRatio(c, fill) >= ratio)
+        if (ink !== undefined)
+          return {
+            mix: step / 100,
+            fill: fill,
+            ink: ink
+          }
+      }
+      const under = fillAt(0)
+      const best = inks.reduce((a, b) => FoamyPalette.contrastRatio(b, under) > FoamyPalette.contrastRatio(a, under) ? b : a)
+      return {
+        mix: 0,
+        fill: under,
+        ink: best
+      }
+    }
+    let look = pick(inert, 4.5)
+    if (!enabled)
+      look = pick(Math.min(disabled, look.mix * disabled / inert), 3)
+    const ratio = enabled ? 4.5 : 3
+    for (let step = Math.round(_strength * 100); step <= 100; step++) {
+      const label = Qt.color(Qt.tint(look.fill, Qt.alpha(look.ink, step / 100)).toString())
+      if (FoamyPalette.contrastRatio(label, look.fill) >= ratio)
+        return {
+          fill: look.fill,
+          label: label
+        }
+    }
+    return {
+      fill: look.fill,
+      label: look.ink
+    }
+  }
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight
   radius: FoamyStyle.radius
-  opacity: enabled ? (actionEnabled || busy ? 1 : 0.7) : FoamyStyle.disabledOpacity
   color: {
+    if (_quiet)
+      return _quiet.fill
     if (primary) {
       var base = Commons.Color.accent
       return root.pressed && root.active ? Qt.darker(base, 1.12) : root.hot ? Qt.lighter(base, 1.1) : base
@@ -62,7 +127,15 @@ Rectangle {
     return root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14) : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
   }
   border.width: activeFocus && focusable ? 2 : FoamyStyle.borderWidth
-  border.color: activeFocus && focusable ? (primary ? FoamyPalette.text : Commons.Color.accent) : primary ? "transparent" : destructive ? Qt.alpha(Commons.Color.urgent, root.hot ? 0.7 : 0.45) : Qt.alpha(FoamyPalette.text, root.hot ? 0.3 : 0.18)
+  // Inert and disabled fade the border as the fill; the focus ring stays.
+  border.color: {
+    if (activeFocus && focusable)
+      return primary ? FoamyPalette.text : Commons.Color.accent
+    if (primary)
+      return "transparent"
+    const edge = destructive ? Qt.alpha(Commons.Color.urgent, root.hot ? 0.7 : 0.45) : Qt.alpha(FoamyPalette.text, root.hot ? 0.3 : 0.18)
+    return _strength < 1 ? Qt.alpha(edge, edge.a * _strength) : edge
+  }
   activeFocusOnTab: focusable && active
 
   Behavior on color {

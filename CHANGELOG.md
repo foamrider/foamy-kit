@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.15.2 — 2026-11-27
+
+### Fixed
+- `FoamyButton` (since 0.4.0) showed an inert (`actionEnabled: false`)
+  or disabled (`enabled: false`) button by fading the whole item to .7 or
+  .45, so its label faded toward the same popup background as its fill.
+  Since 0.15.0 a primary label is `accentInk`, often the background
+  itself, so a faded primary moved its fill toward its own label. Label
+  on fill as drawn, before (dark / light preview / dim red): primary
+  inert 2.92 / 2.08 / 2.92, disabled 1.60 / 1.34 / 1.60; secondary inert
+  5.87 / 3.36 / 5.87, disabled 3.34 / 2.09 / 3.34; destructive inert
+  4.05 / 3.81 / 3.33, disabled 2.60 / 2.36 / 2.15. The button no longer
+  fades: each state draws an opaque fill, the kind's fill at its strength
+  (.7, .45) mixed toward the background, and a label measured on it at 8
+  bits a channel, inert 4.5:1 and disabled 3:1. The label is the faded
+  ink where that reads (dark secondary: unchanged), else the faintest of
+  the kind's ink, the text and the background that does. Where no ink
+  reads on the fill, the fill steps further toward the background: a
+  light-theme primary turns to a pale accent with the text's ink, and its
+  disabled fill starts no stronger than its inert one. After: primary
+  inert 4.53 / 4.50 / 4.53, disabled 3.01 / 3.00 / 3.01; secondary inert
+  5.88 / 4.59 / 5.88, disabled 3.35 / 3.06 / 3.35; destructive inert
+  4.55 / 4.52 / 4.53, disabled 3.04 / 3.03 / 3.00. The border fades as
+  before; the focus ring keeps full strength. Active and busy buttons
+  render the same, pixel for pixel; inert keeps no hover or press and the
+  plain cursor. `foreground` is now the label's colour in the current
+  state (foamy-lock's `IconButton` draws its icon in it, so it follows
+  without a change). Known limits: the active light-preview primary label
+  is 4.34:1 (`accentInk` takes the better of two inks, with no floor),
+  and an inert or disabled `FoamyAction` still fades (text icon on the
+  background: inert 6.24 dark, 3.45 light; disabled 3.41 dark, 2.09
+  light; computed, not measured from pixels). DESIGN.md: Tokens
+  (Disabled), Components (Buttons). `tests/test_button_states.py` (new:
+  each kind in each state in a popup and a settings page, in dark, light
+  and the dim red; the label and fill read from the card's pixels, the
+  states weaker in order, the icon in the label's colour, an inert
+  button under the pointer, busy as active; on the 0.15.1 button 14 of
+  the 18 label checks failed, all but the secondary in the two dark
+  themes, e.g. light primary inert 2.08:1).
+
 ## 0.15.1 — 2026-11-26
 
 ### Fixed

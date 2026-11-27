@@ -1228,7 +1228,9 @@ with more output in a later read, `clear()`), a `qs ipc` argument probe, harness
 leak tests, the demo, menu-card and service previews, and (0.4.0,
 LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and FoamyPopupCard height
-(`test_components.py`), the tab row (`test_tabs.py`: 6 runs that cover every
+(`test_components.py`), FoamyButton's inert and disabled labels measured
+from the drawn card in dark, light and a dim red (`test_button_states.py`),
+the tab row (`test_tabs.py`: 6 runs that cover every
 pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
 light in both directions), and wheel scrolling and the settings page's focus
 follow (`test_wheel.py`, which also prints how far Qt's own Flickable gets per
