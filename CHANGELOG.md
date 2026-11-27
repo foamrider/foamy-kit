@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.17.0 — 2026-11-27
+
+### Changed
+- The kit's UI font (`FoamyStyle.fontFamily`) is Adwaita Sans when it is
+  installed, and the system's `"sans-serif"` otherwise. The usual
+  sans-serif, Liberation Sans, has no semi-bold, so every `Font.DemiBold`
+  title (band and header titles, section headings, field labels, a
+  selected tab, a primary button) drew Bold; Adwaita Sans draws it at 600.
+  Adwaita Sans ships in the package `adwaita-fonts`, which Omarchy
+  installs (gtk3, gtk4, plymouth and gsettings-desktop-schemas require it).
+  The family is chosen once, when the shell starts (`Qt.fontFamilies()`);
+  without Adwaita Sans the family is exactly `"sans-serif"` and every
+  plugin draws as with 0.16.0.
+
+  **Every plugin's look changes, and so do its README pictures and any
+  picture or width a plugin's tests compare.** Measured offscreen at 12
+  and 14 px over nine UI strings: regular text is 6.9 % wider than
+  Liberation Sans, DemiBold text 1.6 % wider than the Bold it replaces,
+  and a line is about 8 % taller (12 px: 14.5 against 13.4 px). Titles
+  that elide end a few letters earlier, and popups grow a few pixels: the
+  demo plugin's cards are 2 to 5 px taller (devices 285 → 290, settings
+  343 → 346, empty 107 → 109; the menu and the toast keep their size).
+  Nothing in the demo states is cut or overlaps, dark or light.
+  `tests/test_ui_font.py` (new): with Adwaita Sans installed, the kit asks
+  for it, a FoamyHeroBand's DemiBold title draws with its SemiBold face,
+  and DemiBold text is wider than Normal and narrower than Bold; with
+  Adwaita Sans hidden from fontconfig (a `FONTCONFIG_FILE` that includes
+  `/etc/fonts/fonts.conf` and rejects the family), the kit falls back to
+  `"sans-serif"` and draws the same face, widths and pixels as the
+  system's sans-serif. DESIGN.md: Body font.
+
 ## 0.16.1 — 2026-11-27
 
 ### Fixed
