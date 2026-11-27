@@ -1,5 +1,97 @@
 # Changelog
 
+## 0.16.0 — 2026-11-27
+
+From the foamy-todoist UI review. New optional interfaces; with them off
+nothing changes: the demo plugin's preview states render the same as with
+0.15.1, pixel for pixel, dark and light. No plugin must change.
+
+### Added
+- `FoamyTitleAction` (new component, in `components.json`): a title that
+  is a control, for a title that names what the user changes from a menu
+  (foamy-todoist's task editor: the task's place opens the move menu, in
+  the page's band and in the Wide pane's header). A leading mark
+  (`iconName`, `iconColor`), the text and a chevron on a hover fill, with
+  the keys' accent ring; a click emits `activated(false)`, Enter, Return
+  or Space `activated(true)` (for `FoamyMenu.open(keyboard)`), the
+  accessible press `activated(false)` unless disabled; a Button named
+  `accessibleName` (default: the text). As wide as its content; given
+  less, the text ends with "…" and the mark and chevron stay inside its
+  box (`minimumWidth` holds them); a cut text shows on hover in a
+  tooltip that wraps anywhere, at most `tooltipMaxWidth`
+  (`Style.space(320)`, as FoamyAction's) wide, in the kit's font, with at
+  most 3 lines of 200 characters cut with "…" (the accessible name keeps
+  it all). `fontSize`/`fontWeight` (default: the band's title),
+  `iconCenter` and `textStart` line it up with a column outside it; `menuAnchor` is
+  `menuWidth` (a FoamyMenu's) wide at its start, so a menu anchored to it
+  hangs under the control from its start (the right in RTL). DESIGN.md:
+  Title actions.
+- The compact band's title as a FoamyTitleAction:
+  `FoamySettingsHeader.titleAction` (off by default), `titleIconName`,
+  `titleIconColor`, `titleAccessibleName` (default: the title),
+  `titleButton`, `titleMenuAnchor` and `titleActivated(keyboard)`;
+  `FoamyHeroBand` passes them as `compactTitleAction`,
+  `compactTitleIconName`, `compactTitleIconColor`,
+  `compactTitleAccessibleName`, `compactTitleButton`,
+  `compactTitleMenuAnchor` and `compactTitleActivated(keyboard)`. On, the
+  control is the next Tab stop after Back; a long title gives way to
+  "Saving…" and the trailing actions. Off, no control is created
+  (`titleButton` and `titleMenuAnchor` are null) and the band draws and
+  tabs as with 0.15.1; turned off, a menu anchored to it closes, and if
+  it had the keys the caller places them (they stay on no Tab stop; Tab
+  goes to the page's first one). DESIGN.md: Hero band.
+  `tests/test_settings_header.py` (new; LTR and RTL, the RTL runs in
+  Arabic, scale 1.0 and 1.25, dark, and LTR 1.0 light): off, no control
+  created and Tab from Back to the trailing action, and the band with the
+  other title properties set draws the same pixels; on, the mark, title
+  and chevron in reading order by position (mirrored in RTL), the mark in
+  the caller's colour, click/Return/Enter/Space and the accessible press
+  with their `keyboard` argument, the press inert under a disabled
+  parent, the Tab order, ring and fill, role and name, the menu's place,
+  Esc giving the keys back, turned off with the menu open (it closes; no
+  control, no anchor), turned off with the keys and no menu (Tab reaches
+  the page's first Back; no Qt warning: `run_shell(forbid=…)` in
+  `tests/common.py` fails a run on a named log line), elide in the room
+  left, the tooltip's width cap and font, and a title of 4,500 characters
+  whose first name has no break (the tooltip stays in its 320 box, a few
+  lines high, cut to 200 characters with "…");
+  pictures `band-on-focused`, `band-on-long`; a bare FoamyTitleAction's
+  mark and text at `iconCenter`/`textStart`, its chevron inside a box
+  narrower than `minimumWidth`, its `menuAnchor` `menuWidth` wide. Seen
+  failing with Space not handled, no ring, the title as the accessible
+  name, no chevron and a click reported as keys (7 checks); with the
+  control shown and on the Tab path while off (3 checks and 110 pixels);
+  with the anchor as wide as the control (the menu's place); with the off
+  title taking the icon colour (592 pixels); with the control kept while
+  off and its Tab stop bound to `titleAction` (Qt's warning); with the tooltip capped at the header's
+  width (249 instead of 320) or without its font; with the mark's colour
+  not passed; with the accessible press not gated; with the control not
+  mirrored (the order and the menu's place in RTL); with the control
+  created while off (2 checks); with the chevron placed after the text
+  (outside a narrow box); with the control 20 px short of the room left;
+  with the tooltip's text not capped (1,068 px high, 4,588 characters) or
+  wrapping at word boundaries only (1,352 px of text in a 320 box); with
+  the control kept while off (the control, and Tab going on to the
+  trailing action); with FoamyMenu not closing when its anchor hides (the
+  menu stays open); with the text over the chevron (the order check).
+- `FoamySettingsPage.columnWidth` (default: the page's width less its
+  side paddings) and `columnInset`, for a page wider than the settings
+  width (foamy-todoist's Wide page, 880 with a settings-wide column): Back
+  and the title start at the column's edge, the error line with Retry and
+  the sections keep to the column, centred; the band's surface still runs
+  to the card's edges. `FoamyHeroBand.compactPadding` (default
+  `FoamyStyle.padding`) is the compact row's side padding the page sets.
+  A page of the settings width is unchanged (the demo's settings and
+  settings-error states, and foamy-todoist's Small settings, pixel for
+  pixel). DESIGN.md: Settings page. `tests/test_settings_header.py`: on
+  an 880 page with a 400 column, the band to the edges, Back and the error
+  at the column's start, the title and Retry inside its end, the section
+  filling it; a 420 page at the padding; a column wider than the page
+  keeps the padding; in the RTL runs (Arabic) the pages mirror and the
+  same checks hold from the right. Seen failing with the page's paddings
+  back at `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the
+  error and Retry across the card, the section 840 wide).
+
 ## 0.15.2 — 2026-11-27
 
 ### Fixed

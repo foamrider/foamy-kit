@@ -66,7 +66,11 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   - Settings pages show the compact band (back, "Settings", "Saving…");
     `FoamySettingsPage` does it. A sub-view built like a settings page (an
     editor page) uses the same band, with its icon actions at the end
-    (`compactTrailing`).
+    (`compactTrailing`). When its title is something the user changes (an
+    editor page's place), the title is the control: `compactTitleAction`
+    (a FoamyTitleAction: a mark, the title, a chevron; a click, Enter or
+    Space opens its menu, hung from `compactTitleMenuAnchor`), not a second
+    row saying the same.
   - No band on menus (`FoamyPopupCard`) or toasts.
   - **Field mode** (search, quick add): a text field grows out of the header
     action that opens it, across the title row (`field`, `fieldOrigin`,
@@ -123,6 +127,13 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Actions**: `FoamyAction` (28, icon 15, hover fill, tooltip). Settings button =
   `settings: true` (32/16). Destructive: `destructive: true`. Spinners only via
   `spinning`. Icon actions are for toolbars (header, footer, rows).
+- **Title actions**: `FoamyTitleAction` where a title names what the user
+  changes from a menu (an editor's place, in the compact band or a pane's
+  header): mark, text, chevron, hover fill, the keys' ring; Enter or Space
+  opens the menu from its start (`menuAnchor`). It gives way first: the
+  header's fixed actions keep their room, its text ends with "…" and shows
+  on hover in a tooltip (up to 3 lines of 200 characters, cut with "…"),
+  and the mark and chevron stay inside its box.
 - **Buttons**: `FoamyButton` for form actions (Verify, Apply, Remove, Add): a
   filled or bordered surface that reads as a button — `secondary` (default,
   field fill + border), `primary` (accent fill, at most one per form),
@@ -250,6 +261,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   write back in `onTextEdited`, reset by assigning.)
 - **Settings page**: `FoamySettingsPage` (back, "Settings", "Saving…", error +
   Retry, sections). Sections: `FoamySettingsSection`, sentence-case titles.
+  A page wider than the settings width (a Wide popup's) reads as one
+  column: set `columnWidth`; Back and the title, the error line and the
+  sections keep to the centred column, the band still runs to the card's
+  edges.
 - **Scrolling**: every scrolling list or page takes a wheel notch as a normal
   step (~3 rows: `wheelScrollLines` × `rowHeight`), however the mouse splits it,
   and touchpad pixel deltas 1:1. FoamySettingsPage does it; a plugin Flickable

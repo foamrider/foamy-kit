@@ -63,19 +63,24 @@ def run_shell(
     notes=False,
     theme="dark",
     clipboard=False,
+    forbid=(),
+    language=None,
 ):
     """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
     shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
     <name>-<suffix>.png. `theme` is a preview/themes name or a colors.toml
     path. `clipboard` puts the hostenv.clipboard_fakes() stand-ins in front
-    of the run's PATH, so a paste never reads the real clipboard. Returns
-    True when it passed."""
+    of the run's PATH, so a paste never reads the real clipboard. A log line
+    containing one of `forbid` (a Qt warning the scene provokes) fails the
+    run. `language` is the host's language (an RTL one mirrors what follows
+    FoamyI18n.rightToLeft). Returns True when it passed."""
     r = harness.Run(
         host,
         (KIT_ROOT / "tests/qml" / qml_name).read_text(),
         plugin=plugin,
         scale=scale,
         theme=theme,
+        language=language,
         prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-",
     )
     if clipboard:
@@ -85,10 +90,13 @@ def run_shell(
     detail = next((line.split("qml: ", 1)[-1] for line in r.log.splitlines() if "FOAMY RESULT" in line), "no result")
     # A layout that never settles (an Image in a Layout without preferred size…).
     loops = [line for line in r.log.splitlines() if "polish() loop" in line]
+    forbidden = [line for line in r.log.splitlines() if any(text in line for text in forbid)]
     ok = report(
         f"{Path(qml_name).stem.lower()} {tag}",
-        r.ok and not loops,
-        detail + (f"; {len(loops)} polish-loop warnings" if loops else ""),
+        r.ok and not loops and not forbidden,
+        detail
+        + (f"; {len(loops)} polish-loop warnings" if loops else "")
+        + (f"; forbidden: {forbidden[0].strip()}" if forbidden else ""),
     )
     if notes:
         for line in r.log.splitlines():

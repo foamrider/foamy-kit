@@ -37,9 +37,10 @@ edited in a plugin: change it here, then sync.
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
-| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene; field mode (`field`, `fieldOrigin`, `fieldOpen`; not in the centred variant): a text field grows out of a header action across the title row, the band's height fixed |
+| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form (its title optionally a FoamyTitleAction: `compactTitleAction`), own picture or scene; field mode (`field`, `fieldOrigin`, `fieldOpen`; not in the centred variant): a text field grows out of a header action across the title row, the band's height fixed |
 | FoamyMenu | `FoamyMenu.qml`, `FoamyMenuItem.qml` | In-card menu dropping from a button (the ⋯ menu): icons, separators, submenus, single-cursor keys, RTL |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
+| FoamyTitleAction | `FoamyTitleAction.qml` | A title that is a control (an editor's place): mark, text, chevron, hover fill and keys' ring, `activated(keyboard)`, elide with a capped tooltip, `menuAnchor` to hang a FoamyMenu from its start |
 | FoamyButton | `FoamyButton.qml` | Form button (primary/secondary/destructive, icon, busy, focus ring) |
 | FoamyPanelFooter | `FoamyPanelFooter.qml` | Footer: source or leading action, "Updated …", refresh |
 | FoamyInfoNote | `FoamyInfoNote.qml` | (i) beside a heading that opens an inline help note (instead of long tooltips) |
@@ -53,7 +54,7 @@ edited in a plugin: change it here, then sync.
 | SafeTextField | `SafeTextField.qml` | Text field with bounded, out-of-process paste (through FoamyClipboard), `maximumLength`; `masked: true` for secrets: shows only •, value in `secretText`, no copy/cut/undo, no clipboard or primary-selection writes; styled `runs` ({text, color}) drawn over its own glyphs, plain text when they don't match or text is selected |
 | SafeTextArea | `SafeTextArea.qml` | Multi-line SafeTextField: the same bounded paste with line breaks kept, `maximumLength`, wrapping, `minimumHeight`/`maximumHeight` (scrolls past it), Enter for a newline, `keyPressed` hook (Ctrl+Enter), `editingFinished` on focus loss |
 | FoamyNumberField | `FoamyNumberField.qml`, `FoamyTextSettingField.qml` | Binding-safe numeric and text settings fields: draft, Enter/focus-out commit, Escape restore, step, validation, compact one-row form for short values |
-| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`), plain toggle rows, open/close state |
+| FoamySettings | `FoamySettingsPage/Header/Section/Error/State.qml`, `FoamyToggle.qml` | Settings page skeleton (wheel scrolling, `ensureVisible`, section `info`, a centred `columnWidth` on a wide page), plain toggle rows, open/close state |
 | FoamyCursor | `FoamyCursor.qml`, `FoamyCursorSurface.qml` | Single keyboard/pointer cursor model and row surface |
 | FoamyPrefs | `FoamyPrefs.js`, `FoamyPrefsQueue.qml`, `node-loader.cjs` | Schema (incl. array/object), queued saving (inline, else the CLI), an invalid stored array kept until a forced save (`storedProblems.<key>` says which), node loader for unit tests |
 | FoamyText | `FoamyText.js`, `node-loader.cjs` | `cap(text, lines, chars)` and `tooltip(text)`: text for a sink with no size bound of its own (the host bar tooltip), cut with a visible "…", never between a letter and its marks or inside an emoji sequence, a flag or a surrogate pair |
