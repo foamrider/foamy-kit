@@ -12,7 +12,9 @@ the active ink. The QML side checks the icon's colour, the pointer on an
 inert or busy button, busy starting and ending under the pointer, the
 border and focus ring, the label on the fill through each change of
 state, also under the pointer, and the hover animation. An inert and a disabled button of each kind on a tinted surface
-show its colour through their fill. Card screenshots:
+show its colour through their fill. A focused primary's ring, at rest,
+under the cursor and inert, reads at least 3:1 against the fill inside
+it, from the pixels. Card screenshots:
 tests/out/button-states/ (FOAMY_BUTTON_STATES_OUT overrides)."""
 
 import json
@@ -50,6 +52,9 @@ MARGIN = 1.1
 # least this much in one channel, 8 bits; an opaque fill differs by the
 # renderer's rounding, 0 or 1. The nearest: an inert primary, mix up to .8.
 TINT_APART = 16
+# A primary's focus ring against the fill inside it, WCAG 2 (non-text
+# contrast).
+RING_FLOOR = 3.0
 
 
 def relative(p):
@@ -166,10 +171,51 @@ def run(host, theme, source, plugin, out_dir):
     tinted_png = out_dir / f"button-states-{host}-{theme}-tinted.png"
     shutil.copyfile(r.out / "card.png", png)
     shutil.copyfile(r.out / "tinted.png", tinted_png)
+    focus_info = json.loads(
+        next(line.split("FOAMY FOCUS ", 1)[1] for line in r.log.splitlines() if "FOAMY FOCUS " in line)
+    )
+    focus_pngs = {}
+    for name in focus_info["buttons"]:
+        focus_pngs[name] = out_dir / f"button-states-{host}-{theme}-focus-{name}.png"
+        shutil.copyfile(r.out / f"focus-{name}.png", focus_pngs[name])
     r.cleanup()
     drawn = measure(png, info)
     tinted_info["card"] = tinted_info["size"]
-    return all([check_theme(tag, theme, drawn), check_see_through(tag, drawn, measure(tinted_png, tinted_info))])
+    return all(
+        [
+            check_theme(tag, theme, drawn),
+            check_see_through(tag, drawn, measure(tinted_png, tinted_info)),
+            check_focus_rings(tag, focus_info, focus_pngs),
+        ]
+    )
+
+
+def check_focus_rings(tag, info, pngs):
+    """A focused primary's 2 px ring reads against the fill just inside it,
+    at rest, under the cursor and inert. (Until 0.16.1 the ring was the
+    text colour: 1.46:1 on the dark preview's accent, 1.63:1 on the light
+    one's.)"""
+    results = []
+    for name, (bx, by, _, bh) in info["buttons"].items():
+        width, _, px = read_png(pngs[name])
+        scale = width / info["card"][0]
+
+        def at(x, y, scale=scale, px=px):
+            return px(round(x * scale), round(y * scale))
+
+        # The ring: the leading edge's second pixel column at mid height;
+        # the fill: clear of the ring, before the label.
+        ring = at(bx + 1, by + bh / 2)
+        fill = at(bx + 5, by + bh / 2)
+        ratio = contrast(ring, fill)
+        results.append(
+            report(
+                f"button-states {tag} primary focus ring reads ({name})",
+                ratio >= RING_FLOOR,
+                f"{ring[:3]} on {fill[:3]}: {ratio:.2f}:1, at least {RING_FLOOR}",
+            )
+        )
+    return all(results)
 
 
 def check_see_through(tag, drawn, tinted):

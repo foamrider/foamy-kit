@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Runtime checks on 4.5: FoamyI18n (English, Danish and Arabic), FoamyMotion,
-FoamyPalette (and a live theme switch), FoamyStyle, FoamyCursor, FoamyShared
-leader election and leader takeover across three bar instances, and FoamyIpc
-over both the IpcRegistry socket path and `qs ipc`."""
+FoamyPalette (and a live theme switch; `onSurface` on greys from black to
+white and on the popup's tints, light and dark), FoamyStyle, FoamyCursor,
+FoamyShared leader election and leader takeover across three bar instances,
+and FoamyIpc over both the IpcRegistry socket path and `qs ipc`."""
 
 import json
 import shutil
