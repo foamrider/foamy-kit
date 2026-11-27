@@ -9,9 +9,9 @@ fill moves toward the surface from active to inert to disabled, each step
 is weaker by a clear margin, and a disabled label reads less than an
 inert one; where the accent's own ink reads by .8, an inert primary keeps
 the active ink. The QML side checks the icon's colour, the pointer on an
-inert button, busy, the border and focus ring, the label on the fill
-through each change of state, also under the pointer, and the hover
-animation. An inert and a disabled button of each kind on a tinted surface
+inert or busy button, busy starting and ending under the pointer, the
+border and focus ring, the label on the fill through each change of
+state, also under the pointer, and the hover animation. An inert and a disabled button of each kind on a tinted surface
 show its colour through their fill. Card screenshots:
 tests/out/button-states/ (FOAMY_BUTTON_STATES_OUT overrides)."""
 

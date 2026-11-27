@@ -13,12 +13,14 @@ import "plugin/kit"
 // put their forms. The body grid's labels are a full block (█), so
 // test_button_states.py can read the label's colour as drawn from the
 // card's pixels; the settings grid has real labels and icons, for the
-// pictures. Here: the icon draws in the label's colour, an inert button
-// keeps its look and the plain cursor under the pointer and takes no
-// click, a busy one draws as an active one, the states keep the active
-// button's size, the border fades with the state but a focus ring does
-// not, a change of state never shows the new label on the old fill, also
-// under the pointer, and an active button's hover still animates.
+// pictures. Here: the icon draws in the label's colour, an inert or busy
+// button keeps its look and the plain cursor under the pointer and
+// pressed and takes no click, a busy one draws as an active one and eases
+// between the hover and rest fill when it starts or ends under the
+// pointer, the states keep the active button's size, the border fades
+// with the state but a focus ring does not, a change of state never shows
+// the new label on the old fill, also under the pointer, and an active
+// button's hover still animates.
 // Prints FOAMY BUTTONS <json> (where each button and its label are on the
 // card) and saves the card to FOAMY_OUT/card.png; an inert and a disabled
 // button of each kind on a tinted surface: FOAMY TINTED <json> and
@@ -262,17 +264,25 @@ ShellRoot {
     })
   }
 
-  // Each kind's inert button under the pointer: the same fill and label
-  // as before, the plain cursor, and a click does nothing.
-  function pointer(k) {
-    if (k === kinds.length) {
-      check(clicks === 0, "no inert button took a click " + clicks)
+  // Each kind's inert and busy button under the pointer and pressed: the
+  // same fill, label and border as at rest (a busy one: the rest fill, not
+  // the hover or press fill), the plain cursor, and a click does nothing.
+  readonly property var pointed: ["inert", "busy"]
+  function pointer(i) {
+    if (i === kinds.length * pointed.length) {
+      check(clicks === 0, "no inert or busy button took a click " + clicks)
       borders()
       transition(0, 0)
       return
     }
-    var b = button(popup.bodyItem.blocks, kinds[k], "inert")
-    var before = [String(b.color), String(label(b).color), String(b.border.color)]
+    var kind = kinds[Math.floor(i / pointed.length)]
+    var state = pointed[i % pointed.length]
+    var name = kind + " " + state
+    var b = button(popup.bodyItem.blocks, kind, state)
+    var look = function () {
+      return JSON.stringify([String(b.color), String(label(b).color), String(b.border.color)])
+    }
+    var before = look()
     var area = findWhere(b, function (c) {
       return c.cursorShape !== undefined && c.containsMouse !== undefined
     })
@@ -280,17 +290,20 @@ ShellRoot {
     wait.waitFor(function () {
       return area.containsMouse
     }, 3000, function (ok) {
-      check(ok, kinds[k] + ": the pointer reaches the inert button")
+      check(ok, name + ": the pointer reaches the button")
       // A hover fill would have started its animation by now.
       wait.after(FoamyMotion.hover + 100, function () {
-        var after = [String(b.color), String(label(b).color), String(b.border.color)]
-        check(JSON.stringify(after) === JSON.stringify(before), kinds[k] + ": an inert button keeps its look under the pointer " + before + " -> " + after)
-        check(area.cursorShape === Qt.ArrowCursor, kinds[k] + ": an inert button shows the plain cursor " + area.cursorShape)
-        ev.mouseClick(b, b.width / 2, b.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
-        ev.mouseMove(popup.cardItem, 1, popup.cardItem.height - 1, -1, Qt.NoButton, Qt.NoModifier)
-        shell.pointer(k + 1)
+        check(look() === before, name + ": keeps its look under the pointer " + before + " -> " + look())
+        check(area.cursorShape === Qt.ArrowCursor, name + ": shows the plain cursor " + area.cursorShape)
+        ev.mousePress(b, b.width / 2, b.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+        wait.after(FoamyMotion.hover + 100, function () {
+          check(area.pressed && look() === before, name + ": keeps its look pressed " + before + " -> " + look())
+          ev.mouseRelease(b, b.width / 2, b.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+          ev.mouseMove(popup.cardItem, 1, popup.cardItem.height - 1, -1, Qt.NoButton, Qt.NoModifier)
+          shell.pointer(i + 1)
+        })
       })
-    }, tag + " " + kinds[k] + " pointer")
+    }, tag + " " + name + " pointer")
   }
 
   // Inert and disabled fade the border as the fill (.7, .45); a focus ring
@@ -425,6 +438,42 @@ ShellRoot {
   function pointerOn(b) {
     ev.mouseMove(b, b.width / 2, b.height / 2, -1, Qt.NoButton, Qt.NoModifier)
   }
+  // Busy starting under the pointer: the fill eases from hot to rest
+  // (values between the two) and settles on rest; busy ending, back to
+  // hot. The label keeps its colour, so it reads as on the hot or rest
+  // fill throughout. then() with the probe hot again.
+  function busyUnderPointer(probe, rest, hot, name, then) {
+    var ink = String(label(probe).color)
+    var ease = function (busy, from, to, what, next) {
+      var seen = []
+      var inks = []
+      var record = function () {
+        seen.push(String(probe.color))
+      }
+      var recordInk = function () {
+        inks.push(String(label(probe).color))
+      }
+      probe.colorChanged.connect(record)
+      label(probe).colorChanged.connect(recordInk)
+      probe.busy = busy
+      settle(probe, function (ok) {
+        probe.colorChanged.disconnect(record)
+        label(probe).colorChanged.disconnect(recordInk)
+        var between = seen.filter(function (c) {
+          return colorBetween(Qt.color(c), Qt.color(from), Qt.color(to))
+        })
+        var others = seen.filter(function (c) {
+          return c !== from && c !== to && !colorBetween(Qt.color(c), Qt.color(from), Qt.color(to))
+        })
+        check(ok && probe.hovered && String(probe.color) === to && between.length > 0 && others.length === 0, name + ": " + what + " under the pointer, the fill eases " + from + " -> " + probe.color + " / " + to + " through " + between.length + " of " + seen.length + " values, " + others.length + " outside")
+        check(inks.length === 0 && String(label(probe).color) === ink, name + ": " + what + " under the pointer, the label keeps its colour " + ink + " -> " + label(probe).color + " (" + inks.length + " changes)")
+        next()
+      })
+    }
+    ease(true, hot, rest, "busy starting", function () {
+      ease(false, rest, hot, "busy ending", then)
+    })
+  }
   function hover(k) {
     if (k === kinds.length) {
       finish()
@@ -461,45 +510,49 @@ ShellRoot {
           })
           check(ok && hot !== rest && between.length > 0, name + ": the fill animates from rest to hot " + rest + " -> " + hot + " through " + between.length + " of " + seen.length + " values")
           var hotRatio = drawnRatio(probe)
-          pointerOff()
-          settle(probe, function (ok) {
-            check(ok && String(probe.color) === rest, name + ": off the pointer the fill returns to rest " + probe.color)
-            var onHover = function () {
-              if (!probe.hovered)
-                return
-              probe.hoveredChanged.disconnect(onHover)
-              // After the bindings of the hover have run: its animation
-              // has started.
-              Qt.callLater(function () {
-                setState(probe, "inert")
-                check(drawn() === want, name + ": turned inert under the pointer, the inert fill and label at once " + drawn() + " / " + want)
-                wait.after(FoamyMotion.hover + 50, function () {
-                  check(drawn() === want, name + ": and still after the hover time " + drawn() + " / " + want)
-                  var floor = Math.min(inertRatio, hotRatio)
-                  setState(probe, "active")
-                  sampleRatio(probe, function (worst) {
-                    check(worst >= floor - 0.005, name + ": active again under the pointer, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
-                    setState(probe, "inert")
-                    pointerOff()
-                    // Within the hover time on an idle machine; later, the
-                    // check still holds and proves less.
-                    wait.after(30, function () {
-                      var floor = Math.min(inertRatio, restRatio)
-                      setState(probe, "active")
-                      sampleRatio(probe, function (worst) {
-                        check(worst >= floor - 0.005, name + ": inert, left by the pointer and active again, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
-                        settle(probe, function (ok) {
-                          check(ok && String(probe.color) === rest, name + ": the fill settles at rest " + probe.color + " / " + rest)
-                          shell.hover(k + 1)
+          busyUnderPointer(probe, rest, hot, name, function () {
+            pointerOff()
+            settle(probe, function (ok) {
+              check(ok && String(probe.color) === rest, name + ": off the pointer the fill returns to rest " + probe.color)
+              var onHover = function () {
+                if (!probe.hovered)
+                  return
+                probe.hoveredChanged.disconnect(onHover)
+                // After the bindings of the hover have run: its animation
+                // has started.
+                Qt.callLater(function () {
+                  setState(probe, "inert")
+                  check(drawn() === want, name + ": turned inert under the pointer, the inert fill and label at once " + drawn() + " / " + want)
+                  wait.after(FoamyMotion.hover + 50, function () {
+                    check(drawn() === want, name + ": and still after the hover time " + drawn() + " / " + want)
+                    var floor = Math.min(inertRatio, hotRatio)
+                    setState(probe, "active")
+                    check(String(probe.color) === hot, name + ": active again under the pointer, the hot fill at once " + probe.color + " / " + hot)
+                    sampleRatio(probe, function (worst) {
+                      check(worst >= floor - 0.005, name + ": active again under the pointer, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
+                      setState(probe, "inert")
+                      pointerOff()
+                      // Within the hover time on an idle machine; later, the
+                      // check still holds and proves less.
+                      wait.after(30, function () {
+                        var floor = Math.min(inertRatio, restRatio)
+                        setState(probe, "active")
+                        check(String(probe.color) === rest, name + ": inert, left by the pointer and active again, the rest fill at once " + probe.color + " / " + rest)
+                        sampleRatio(probe, function (worst) {
+                          check(worst >= floor - 0.005, name + ": inert, left by the pointer and active again, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
+                          settle(probe, function (ok) {
+                            check(ok && String(probe.color) === rest, name + ": the fill settles at rest " + probe.color + " / " + rest)
+                            shell.hover(k + 1)
+                          })
                         })
                       })
                     })
                   })
                 })
-              })
-            }
-            probe.hoveredChanged.connect(onHover)
-            pointerOn(probe)
+              }
+              probe.hoveredChanged.connect(onHover)
+              pointerOn(probe)
+            })
           })
         })
       })
