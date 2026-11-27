@@ -142,60 +142,29 @@ Rectangle {
     }
   }
 
-  // The fill of the current state, and which state that is. Hover and
-  // press of an active button animate; a change of state draws its fill
-  // at once, with its label, so the label never sits on the other state's
-  // fill (an animated fill under the new label read 1.57:1 just after
-  // inert to active in the light preview). `color` is set from it by
-  // _drawFill(), not bound.
-  readonly property var _fillTarget: {
-    if (_quiet)
-      return {
-        look: String(_strength),
-        fill: _quiet.fill
-      }
-    let fill
-    if (primary) {
-      const base = Commons.Color.accent
-      fill = root.pressed && root.active ? Qt.darker(base, 1.12) : root.hot ? Qt.lighter(base, 1.1) : base
-    } else if (destructive) {
-      fill = Qt.alpha(Commons.Color.urgent, root.pressed && root.active ? 0.26 : root.hot ? 0.2 : 0.12)
-    } else {
-      fill = root.pressed && root.active ? Qt.alpha(FoamyPalette.text, 0.14) : root.hot ? Qt.alpha(FoamyPalette.text, 0.1) : FoamyPalette.fieldFill
-    }
-    return {
-      look: "active",
-      fill: fill
+  // An active button's fill: hover and press animate. A change of state
+  // draws at once, so the label never sits on the other state's fill (an
+  // animated `color` under the new label read 1.57:1 just after inert to
+  // active in the light preview): `color` is bound to the inert or
+  // disabled fill, and while the button is not active this fill follows
+  // the pointer without animating, so it is in place when the button turns
+  // active. A theme or `kind` change of an active button still animates
+  // its fill under the new label, for one hover time, as before 0.15.2.
+  property color _activeFill: {
+    if (mouse.pressed)
+      return primary ? Qt.darker(Commons.Color.accent, 1.12) : destructive ? Qt.alpha(Commons.Color.urgent, 0.26) : Qt.alpha(FoamyPalette.text, 0.14)
+    if (hasCursor || mouse.containsMouse)
+      return primary ? Qt.lighter(Commons.Color.accent, 1.1) : destructive ? Qt.alpha(Commons.Color.urgent, 0.2) : Qt.alpha(FoamyPalette.text, 0.1)
+    return _restFill
+  }
+  Behavior on _activeFill {
+    enabled: root.active
+    ColorAnimation {
+      duration: FoamyMotion.hover
     }
   }
-  property string _drawnLook: ""
-  on_FillTargetChanged: _drawFill()
-  Component.onCompleted: _drawFill()
-
-  function _drawFill() {
-    const target = _fillTarget
-    const animate = target.look === "active" && _drawnLook === "active" && FoamyMotion.hover > 0
-    _drawnLook = target.look
-    // The binding above re-runs for changes that keep the fill: let a
-    // running hover or press go on to the same colour.
-    if (animate && fillMotion.running && Qt.colorEqual(fillMotion.to, target.fill))
-      return
-    fillMotion.stop()
-    if (animate && !Qt.colorEqual(color, target.fill)) {
-      fillMotion.from = color
-      fillMotion.to = target.fill
-      fillMotion.start()
-    } else {
-      color = target.fill
-    }
-  }
-
-  ColorAnimation {
-    id: fillMotion
-    target: root
-    property: "color"
-    duration: FoamyMotion.hover
-  }
+  // Busy draws as active at rest.
+  color: _quiet ? _quiet.fill : active ? _activeFill : _restFill
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight

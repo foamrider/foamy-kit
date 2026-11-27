@@ -1,7 +1,6 @@
 # qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
 # finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
 # only to drop fixed entries or after reviewing every added one; never to pass a check.
-kit/FoamyButton.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var base = Commons.Color.accent
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < options.length; i++)
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < options.length; i++) {
 kit/FoamyDropdown.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < root.options.length; i++)

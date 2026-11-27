@@ -17,7 +17,8 @@ import "plugin/kit"
 // keeps its look and the plain cursor under the pointer and takes no
 // click, a busy one draws as an active one, the states keep the active
 // button's size, the border fades with the state but a focus ring does
-// not, and a change of state never shows the new label on the old fill.
+// not, a change of state never shows the new label on the old fill, also
+// under the pointer, and an active button's hover still animates.
 // Prints FOAMY BUTTONS <json> (where each button and its label are on the
 // card) and saves the card to FOAMY_OUT/card.png.
 ShellRoot {
@@ -171,8 +172,8 @@ ShellRoot {
     var w = popup.cardItem.Window.window
     if (!w.active)
       w.requestActivate()
-    // Fills animate (Behavior on color): wait until no button's fill
-    // changes on three polls in a row.
+    // Measure the card settled: wait until no button's fill changes on
+    // three polls in a row.
     var last = "", same = 0
     wait.waitFor(function () {
       var now = fills()
@@ -293,10 +294,11 @@ ShellRoot {
   }
 
   // A change of state draws the new fill with the new label: sampled right
-  // after each change (before the next frame) and through the next 150 ms,
-  // the label on the fill as drawn over the card never reads worse than in
-  // the weaker of the two states, settled. With motion on: an animated
-  // fill under the new label read 1.57:1 (light primary, inert to active).
+  // after each change and on each change of the fill or the label through
+  // the next 150 ms, the label on the fill as drawn over the card never
+  // reads worse than in the weaker of the two states, settled. With motion
+  // on: an animated fill under the new label read 1.57:1 (light primary,
+  // inert to active).
   readonly property var moves: [["active", "inert"], ["inert", "disabled"], ["disabled", "inert"], ["inert", "active"], ["active", "disabled"], ["disabled", "active"]]
   property var settledRatios: ({})
   function drawnRatio(b) {
@@ -307,9 +309,43 @@ ShellRoot {
     b.enabled = state !== "disabled"
     b.actionEnabled = state !== "inert"
   }
+  // Calls then(ok) once b's fill and label have kept their colour for three
+  // polls in a row (a fill that still moves would be the last change's).
+  function settle(b, then) {
+    var last = "", same = 0
+    wait.waitFor(function () {
+      var now = String(b.color) + String(label(b).color)
+      same = now === last ? same + 1 : 0
+      last = now
+      return same >= 2
+    }, 3000, then)
+  }
+  // The worst ratio of b's label on its fill from now on, for
+  // FoamyMotion.hover + 50 ms; then(worst). Sampled after each change of
+  // the fill or the label, once the bindings of that change have run
+  // (Qt.callLater): between the fill's and the label's notification of
+  // one change, no frame is drawn.
+  function sampleRatio(b, then) {
+    var worst = drawnRatio(b)
+    var text = label(b)
+    var sample = function () {
+      worst = Math.min(worst, drawnRatio(b))
+    }
+    var later = function () {
+      Qt.callLater(sample)
+    }
+    b.colorChanged.connect(later)
+    text.colorChanged.connect(later)
+    wait.after(FoamyMotion.hover + 50, function () {
+      b.colorChanged.disconnect(later)
+      text.colorChanged.disconnect(later)
+      sample()
+      then(worst)
+    })
+  }
   function transition(k, m) {
     if (k === kinds.length) {
-      finish()
+      hover(0)
       return
     }
     if (m === moves.length) {
@@ -331,32 +367,114 @@ ShellRoot {
     var from = moves[m][0], to = moves[m][1]
     var floor = Math.min(settledRatios[from], settledRatios[to])
     var name = kinds[k] + " " + from + " -> " + to
-    // The probe starts settled in `from` (a fill that still moves would
-    // be the last change's).
-    var last = "", same = 0
-    wait.waitFor(function () {
-      var now = String(probe.color) + String(label(probe).color)
-      same = now === last ? same + 1 : 0
-      last = now
-      return same >= 2
-    }, 3000, function (ok) {
+    settle(probe, function (ok) {
       check(ok, name + ": the probe settles")
       setState(probe, to)
-      var worst = drawnRatio(probe)
-      var start = Date.now()
-      var sampler = wait.timer.createObject(shell, {
-        interval: 5
-      })
-      sampler.triggered.connect(function () {
-        worst = Math.min(worst, drawnRatio(probe))
-        if (Date.now() - start < FoamyMotion.hover + 50)
-          return
-        sampler.stop()
-        sampler.destroy()
+      sampleRatio(probe, function (worst) {
         check(worst >= floor - 0.005, name + ": the label reads on the fill through the change " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
         shell.transition(k, m + 1)
       })
-      sampler.start()
+    })
+  }
+
+  // Hover and a change of state together, on each kind's active probe:
+  // under the pointer the fill animates from rest to hot; a probe that
+  // turns inert as that animation starts draws the inert fill and label at
+  // once and keeps them; turned active again under the pointer, the label
+  // reads as on the hot fill; turned inert, left by the pointer and active
+  // again within the hover time, as on the rest fill, where the fill then
+  // stays. (With `Behavior` on the whole active fill, a light primary read
+  // 3.90:1 there, settled 4.35: the end of the animation from hot to rest.)
+  function colorBetween(c, a, b) {
+    var within = function (v, x, y) {
+      return v >= Math.min(x, y) - 0.002 && v <= Math.max(x, y) + 0.002
+    }
+    return !Qt.colorEqual(c, a) && !Qt.colorEqual(c, b) && within(c.r, a.r, b.r) && within(c.g, a.g, b.g) && within(c.b, a.b, b.b) && within(c.a, a.a, b.a)
+  }
+  function pointerOff() {
+    ev.mouseMove(popup.cardItem, 1, popup.cardItem.height - 1, -1, Qt.NoButton, Qt.NoModifier)
+  }
+  function pointerOn(b) {
+    ev.mouseMove(b, b.width / 2, b.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+  }
+  function hover(k) {
+    if (k === kinds.length) {
+      finish()
+      return
+    }
+    var blocks = popup.bodyItem.blocks
+    var probe = button(blocks, kinds[k], "active")
+    var inert = button(blocks, kinds[k], "inert")
+    var inertRatio = drawnRatio(inert)
+    var name = kinds[k] + " hover"
+    var drawn = function () {
+      return JSON.stringify([String(probe.color), String(label(probe).color)])
+    }
+    var want = JSON.stringify([String(inert.color), String(label(inert).color)])
+    settle(probe, function (ok) {
+      check(ok && !probe.hovered, name + ": the probe settles at rest off the pointer")
+      var rest = String(probe.color)
+      var restRatio = drawnRatio(probe)
+      var seen = []
+      var record = function () {
+        seen.push(String(probe.color))
+      }
+      probe.colorChanged.connect(record)
+      pointerOn(probe)
+      wait.waitFor(function () {
+        return probe.hovered
+      }, 3000, function (ok) {
+        check(ok, name + ": the pointer reaches the probe")
+        settle(probe, function (ok) {
+          probe.colorChanged.disconnect(record)
+          var hot = String(probe.color)
+          var between = seen.filter(function (c) {
+            return colorBetween(Qt.color(c), Qt.color(rest), Qt.color(hot))
+          })
+          check(ok && hot !== rest && between.length > 0, name + ": the fill animates from rest to hot " + rest + " -> " + hot + " through " + between.length + " of " + seen.length + " values")
+          var hotRatio = drawnRatio(probe)
+          pointerOff()
+          settle(probe, function (ok) {
+            check(ok && String(probe.color) === rest, name + ": off the pointer the fill returns to rest " + probe.color)
+            var onHover = function () {
+              if (!probe.hovered)
+                return
+              probe.hoveredChanged.disconnect(onHover)
+              // After the bindings of the hover have run: its animation
+              // has started.
+              Qt.callLater(function () {
+                setState(probe, "inert")
+                check(drawn() === want, name + ": turned inert under the pointer, the inert fill and label at once " + drawn() + " / " + want)
+                wait.after(FoamyMotion.hover + 50, function () {
+                  check(drawn() === want, name + ": and still after the hover time " + drawn() + " / " + want)
+                  var floor = Math.min(inertRatio, hotRatio)
+                  setState(probe, "active")
+                  sampleRatio(probe, function (worst) {
+                    check(worst >= floor - 0.005, name + ": active again under the pointer, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
+                    setState(probe, "inert")
+                    pointerOff()
+                    // Within the hover time on an idle machine; later, the
+                    // check still holds and proves less.
+                    wait.after(30, function () {
+                      var floor = Math.min(inertRatio, restRatio)
+                      setState(probe, "active")
+                      sampleRatio(probe, function (worst) {
+                        check(worst >= floor - 0.005, name + ": inert, left by the pointer and active again, the label reads on the fill " + worst.toFixed(2) + ", settled at least " + floor.toFixed(2))
+                        settle(probe, function (ok) {
+                          check(ok && String(probe.color) === rest, name + ": the fill settles at rest " + probe.color + " / " + rest)
+                          shell.hover(k + 1)
+                        })
+                      })
+                    })
+                  })
+                })
+              })
+            }
+            probe.hoveredChanged.connect(onHover)
+            pointerOn(probe)
+          })
+        })
+      })
     })
   }
 

@@ -36,7 +36,13 @@
   at once; hover and press of an active button still animate. (A fill
   that animated for 100 ms under the new label read 1.57:1 just after
   inert to active and 1.09:1 after active to disabled, light primary; a
-  secondary passed a half-opaque grey.) The border fades as before; the
+  secondary passed a half-opaque grey.) While a button is not active, its
+  active fill follows the pointer without animating, so a button that
+  turns active under the pointer shows the hover fill at once, and one
+  left by the pointer while inert shows the rest fill (an animation from
+  hover to rest there read 3.90:1, settled 4.35, light primary). A theme
+  or `kind` change of an active button still animates its fill under the
+  new label, as before. The border fades as before; the
   focus ring keeps full strength. Active and busy buttons render the
   same, pixel for pixel; inert keeps no hover or press and the plain
   cursor. `foreground` is now the label's colour in the current state.
@@ -62,10 +68,11 @@
   ink where the accent's ink reads by .8, the icon in the label's
   colour, an inert button under the pointer, busy as active, the border
   at .7 and .45 of the active one, a focused inert button's full ring,
-  and each change between the three states sampled from its first moment
-  for 150 ms; on the 0.15.1 button 14 of the 18 label checks failed, all
-  but the secondary in the two dark themes, e.g. light primary inert
-  2.08:1).
+  each change between the three states sampled from its first moment
+  and on each change of the fill or the label for 150 ms, the hover
+  animation, a button that turns inert as it starts and active again
+  under and off the pointer; on the 0.15.1 button 14 of the 18 label checks failed, all but the secondary in
+  the two dark themes, e.g. light primary inert 2.08:1).
 
 ## 0.15.1 — 2026-11-26
 
