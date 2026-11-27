@@ -44,6 +44,7 @@ run python3 -I test_click_away.py
 run python3 -I test_popup_keys.py
 run python3 -I test_menu.py
 run python3 -I test_components.py
+run python3 -I test_button_states.py
 run python3 -I test_rows.py
 run python3 -I test_tabs.py
 run python3 -I test_masked.py

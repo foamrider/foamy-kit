@@ -1,0 +1,14 @@
+# A dark theme with a mid accent (Tokyo Night's colours: #7aa2f7, 6.8:1
+# on #1a1b26): a primary's dark ink reads on the accent but falls short on
+# it at .7, so FoamyButton's inert fill steps up. Values only; not a real
+# Omarchy theme.
+mode = "dark"
+accent = "#7aa2f7"
+background = "#1a1b26"
+foreground = "#a9b1d6"
+muted = "#565f89"
+red = "#f7768e"
+yellow = "#e0af68"
+green = "#9ece6a"
+cyan = "#7dcfff"
+blue = "#7aa2f7"
