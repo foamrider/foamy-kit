@@ -102,7 +102,9 @@ Item {
         color: titleMouse.containsMouse || activeFocus ? FoamyPalette.hoverFill : "transparent"
         border.width: activeFocus ? 1 : 0
         border.color: Commons.Color.accent
-        activeFocusOnTab: root.titleAction
+        // Off, the slot is hidden: never a Tab stop. (Bound to titleAction,
+        // Qt warns when it turns off while the control has the keys.)
+        activeFocusOnTab: true
 
         Behavior on color {
           ColorAnimation {

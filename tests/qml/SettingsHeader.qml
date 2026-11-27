@@ -403,6 +403,15 @@ ShellRoot {
       shell.check(start && m.top >= b.bottom && m.top - b.bottom <= FoamyStyle.gapSmall + 1, "the menu hangs under the control from its start " + JSON.stringify([m, b]))
       shell.ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
       shell.check(!menu.opened && button.activeFocus, "Esc closes the menu and gives the keys back to the control")
+      // Turned off while it has the keys (an editor's task went): the
+      // control hidden; on again, a Tab stop again. (test_settings_header.py
+      // fails on Qt's warning if the Tab stop is bound to the option.)
+      band.compactTitleAction = false
+      shell.check(!button.visible && shell.find(band, "foamyTitleActionText") !== null, "off while it had the keys: hidden")
+      band.compactTitleAction = true
+      band.backButton.forceActiveFocus()
+      shell.ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+      shell.check(button.activeFocus, "on again: Tab from Back reaches it")
       shell.elideChecks()
     })
   }

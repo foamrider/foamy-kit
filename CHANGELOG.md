@@ -36,7 +36,10 @@ nothing changes: the demo plugin's preview states render the same as with
   accessible name, no chevron and a click reported as keys (7 checks);
   with the control shown and on the Tab path while off (3 checks and 110
   pixels); with the anchor as wide as the control (the menu's place); and
-  with the off title taking the icon colour (592 pixels).
+  with the off title taking the icon colour (592 pixels). Turning the
+  action off while it has the keys (an editor's task went) logs no Qt
+  warning (`run_shell(forbid=…)` in `tests/common.py` fails a run on a
+  named log line); seen failing with the Tab stop bound to `titleAction`.
 - `FoamySettingsPage.columnWidth` (default: the page's width less its
   side paddings) and `columnInset`, for a page wider than the settings
   width (foamy-todoist's Wide page, 880 with a settings-wide column): Back
