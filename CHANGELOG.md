@@ -71,7 +71,9 @@
   each change between the three states sampled from its first moment
   and on each change of the fill or the label for 150 ms, the hover
   animation, a button that turns inert as it starts and active again
-  under and off the pointer; on the 0.15.1 button 14 of the 18 label checks failed, all but the secondary in
+  under and off the pointer, and an inert and a disabled button of each
+  kind on a tinted surface, whose fill shows the surface through; on the
+  0.15.1 button 14 of the 18 label checks failed, all but the secondary in
   the two dark themes, e.g. light primary inert 2.08:1).
 
 ## 0.15.1 — 2026-11-26

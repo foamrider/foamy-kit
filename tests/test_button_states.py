@@ -11,8 +11,9 @@ inert one; where the accent's own ink reads by .8, an inert primary keeps
 the active ink. The QML side checks the icon's colour, the pointer on an
 inert button, busy, the border and focus ring, the label on the fill
 through each change of state, also under the pointer, and the hover
-animation. Card screenshots: tests/out/button-states/
-(FOAMY_BUTTON_STATES_OUT overrides)."""
+animation. An inert and a disabled button of each kind on a tinted surface
+show its colour through their fill. Card screenshots:
+tests/out/button-states/ (FOAMY_BUTTON_STATES_OUT overrides)."""
 
 import json
 import os
@@ -44,6 +45,11 @@ KEEPS_INK = {"dark", "dim-red", "mid-accent"}
 # A weaker state differs from the stronger one by at least this factor in
 # the fill's contrast on the surface or the label's on the fill.
 MARGIN = 1.1
+# An inert or disabled fill's pixel on the tinted test surface (a green far
+# from every popup background) differs from its pixel on the card by at
+# least this much in one channel, 8 bits; an opaque fill differs by the
+# renderer's rounding, 0 or 1. The nearest: an inert primary, mix up to .8.
+TINT_APART = 16
 
 
 def relative(p):
@@ -153,10 +159,36 @@ def run(host, theme, source, plugin, out_dir):
     info = json.loads(
         next(line.split("FOAMY BUTTONS ", 1)[1] for line in r.log.splitlines() if "FOAMY BUTTONS " in line)
     )
+    tinted_info = json.loads(
+        next(line.split("FOAMY TINTED ", 1)[1] for line in r.log.splitlines() if "FOAMY TINTED " in line)
+    )
     png = out_dir / f"button-states-{host}-{theme}.png"
+    tinted_png = out_dir / f"button-states-{host}-{theme}-tinted.png"
     shutil.copyfile(r.out / "card.png", png)
+    shutil.copyfile(r.out / "tinted.png", tinted_png)
     r.cleanup()
-    return check_theme(tag, theme, measure(png, info))
+    drawn = measure(png, info)
+    tinted_info["card"] = tinted_info["size"]
+    return all([check_theme(tag, theme, drawn), check_see_through(tag, drawn, measure(tinted_png, tinted_info))])
+
+
+def check_see_through(tag, drawn, tinted):
+    """An inert or disabled fill is see-through: on the tinted surface its
+    pixel is not the one it has on the card. (An opaque fill, the popup
+    background tinted with the kind's fill, drew a patch of the popup's
+    colour on a hero band or a menu.)"""
+    results = []
+    for name, (fill, _, surface) in tinted.items():
+        on_card = drawn[name][0]
+        apart = max(abs(a - b) for a, b in zip(fill[:3], on_card[:3], strict=True))
+        results.append(
+            report(
+                f"button-states {tag} {name} fill is see-through",
+                apart >= TINT_APART,
+                f"{fill[:3]} on {surface[:3]}, {on_card[:3]} on the card: {apart} apart, at least {TINT_APART}",
+            )
+        )
+    return all(results)
 
 
 def main():

@@ -1230,8 +1230,8 @@ LTR/RTL, scale 1.0 and 1.25) the header overflow menu (`test_menu.py`), the
 centred band, footer, buttons, info note and FoamyPopupCard height
 (`test_components.py`), FoamyButton's inert and disabled labels measured
 from the drawn card in dark, light, a dim red, a mid and a dim accent, and
-read through each change of state, also under the pointer
-(`test_button_states.py`),
+read through each change of state, also under the pointer, and their
+see-through fills on a tinted surface (`test_button_states.py`),
 the tab row (`test_tabs.py`: 6 runs that cover every
 pair of LTR/RTL, the standard and wide popup and both scales in dark, plus
 light in both directions), and wheel scrolling and the settings page's focus

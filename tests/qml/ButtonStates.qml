@@ -20,7 +20,9 @@ import "plugin/kit"
 // not, a change of state never shows the new label on the old fill, also
 // under the pointer, and an active button's hover still animates.
 // Prints FOAMY BUTTONS <json> (where each button and its label are on the
-// card) and saves the card to FOAMY_OUT/card.png.
+// card) and saves the card to FOAMY_OUT/card.png; an inert and a disabled
+// button of each kind on a tinted surface: FOAMY TINTED <json> and
+// FOAMY_OUT/tinted.png.
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -230,6 +232,32 @@ ShellRoot {
     console.log("FOAMY BUTTONS " + JSON.stringify(info))
     popup.cardItem.grabToImage(function (result) {
       result.saveToFile(Quickshell.env("FOAMY_OUT") + "/card.png")
+      shell.tint()
+    })
+  }
+
+  // Shows the tinted surface for its own picture (FOAMY_OUT/tinted.png,
+  // geometry in FOAMY TINTED <json>), then hides it again.
+  function tint() {
+    tinted.visible = true
+    var info = {
+      size: [tinted.width, tinted.height],
+      buttons: {}
+    }
+    for (var k = 0; k < kinds.length; k++)
+      for (var s = 1; s < 3; s++) {
+        var b = button(tinted, kinds[k], states[s])
+        var at = b.mapToItem(tinted, 0, 0)
+        var text = label(b).mapToItem(tinted, 0, 0)
+        info.buttons[kinds[k] + "-" + states[s]] = {
+          button: [at.x, at.y, b.width, b.height],
+          label: [text.x, text.y, label(b).width, label(b).height]
+        }
+      }
+    console.log("FOAMY TINTED " + JSON.stringify(info))
+    tinted.grabToImage(function (result) {
+      result.saveToFile(Quickshell.env("FOAMY_OUT") + "/tinted.png")
+      tinted.visible = false
       shell.pointer(0)
     })
   }
@@ -482,6 +510,35 @@ ShellRoot {
     console.log("FOAMY RESULT " + tag + " checks=" + checks + " failures=" + failures)
     console.log("FOAMY DONE")
     Qt.quit()
+  }
+
+  // A clearly tinted surface with an inert and a disabled button of each
+  // kind: their fills are see-through, so they tint it as they tint the
+  // card; an opaque fill would draw the same pixels on both.
+  Rectangle {
+    id: tinted
+    parent: popup.cardItem
+    visible: false
+    z: 100
+    color: "#20d020"
+    width: tintedRow.implicitWidth + FoamyStyle.padding * 2
+    height: tintedRow.implicitHeight + FoamyStyle.padding * 2
+    Row {
+      id: tintedRow
+      x: FoamyStyle.padding
+      y: FoamyStyle.padding
+      spacing: FoamyStyle.gap
+      Repeater {
+        model: shell.kinds.length * 2
+        FoamyButton {
+          objectName: shell.kinds[Math.floor(index / 2)] + "-" + (index % 2 ? "disabled" : "inert")
+          kind: shell.kinds[Math.floor(index / 2)]
+          text: "\u2588"
+          actionEnabled: false
+          enabled: index % 2 === 0
+        }
+      }
+    }
   }
 
   Item {
