@@ -19,10 +19,12 @@ import "plugin/kit"
 //   first, with the hover fill and the accent ring; role Button and its
 //   accessible name; a menu anchored to compactTitleMenuAnchor hangs under
 //   it from its start; Esc gives the keys back to it; turned off with the
-//   menu open, the menu closes; a long title elides within the room left,
-//   with a tooltip on hover capped at Style.space(320), in the kit's font.
+//   menu open, the menu closes; turned off with the keys, Tab reaches the
+//   page's first Back; a long title elides within the room left, with a
+//   tooltip on hover capped at Style.space(320), in the kit's font, its
+//   text capped at 200 characters.
 //   Pictures: band-on-focused.png, band-on-long.png.
-// - A bare FoamyTitleAction: its mark and text where markCenter and
+// - A bare FoamyTitleAction: its mark and text where iconCenter and
 //   textStart put them, the chevron inside a box narrower than
 //   minimumWidth, menuAnchor as wide as menuWidth.
 // - The column: on a wide page Back and the title, the error line and its
@@ -199,7 +201,7 @@ ShellRoot {
             id: bare
             text: shell.place
             iconName: "hash"
-            markCenter: 30
+            iconCenter: 30
             textStart: 50
             menuWidth: 300
             width: minimumWidth - 10
@@ -354,7 +356,7 @@ ShellRoot {
     var mark = find(button, "foamyTitleActionMark")
     var chevron = find(button, "foamyTitleActionChevron")
     var ms = span(mark, band), xs = span(text, band), cs = span(chevron, band), bs = span(button, band)
-    check(mark.visible && mark.name === "hash" && chevron.visible && ms.start > bs.start && ms.end <= xs.start && xs.start < cs.start && cs.end < bs.end, "on: mark, title, chevron in reading order " + JSON.stringify([bs, ms, xs, cs]))
+    check(mark.visible && mark.name === "hash" && chevron.visible && ms.start > bs.start && ms.end <= xs.start && xs.end <= cs.start && cs.end < bs.end, "on: mark, title, chevron in reading order " + JSON.stringify([bs, ms, xs, cs]))
     check(Qt.colorEqual(mark.color, FoamyPalette.secondaryText), "on: the mark in the default colour " + mark.color)
     band.compactTitleIconColor = "#c03030"
     check(Qt.colorEqual(mark.color, "#c03030"), "on: the mark in the caller's colour " + mark.color)
@@ -428,18 +430,30 @@ ShellRoot {
       shell.check(start && m.top >= b.bottom && m.top - b.bottom <= FoamyStyle.gapSmall + 1, "the menu hangs under the control from its start " + JSON.stringify([m, b]))
       shell.ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
       shell.check(!menu.opened && button.activeFocus, "Esc closes the menu and gives the keys back to the control")
-      // Turned off while its menu is open and it has the keys (an editor's
-      // task went): the menu closes, the control goes; on again, a new one
-      // is a Tab stop. (test_settings_header.py fails on a Qt warning.)
+      // Turned off while its menu is open (an editor's task went): the
+      // menu closes (FoamyMenu closes when its anchor hides; the Loader
+      // hides the control before it goes) and the control goes.
       menu.open(true)
       shell.check(menu.opened, "the menu opens again")
       band.compactTitleAction = false
-      shell.check(!menu.opened && band.compactTitleButton === null && shell.find(band, "foamyTitleAction") === null, "off while its menu was open: the menu closed, no control")
+      shell.check(!menu.opened, "off while its menu was open: the menu closed")
+      shell.check(band.compactTitleButton === null && band.compactTitleMenuAnchor === null && shell.find(band, "foamyTitleAction") === null, "off: no control, no anchor")
+      // On again: a new control, a Tab stop.
       band.compactTitleAction = true
       var again = band.compactTitleButton
       band.backButton.forceActiveFocus()
       shell.ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
       shell.check(again !== null && again.activeFocus, "on again: Tab from Back reaches it")
+      // Turned off while it has the keys and no menu is open: Qt logs no
+      // warning (test_settings_header.py fails on one) and the keys are
+      // not lost: they stay on the empty Loader, no Tab stop, and Tab goes
+      // to the page's first Tab stop (here the first band's Back). Where
+      // they go next is the caller's to say.
+      band.compactTitleAction = false
+      shell.ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
+      shell.check(shell.body.offBand.backButton.activeFocus, "off while it had the keys: Tab reaches the first Back " + card.Window.window.activeFocusItem)
+      band.compactTitleAction = true
+      band.compactTitleButton.forceActiveFocus()
       // A picture with the keys on it.
       wait.after(300, function () {
         shell.grab(band, "band-on-focused", shell.elideChecks)
@@ -451,7 +465,9 @@ ShellRoot {
     var band = body.longBand
     var button = band.compactTitleButton
     var text = find(button, "foamyTitleActionText")
-    var slot = button.parent
+    // The room left: the title's slot (the Loader's parent; the Loader is
+    // as wide as its control).
+    var slot = button.parent.parent
     var trailing = band.compactTrailing[0]
     check(text.truncated && near(button.width, slot.width) && button.width < button.implicitWidth, "a long title elides in the room left " + JSON.stringify([button.width, slot.width, button.implicitWidth]))
     // "Saving…" and the trailing action stay in the band.
@@ -464,17 +480,41 @@ ShellRoot {
       return tip.visible
     }, 3000, function (ok) {
       shell.check(ok && tip.text === shell.longPlace, "the whole title in a tooltip on hover")
-      shell.check(near(tip.implicitWidth, Commons.Style.space(320)) && tip.contentItem.wrapMode === Text.WrapAtWordBoundaryOrAnywhere && tip.fontFamily === FoamyStyle.fontFamily, "the tooltip capped at Style.space(320), wrapped, in the kit's font " + JSON.stringify([tip.implicitWidth, Commons.Style.space(320), tip.fontFamily]))
-      // A title that fits: no tooltip.
-      var short = shell.body.actionBand.compactTitleButton
-      shell.ev.mouseMove(short, short.width / 2, short.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+      shell.check(near(tip.implicitWidth, Commons.Style.space(320)) && tip.fontFamily === FoamyStyle.fontFamily, "the tooltip capped at Style.space(320), in the kit's font " + JSON.stringify([tip.implicitWidth, Commons.Style.space(320), tip.fontFamily]))
+      shell.longTip(band, tip, function () {
+        band.compactTitle = shell.longPlace
+        shell.fitChecks(band)
+      })
+    })
+  }
+  // A title too long for a tooltip (a path whose first name has no break):
+  // the tooltip stays in its Style.space(320) box, a few lines high, the
+  // text cut at 200 characters with "…".
+  function longTip(band, tip, then) {
+    band.compactTitle = "Open /home/test/" + "X".repeat(512) + "/Sync/Folder-with-a-long-name".repeat(140)
+    var cap = Commons.Style.space(320)
+    wait.waitFor(function () {
+      // Hovered again each time: the new text closes the tooltip.
+      var button = band.compactTitleButton
+      ev.mouseMove(button, button.width / 2, button.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+      var text = tip.contentItem
+      return tip.opened && text && tip.width <= cap + 0.5 && text.contentWidth + text.leftPadding + text.rightPadding <= tip.width + 0.5 && tip.height < window.height / 3
+    }, 3000, function (inside) {
+      var shown = String(tip.text)
+      shell.check(inside && shown.length <= 200 && shown.slice(-1) === "\u2026", "a long title's tooltip stays in its " + cap + " px box, a few lines high, cut with …: " + tip.width + "x" + tip.height + ", " + (tip.contentItem ? tip.contentItem.contentWidth : 0) + " px of text, " + shown.length + " characters")
+      then()
+    })
+  }
+  // A title that fits: no tooltip.
+  function fitChecks(band) {
+    var short = body.actionBand.compactTitleButton
+    ev.mouseMove(short, short.width / 2, short.height / 2, -1, Qt.NoButton, Qt.NoModifier)
+    wait.after(300, function () {
+      shell.check(!shell.find(short, "foamyTitleActionTip").visible, "no tooltip for a title that fits")
+      shell.ev.mouseMove(shell.body, 2, shell.body.height - 2, -1, Qt.NoButton, Qt.NoModifier)
+      shell.body.catcher.forceActiveFocus()
       wait.after(300, function () {
-        shell.check(!shell.find(short, "foamyTitleActionTip").visible, "no tooltip for a title that fits")
-        shell.ev.mouseMove(shell.body, 2, shell.body.height - 2, -1, Qt.NoButton, Qt.NoModifier)
-        shell.body.catcher.forceActiveFocus()
-        wait.after(300, function () {
-          shell.grab(band, "band-on-long", shell.bareChecks)
-        })
+        shell.grab(band, "band-on-long", shell.bareChecks)
       })
     })
   }
@@ -486,8 +526,8 @@ ShellRoot {
     var text = find(b, "foamyTitleActionText")
     var chevron = find(b, "foamyTitleActionChevron")
     var ms = span(mark, b), xs = span(text, b), cs = span(chevron, b)
-    check(near((ms.start + ms.end) / 2, 30) && near(xs.start, 50), "bare: the mark centred at markCenter, the text at textStart " + JSON.stringify([ms, xs]))
-    check(text.width === 0 && cs.start >= 0 && cs.end <= b.width - b.padding + 0.5, "bare: narrower than minimumWidth, the chevron stays inside " + JSON.stringify([cs, b.width, b.minimumWidth]))
+    check(near((ms.start + ms.end) / 2, 30) && near(xs.start, 50), "bare: the mark centred at iconCenter, the text at textStart " + JSON.stringify([ms, xs]))
+    check(text.width === 0 && cs.start >= 0 && cs.end <= b.width - FoamyStyle.gap + 0.5, "bare: narrower than minimumWidth, the chevron stays inside " + JSON.stringify([cs, b.width, b.minimumWidth]))
     var a = span(b.menuAnchor, b)
     check(near(a.start, 0) && near(b.menuAnchor.width, 300), "bare: menuAnchor at the start, menuWidth wide " + JSON.stringify(a))
     columnChecks()

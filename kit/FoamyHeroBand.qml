@@ -226,7 +226,8 @@ Item {
   // The compact title as a control (off by default): FoamySettingsHeader's
   // title action, a FoamyTitleAction (titleAction, titleIconName,
   // titleIconColor, titleAccessibleName, titleButton, titleMenuAnchor,
-  // titleActivated). The button and the anchor are null while it is off.
+  // titleActivated). The button and the anchor are null while it is off;
+  // turned off, the caller places the keys it had.
   property bool compactTitleAction: false
   property string compactTitleIconName: ""
   property color compactTitleIconColor: FoamyPalette.secondaryText

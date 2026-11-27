@@ -130,9 +130,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Title actions**: `FoamyTitleAction` where a title names what the user
   changes from a menu (an editor's place, in the compact band or a pane's
   header): mark, text, chevron, hover fill, the keys' ring; Enter or Space
-  opens the menu from its start (`menuAnchor`). It gives way last: the
+  opens the menu from its start (`menuAnchor`). It gives way first: the
   header's fixed actions keep their room, its text ends with "…" and shows
-  whole in a capped tooltip, and the mark and chevron stay inside its box.
+  on hover in a tooltip (up to 3 lines of 200 characters, cut with "…"),
+  and the mark and chevron stay inside its box.
 - **Buttons**: `FoamyButton` for form actions (Verify, Apply, Remove, Add): a
   filled or bordered surface that reads as a button — `secondary` (default,
   field fill + border), `primary` (accent fill, at most one per form),

@@ -18,7 +18,9 @@ import QtQuick.Layouts
 // keys back with forceActiveFocus()) and `titleMenuAnchor` its menuAnchor
 // (a menu anchored to it hangs under the control from its start); both are
 // null while the action is off, when the title is the plain text it always
-// was and no control is created.
+// was and no control is created. Turned off, a menu anchored to it closes;
+// if the control had the keys, the caller places them (they stay on no
+// Tab stop: Tab goes to the page's first one).
 Item {
   id: root
 
@@ -76,10 +78,9 @@ Item {
       font.weight: Font.DemiBold
     }
     // The title action, created only while it is on: as wide as its
-    // content, at most the room left. Created from the slot's visibility,
-    // so when it turns off the slot hides first: a menu anchored to it
-    // closes (FoamyMenu closes when its anchor hides) and the keys leave
-    // it before it goes.
+    // content, at most the room left. Turned off, the Loader hides it
+    // before it goes, so a menu anchored to it closes (FoamyMenu closes
+    // when its anchor hides).
     Item {
       id: titleSlot
       visible: root.titleAction
@@ -89,7 +90,7 @@ Item {
 
       Loader {
         id: titleLoader
-        active: titleSlot.visible
+        active: root.titleAction
         // Anchored, so a mirrored header starts it at the right.
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter

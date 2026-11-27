@@ -7,10 +7,11 @@ same Tab chain and the same pixels with its other properties set; on: mark,
 title, chevron by position, the mark's colour, click/Enter/Space with the
 `keyboard` argument, the accessible press inert while disabled, Tab order,
 ring and fill, role and name, a menu hanging from its start, Esc back to
-it, elide with a capped tooltip; turned off with its menu open and the
-keys, the menu closes and no Qt warning), a bare FoamyTitleAction's
-geometry, and a wide FoamySettingsPage's column (Back, the title, the error
-line and Retry in the centred column). Screenshots:
+it, elide with a capped tooltip; turned off with its menu open, the menu
+closes; turned off with the keys, Tab reaches Back and no Qt warning), a
+bare FoamyTitleAction's geometry, and a wide FoamySettingsPage's column
+(Back, the title, the error line and Retry in the centred column).
+Screenshots:
 tests/out/settings-header/ (band-on-focused, band-on-long: the control)."""
 
 import shutil
@@ -57,8 +58,8 @@ def main():
                     language="ar" if rtl else None,
                     keep_pngs_to=out,
                     suffix=suffix,
-                    # The action turned off while it has the keys and its
-                    # menu is open; a null control or anchor read.
+                    # The action turned off while it has the keys; a null
+                    # control or anchor read.
                     forbid=("Cannot set activeFocusOnTab", "TypeError", "ReferenceError"),
                 )
             )
