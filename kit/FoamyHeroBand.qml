@@ -24,6 +24,9 @@ import QtQuick.Layouts
 //   FoamyHeroBand { compact: true; saving: …; onBack: … }
 // A sub-view built like it (an editor page) may add icon actions at the
 // trailing end: compactTrailing: [ FoamyAction { iconName: "external-link"; … } ]
+// and make its title a control (FoamySettingsHeader's title action):
+//   compactTitleAction: true; compactTitleIconName: "hash"
+//   onCompactTitleActivated: function (keyboard) { menu.anchorItem = band.compactTitleMenuAnchor; menu.open(keyboard) }
 //
 // Centred variant (a panel about one big value: clock, weather):
 //   FoamyHeroBand {
@@ -217,7 +220,17 @@ Item {
   // Icon actions at the compact form's trailing end, after "Saving…" (a
   // sub-view's "Open in …"): FoamySettingsHeader.trailing.
   property alias compactTrailing: settingsHeader.trailing
+  // The compact title as a control (off by default): FoamySettingsHeader's
+  // title action (titleAction, titleIconName, titleIconColor,
+  // titleAccessibleName, titleButton, titleMenuAnchor, titleActivated).
+  property bool compactTitleAction: false
+  property string compactTitleIconName: ""
+  property color compactTitleIconColor: FoamyPalette.secondaryText
+  property string compactTitleAccessibleName: compactTitle
+  readonly property alias compactTitleButton: settingsHeader.titleButton
+  readonly property alias compactTitleMenuAnchor: settingsHeader.titleMenuAnchor
   signal back
+  signal compactTitleActivated(bool keyboard)
 
   // --- hero slot -------------------------------------------------------------------
   default property alias hero: heroSlot.data
@@ -426,7 +439,14 @@ Item {
       bottomPadding: 0
       title: band.compactTitle
       saving: band.saving
+      titleAction: band.compactTitleAction
+      titleIconName: band.compactTitleIconName
+      titleIconColor: band.compactTitleIconColor
+      titleAccessibleName: band.compactTitleAccessibleName
       onBack: band.back()
+      onTitleActivated: function (keyboard) {
+        band.compactTitleActivated(keyboard)
+      }
     }
 
     // A layout, so hero items align to the reading start in RTL too. Give

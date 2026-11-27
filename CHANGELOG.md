@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.16.0 — 2026-11-27
+
+From the foamy-todoist UI review. New optional interfaces; with them off
+nothing changes: the demo plugin's preview states render the same as with
+0.15.1, pixel for pixel, dark and light. No plugin must change.
+
+### Added
+- The compact band's title as a control, for a sub-view whose title is
+  something the user changes (foamy-todoist's editor page: the task's
+  place opens the move menu, and the Project row it repeated goes).
+  `FoamySettingsHeader.titleAction` (off by default), `titleIconName`,
+  `titleIconColor`, `titleAccessibleName` (default: the title),
+  `titleButton`, `titleMenuAnchor` and `titleActivated(keyboard)`;
+  `FoamyHeroBand` passes them as `compactTitleAction`,
+  `compactTitleIconName`, `compactTitleIconColor`,
+  `compactTitleAccessibleName`, `compactTitleButton`,
+  `compactTitleMenuAnchor` and `compactTitleActivated(keyboard)`. On, the
+  title shows a leading mark, the title and a chevron on a hover fill,
+  with the keys' accent ring; it is the next Tab stop after Back; a click
+  emits `false`, Enter or Space `true` (for `FoamyMenu.open(keyboard)`); it
+  is a Button for assistive technology. A title too long for the room
+  ends with "…" ("Saving…" and the trailing actions stay) and shows whole
+  in a tooltip on hover, wrapped, at most the header's width.
+  `titleMenuAnchor` is a menu's width at the control's start, so a
+  FoamyMenu anchored to it hangs under the control from its start (the
+  trailing edge in RTL). DESIGN.md: Hero band.
+  `tests/test_settings_header.py` (new; LTR and RTL, scale 1.0 and 1.25):
+  off, no control and Tab from Back to the trailing action, and the band
+  with the other title properties set draws the same pixels; on, the
+  mark, title and chevron, click/Return/Enter/Space and the accessible
+  press with their `keyboard` argument, the Tab order, ring and fill, role
+  and name, the menu's place, Esc giving the keys back, elide and the
+  tooltip. Seen failing with Space not handled, no ring, the title as the
+  accessible name, no chevron and a click reported as keys (7 checks);
+  with the control shown and on the Tab path while off (3 checks and 110
+  pixels); with the anchor as wide as the control (the menu's place); and
+  with the off title taking the icon colour (592 pixels).
+
 ## 0.15.1 — 2026-11-26
 
 ### Fixed

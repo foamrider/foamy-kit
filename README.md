@@ -37,7 +37,7 @@ edited in a plugin: change it here, then sync.
 | FoamyPeerIpc | `FoamyPeerIpc.qml` | Call another plugin's IPC: in-process, bounded `omarchy-shell` fallback |
 | FoamyShared | `FoamyShared.qml` (singleton), `FoamyMember.qml` | One leader per shell across per-monitor bar instances, open-popup demand |
 | FoamyHeader | `FoamyHeader.qml` | Icon, title, meta, trailing actions (at most three buttons; overflow into a ⋯ menu with Settings last), settings button |
-| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form, own picture or scene; field mode (`field`, `fieldOrigin`, `fieldOpen`; not in the centred variant): a text field grows out of a header action across the title row, the band's height fixed |
+| FoamyHeroBand | `FoamyHeroBand.qml` | The tinted full-bleed header band: title row + hero slot, `centered` variant, compact settings form (its title optionally a control: `compactTitleAction`), own picture or scene; field mode (`field`, `fieldOrigin`, `fieldOpen`; not in the centred variant): a text field grows out of a header action across the title row, the band's height fixed |
 | FoamyMenu | `FoamyMenu.qml`, `FoamyMenuItem.qml` | In-card menu dropping from a button (the ⋯ menu): icons, separators, submenus, single-cursor keys, RTL |
 | FoamyAction | `FoamyAction.qml` | Icon/label action button, settings button, spinner |
 | FoamyButton | `FoamyButton.qml` | Form button (primary/secondary/destructive, icon, busy, focus ring) |

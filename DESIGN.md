@@ -66,7 +66,10 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   - Settings pages show the compact band (back, "Settings", "Saving…");
     `FoamySettingsPage` does it. A sub-view built like a settings page (an
     editor page) uses the same band, with its icon actions at the end
-    (`compactTrailing`).
+    (`compactTrailing`). When its title is something the user changes (an
+    editor page's place), the title is the control: `compactTitleAction`
+    (a mark, the title, a chevron; a click, Enter or Space opens its menu,
+    hung from `compactTitleMenuAnchor`), not a second row saying the same.
   - No band on menus (`FoamyPopupCard`) or toasts.
   - **Field mode** (search, quick add): a text field grows out of the header
     action that opens it, across the title row (`field`, `fieldOrigin`,
