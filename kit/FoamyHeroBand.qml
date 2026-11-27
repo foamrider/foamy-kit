@@ -224,8 +224,9 @@ Item {
   // sub-view's "Open in …"): FoamySettingsHeader.trailing.
   property alias compactTrailing: settingsHeader.trailing
   // The compact title as a control (off by default): FoamySettingsHeader's
-  // title action (titleAction, titleIconName, titleIconColor,
-  // titleAccessibleName, titleButton, titleMenuAnchor, titleActivated).
+  // title action, a FoamyTitleAction (titleAction, titleIconName,
+  // titleIconColor, titleAccessibleName, titleButton, titleMenuAnchor,
+  // titleActivated). The button and the anchor are null while it is off.
   property bool compactTitleAction: false
   property string compactTitleIconName: ""
   property color compactTitleIconColor: FoamyPalette.secondaryText

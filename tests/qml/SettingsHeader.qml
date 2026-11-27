@@ -9,20 +9,27 @@ import "plugin/kit"
 // kit 0.16.0: the compact band's title action (FoamySettingsHeader's
 // titleAction through FoamyHeroBand) in a real FoamyPopup, and a wide
 // FoamySettingsPage's column (columnWidth).
-// - Off (the default): no title control, Tab goes from Back to the trailing
-//   action; with the action's other properties set while off the band
-//   draws the same pixels (band-off.png, band-off-set.png).
-// - On: its mark, title and chevron; a click, Enter and Space emit
-//   compactTitleActivated(keyboard) with false, true, true; Tab from Back
-//   reaches it first, with the hover fill and the accent ring; role Button
-//   and its accessible name; a menu anchored to compactTitleMenuAnchor
-//   hangs under it from its start; Esc gives the keys back to it; a long
-//   title elides within the room left, with a tooltip on hover no wider
-//   than the header.
+// - Off (the default): no title control is created, Tab goes from Back to
+//   the trailing action; with the action's other properties set while off
+//   the band draws the same pixels (band-off.png, band-off-set.png).
+// - On (a FoamyTitleAction): its mark, title and chevron in reading order
+//   by position, the mark in the caller's colour; a click, Enter and Space
+//   emit compactTitleActivated(keyboard) with false, true, true; the
+//   accessible press does nothing while disabled; Tab from Back reaches it
+//   first, with the hover fill and the accent ring; role Button and its
+//   accessible name; a menu anchored to compactTitleMenuAnchor hangs under
+//   it from its start; Esc gives the keys back to it; turned off with the
+//   menu open, the menu closes; a long title elides within the room left,
+//   with a tooltip on hover capped at Style.space(320), in the kit's font.
+//   Pictures: band-on-focused.png, band-on-long.png.
+// - A bare FoamyTitleAction: its mark and text where markCenter and
+//   textStart put them, the chevron inside a box narrower than
+//   minimumWidth, menuAnchor as wide as menuWidth.
 // - The column: on a wide page Back and the title, the error line and its
 //   Retry, and the sections keep to the centred column while the band runs
 //   to the page's edges; a page of the settings width keeps its padding.
-// FOAMY_RTL=1 mirrors the bands (a settings page mirrors with the language).
+// FOAMY_RTL=1 mirrors the bands; a settings page mirrors with the language
+// (the rtl runs are in Arabic).
 ShellRoot {
   id: shell
   readonly property string host: Quickshell.env("FOAMY_HOST")
@@ -99,6 +106,7 @@ ShellRoot {
         property alias actionBand: actionBand
         property alias actionOpen: actionOpen
         property alias longBand: longBand
+        property alias bare: bare
         property alias menu: placeMenu
         property alias ev: bodyEvent
         // Takes the keys from the bands (the body, a FocusScope, would give
@@ -184,6 +192,17 @@ ShellRoot {
                 tooltipText: "Open"
               }
             ]
+          }
+          // A bare control, lined up with an outside column; given less
+          // than its minimumWidth.
+          FoamyTitleAction {
+            id: bare
+            text: shell.place
+            iconName: "hash"
+            markCenter: 30
+            textStart: 50
+            menuWidth: 300
+            width: minimumWidth - 10
           }
           // Room for the menu below the bands.
           Item {
@@ -308,7 +327,7 @@ ShellRoot {
   // --- off -----------------------------------------------------------------------
   function offChecks() {
     var band = body.offBand
-    check(!band.compactTitleButton.visible && !band.compactTitleMenuAnchor.visible, "off: no title control")
+    check(band.compactTitleButton === null && band.compactTitleMenuAnchor === null && find(band, "foamyTitleAction") === null, "off: no title control created")
     band.backButton.forceActiveFocus()
     ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
     check(body.offOpen.activeFocus, "off: Tab goes from Back to the trailing action")
@@ -330,14 +349,15 @@ ShellRoot {
     var text = find(button, "foamyTitleActionText")
     check(button.visible && text && text.text === place && !text.truncated, "on: the title in the control, whole")
     check(button.Accessible.role === Accessible.Button && button.Accessible.name === "Project: " + place, "on: role Button, named " + button.Accessible.name)
-    // Mark, title, chevron in reading order.
-    var icons = []
-    for (var i = 0; i < text.parent.children.length; i++) {
-      var child = text.parent.children[i]
-      if (child.visible)
-        icons.push(child === text ? "text" : child.name)
-    }
-    check(JSON.stringify(icons) === JSON.stringify(["hash", "text", "chevron-down"]), "on: mark, title, chevron " + JSON.stringify(icons))
+    // Mark, title, chevron in reading order (mirrored in RTL), all inside
+    // the control.
+    var mark = find(button, "foamyTitleActionMark")
+    var chevron = find(button, "foamyTitleActionChevron")
+    var ms = span(mark, band), xs = span(text, band), cs = span(chevron, band), bs = span(button, band)
+    check(mark.visible && mark.name === "hash" && chevron.visible && ms.start > bs.start && ms.end <= xs.start && xs.start < cs.start && cs.end < bs.end, "on: mark, title, chevron in reading order " + JSON.stringify([bs, ms, xs, cs]))
+    check(Qt.colorEqual(mark.color, FoamyPalette.secondaryText), "on: the mark in the default colour " + mark.color)
+    band.compactTitleIconColor = "#c03030"
+    check(Qt.colorEqual(mark.color, "#c03030"), "on: the mark in the caller's colour " + mark.color)
     var bb = span(band.backButton, band)
     var tb = span(button, band)
     check(tb.start > bb.end && tb.start - bb.end <= FoamyStyle.gap + 1, "on: the control follows Back " + JSON.stringify([bb, tb]))
@@ -370,6 +390,11 @@ ShellRoot {
     check(activations.length === 3, "on: another key does nothing")
     button.Accessible.pressAction()
     check(JSON.stringify(activations.slice(3)) === JSON.stringify([false]), "on: the accessible press activates " + JSON.stringify(activations))
+    // Under a disabled parent: the accessible press does nothing.
+    band.enabled = false
+    button.Accessible.pressAction()
+    band.enabled = true
+    check(activations.length === 4, "disabled: the accessible press does nothing " + JSON.stringify(activations))
     // A click: from the pointer; the pointer over it lights it.
     activations = []
     body.catcher.forceActiveFocus()
@@ -403,16 +428,22 @@ ShellRoot {
       shell.check(start && m.top >= b.bottom && m.top - b.bottom <= FoamyStyle.gapSmall + 1, "the menu hangs under the control from its start " + JSON.stringify([m, b]))
       shell.ev.keyClick(Qt.Key_Escape, Qt.NoModifier, -1)
       shell.check(!menu.opened && button.activeFocus, "Esc closes the menu and gives the keys back to the control")
-      // Turned off while it has the keys (an editor's task went): the
-      // control hidden; on again, a Tab stop again. (test_settings_header.py
-      // fails on Qt's warning if the Tab stop is bound to the option.)
+      // Turned off while its menu is open and it has the keys (an editor's
+      // task went): the menu closes, the control goes; on again, a new one
+      // is a Tab stop. (test_settings_header.py fails on a Qt warning.)
+      menu.open(true)
+      shell.check(menu.opened, "the menu opens again")
       band.compactTitleAction = false
-      shell.check(!button.visible && shell.find(band, "foamyTitleActionText") !== null, "off while it had the keys: hidden")
+      shell.check(!menu.opened && band.compactTitleButton === null && shell.find(band, "foamyTitleAction") === null, "off while its menu was open: the menu closed, no control")
       band.compactTitleAction = true
+      var again = band.compactTitleButton
       band.backButton.forceActiveFocus()
       shell.ev.keyClick(Qt.Key_Tab, Qt.NoModifier, -1)
-      shell.check(button.activeFocus, "on again: Tab from Back reaches it")
-      shell.elideChecks()
+      shell.check(again !== null && again.activeFocus, "on again: Tab from Back reaches it")
+      // A picture with the keys on it.
+      wait.after(300, function () {
+        shell.grab(band, "band-on-focused", shell.elideChecks)
+      })
     })
   }
 
@@ -433,16 +464,33 @@ ShellRoot {
       return tip.visible
     }, 3000, function (ok) {
       shell.check(ok && tip.text === shell.longPlace, "the whole title in a tooltip on hover")
-      shell.check(tip.implicitWidth <= band.width + 0.5 && tip.contentItem.wrapMode === Text.WrapAtWordBoundaryOrAnywhere, "the tooltip at most the header's width, wrapped " + JSON.stringify([tip.implicitWidth, band.width]))
+      shell.check(near(tip.implicitWidth, Commons.Style.space(320)) && tip.contentItem.wrapMode === Text.WrapAtWordBoundaryOrAnywhere && tip.fontFamily === FoamyStyle.fontFamily, "the tooltip capped at Style.space(320), wrapped, in the kit's font " + JSON.stringify([tip.implicitWidth, Commons.Style.space(320), tip.fontFamily]))
       // A title that fits: no tooltip.
       var short = shell.body.actionBand.compactTitleButton
       shell.ev.mouseMove(short, short.width / 2, short.height / 2, -1, Qt.NoButton, Qt.NoModifier)
       wait.after(300, function () {
         shell.check(!shell.find(short, "foamyTitleActionTip").visible, "no tooltip for a title that fits")
         shell.ev.mouseMove(shell.body, 2, shell.body.height - 2, -1, Qt.NoButton, Qt.NoModifier)
-        shell.columnChecks()
+        shell.body.catcher.forceActiveFocus()
+        wait.after(300, function () {
+          shell.grab(band, "band-on-long", shell.bareChecks)
+        })
       })
     })
+  }
+
+  // --- a bare FoamyTitleAction --------------------------------------------------
+  function bareChecks() {
+    var b = body.bare
+    var mark = find(b, "foamyTitleActionMark")
+    var text = find(b, "foamyTitleActionText")
+    var chevron = find(b, "foamyTitleActionChevron")
+    var ms = span(mark, b), xs = span(text, b), cs = span(chevron, b)
+    check(near((ms.start + ms.end) / 2, 30) && near(xs.start, 50), "bare: the mark centred at markCenter, the text at textStart " + JSON.stringify([ms, xs]))
+    check(text.width === 0 && cs.start >= 0 && cs.end <= b.width - b.padding + 0.5, "bare: narrower than minimumWidth, the chevron stays inside " + JSON.stringify([cs, b.width, b.minimumWidth]))
+    var a = span(b.menuAnchor, b)
+    check(near(a.start, 0) && near(b.menuAnchor.width, 300), "bare: menuAnchor at the start, menuWidth wide " + JSON.stringify(a))
+    columnChecks()
   }
 
   // --- the column ----------------------------------------------------------------
@@ -458,6 +506,8 @@ ShellRoot {
     return null
   }
   function columnChecks() {
+    // The rtl runs are in Arabic: the pages mirror.
+    check(widePage.LayoutMirroring.enabled === rtl && narrowPage.LayoutMirroring.enabled === rtl, "the pages mirror with the language " + widePage.LayoutMirroring.enabled)
     var inset = (widePage.width - widePage.columnWidth) / 2
     var band = find(widePage, "foamyHeroBandSurface").parent
     var back = widePage.backTarget

@@ -64,6 +64,7 @@ def run_shell(
     theme="dark",
     clipboard=False,
     forbid=(),
+    language=None,
 ):
     """Run tests/qml/<qml_name> under `host`; report PASS/FAIL with the
     shell's FOAMY RESULT line; copy its PNGs to keep_pngs_to as
@@ -71,13 +72,15 @@ def run_shell(
     path. `clipboard` puts the hostenv.clipboard_fakes() stand-ins in front
     of the run's PATH, so a paste never reads the real clipboard. A log line
     containing one of `forbid` (a Qt warning the scene provokes) fails the
-    run. Returns True when it passed."""
+    run. `language` is the host's language (an RTL one mirrors what follows
+    FoamyI18n.rightToLeft). Returns True when it passed."""
     r = harness.Run(
         host,
         (KIT_ROOT / "tests/qml" / qml_name).read_text(),
         plugin=plugin,
         scale=scale,
         theme=theme,
+        language=language,
         prefix=f"foamy-kit-{Path(qml_name).stem.lower()}-{host}-",
     )
     if clipboard:

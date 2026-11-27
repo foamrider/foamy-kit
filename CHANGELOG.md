@@ -7,9 +7,26 @@ nothing changes: the demo plugin's preview states render the same as with
 0.15.1, pixel for pixel, dark and light. No plugin must change.
 
 ### Added
-- The compact band's title as a control, for a sub-view whose title is
-  something the user changes (foamy-todoist's editor page: the task's
-  place opens the move menu, and the Project row it repeated goes).
+- `FoamyTitleAction` (new component, in `components.json`): a title that
+  is a control, for a title that names what the user changes from a menu
+  (foamy-todoist's task editor: the task's place opens the move menu, in
+  the page's band and in the Wide pane's header). A leading mark
+  (`iconName`, `iconColor`), the text and a chevron on a hover fill, with
+  the keys' accent ring; a click emits `activated(false)`, Enter, Return
+  or Space `activated(true)` (for `FoamyMenu.open(keyboard)`), the
+  accessible press `activated(false)` unless disabled; a Button named
+  `accessibleName` (default: the text). As wide as its content; given
+  less, the text ends with "…" and the mark and chevron stay inside its
+  box (`minimumWidth` holds them); a cut text shows on hover in a
+  wrapped tooltip at most `tooltipMaxWidth` (`Style.space(320)`, as
+  FoamyAction's) wide, in the kit's font, with at most 3 lines of 200
+  characters cut with "…" (the accessible name keeps it all).
+  `fontSize`/`fontWeight` (default: the band's title), `markCenter` and
+  `textStart` line it up with a column outside it; `menuAnchor` is
+  `menuWidth` (a FoamyMenu's) wide at its start, so a menu anchored to it
+  hangs under the control from its start (the right in RTL). DESIGN.md:
+  Title actions.
+- The compact band's title as a FoamyTitleAction:
   `FoamySettingsHeader.titleAction` (off by default), `titleIconName`,
   `titleIconColor`, `titleAccessibleName` (default: the title),
   `titleButton`, `titleMenuAnchor` and `titleActivated(keyboard)`;
@@ -17,29 +34,36 @@ nothing changes: the demo plugin's preview states render the same as with
   `compactTitleIconName`, `compactTitleIconColor`,
   `compactTitleAccessibleName`, `compactTitleButton`,
   `compactTitleMenuAnchor` and `compactTitleActivated(keyboard)`. On, the
-  title shows a leading mark, the title and a chevron on a hover fill,
-  with the keys' accent ring; it is the next Tab stop after Back; a click
-  emits `false`, Enter or Space `true` (for `FoamyMenu.open(keyboard)`); it
-  is a Button for assistive technology. A title too long for the room
-  ends with "…" ("Saving…" and the trailing actions stay) and shows whole
-  in a tooltip on hover, wrapped, at most the header's width.
-  `titleMenuAnchor` is a menu's width at the control's start, so a
-  FoamyMenu anchored to it hangs under the control from its start (the
-  trailing edge in RTL). DESIGN.md: Hero band.
-  `tests/test_settings_header.py` (new; LTR and RTL, scale 1.0 and 1.25):
-  off, no control and Tab from Back to the trailing action, and the band
-  with the other title properties set draws the same pixels; on, the
-  mark, title and chevron, click/Return/Enter/Space and the accessible
-  press with their `keyboard` argument, the Tab order, ring and fill, role
-  and name, the menu's place, Esc giving the keys back, elide and the
-  tooltip. Seen failing with Space not handled, no ring, the title as the
-  accessible name, no chevron and a click reported as keys (7 checks);
-  with the control shown and on the Tab path while off (3 checks and 110
-  pixels); with the anchor as wide as the control (the menu's place); and
-  with the off title taking the icon colour (592 pixels). Turning the
-  action off while it has the keys (an editor's task went) logs no Qt
-  warning (`run_shell(forbid=…)` in `tests/common.py` fails a run on a
-  named log line); seen failing with the Tab stop bound to `titleAction`.
+  control is the next Tab stop after Back; a long title gives way to
+  "Saving…" and the trailing actions. Off, no control is created
+  (`titleButton` and `titleMenuAnchor` are null) and the band draws and
+  tabs as with 0.15.1; turned off while its menu is open, the menu closes
+  and the keys leave it. DESIGN.md: Hero band.
+  `tests/test_settings_header.py` (new; LTR and RTL, the RTL runs in
+  Arabic, scale 1.0 and 1.25, dark, and LTR 1.0 light): off, no control
+  created and Tab from Back to the trailing action, and the band with the
+  other title properties set draws the same pixels; on, the mark, title
+  and chevron in reading order by position (mirrored in RTL), the mark in
+  the caller's colour, click/Return/Enter/Space and the accessible press
+  with their `keyboard` argument, the press inert under a disabled
+  parent, the Tab order, ring and fill, role and name, the menu's place,
+  Esc giving the keys back, turned off with the menu open (it closes, no
+  control, no Qt warning: `run_shell(forbid=…)` in `tests/common.py` fails
+  a run on a named log line), elide and the tooltip's cap and font;
+  pictures `band-on-focused`, `band-on-long`; a bare FoamyTitleAction's
+  mark and text at `markCenter`/`textStart`, its chevron inside a box
+  narrower than `minimumWidth`, its `menuAnchor` `menuWidth` wide. Seen
+  failing with Space not handled, no ring, the title as the accessible
+  name, no chevron and a click reported as keys (7 checks); with the
+  control shown and on the Tab path while off (3 checks and 110 pixels);
+  with the anchor as wide as the control (the menu's place); with the off
+  title taking the icon colour (592 pixels); with the Tab stop bound to
+  `titleAction` (Qt's warning); with the tooltip capped at the header's
+  width (249 instead of 320) or without its font; with the mark's colour
+  not passed; with the accessible press not gated; with the control not
+  mirrored (the order and the menu's place in RTL); with the control
+  created while off (2 checks); with the chevron placed after the text
+  (outside a narrow box).
 - `FoamySettingsPage.columnWidth` (default: the page's width less its
   side paddings) and `columnInset`, for a page wider than the settings
   width (foamy-todoist's Wide page, 880 with a settings-wide column): Back
@@ -53,9 +77,10 @@ nothing changes: the demo plugin's preview states render the same as with
   an 880 page with a 400 column, the band to the edges, Back and the error
   at the column's start, the title and Retry inside its end, the section
   filling it; a 420 page at the padding; a column wider than the page
-  keeps the padding. Seen failing with the page's paddings back at
-  `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the error and
-  Retry across the card, the section 840 wide).
+  keeps the padding; in the RTL runs (Arabic) the pages mirror and the
+  same checks hold from the right. Seen failing with the page's paddings
+  back at `FoamyStyle.padding` (5 checks: Back at 20 instead of 240, the
+  error and Retry across the card, the section 840 wide).
 
 ## 0.15.1 — 2026-11-26
 

@@ -68,8 +68,9 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     editor page) uses the same band, with its icon actions at the end
     (`compactTrailing`). When its title is something the user changes (an
     editor page's place), the title is the control: `compactTitleAction`
-    (a mark, the title, a chevron; a click, Enter or Space opens its menu,
-    hung from `compactTitleMenuAnchor`), not a second row saying the same.
+    (a FoamyTitleAction: a mark, the title, a chevron; a click, Enter or
+    Space opens its menu, hung from `compactTitleMenuAnchor`), not a second
+    row saying the same.
   - No band on menus (`FoamyPopupCard`) or toasts.
   - **Field mode** (search, quick add): a text field grows out of the header
     action that opens it, across the title row (`field`, `fieldOrigin`,
@@ -126,6 +127,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
 - **Actions**: `FoamyAction` (28, icon 15, hover fill, tooltip). Settings button =
   `settings: true` (32/16). Destructive: `destructive: true`. Spinners only via
   `spinning`. Icon actions are for toolbars (header, footer, rows).
+- **Title actions**: `FoamyTitleAction` where a title names what the user
+  changes from a menu (an editor's place, in the compact band or a pane's
+  header): mark, text, chevron, hover fill, the keys' ring; Enter or Space
+  opens the menu from its start (`menuAnchor`). It gives way last: the
+  header's fixed actions keep their room, its text ends with "…" and shows
+  whole in a capped tooltip, and the mark and chevron stay inside its box.
 - **Buttons**: `FoamyButton` for form actions (Verify, Apply, Remove, Add): a
   filled or bordered surface that reads as a button — `secondary` (default,
   field fill + border), `primary` (accent fill, at most one per form),

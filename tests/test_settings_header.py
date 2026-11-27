@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""kit 0.16.0 (tests/qml/SettingsHeader.qml) on 4.5, LTR and RTL, at display
-scale 1.0 and 1.25: the compact band's title action (off by default: no
-control, the same Tab chain and the same pixels with its other properties
-set; on: mark, title, chevron, click/Enter/Space with the `keyboard`
-argument, Tab order, ring and fill, role and name, a menu hanging from its
-start, Esc back to it, elide with a tooltip; turned off while it has the
-keys, no Qt warning) and a wide FoamySettingsPage's
-column (Back, the title, the error line and Retry in the centred column).
-Screenshots: tests/out/settings-header/."""
+"""kit 0.16.0 (tests/qml/SettingsHeader.qml) on 4.5, LTR and RTL (the RTL
+runs in Arabic, so a settings page mirrors too), at display scale 1.0 and
+1.25, dark, and once LTR at 1.0 in the light theme: the compact band's
+title action, a FoamyTitleAction (off by default: no control created, the
+same Tab chain and the same pixels with its other properties set; on: mark,
+title, chevron by position, the mark's colour, click/Enter/Space with the
+`keyboard` argument, the accessible press inert while disabled, Tab order,
+ring and fill, role and name, a menu hanging from its start, Esc back to
+it, elide with a capped tooltip; turned off with its menu open and the
+keys, the menu closes and no Qt warning), a bare FoamyTitleAction's
+geometry, and a wide FoamySettingsPage's column (Back, the title, the error
+line and Retry in the centred column). Screenshots:
+tests/out/settings-header/ (band-on-focused, band-on-long: the control)."""
 
 import shutil
 import sys
@@ -33,34 +37,35 @@ def main():
     out = KIT_ROOT / "tests/out/settings-header"
     results = []
     for host in harness.available_hosts(what="settings header"):
-        for rtl in (False, True):
-            for scale in (1.0, 1.25):
-                tag = f"{host}/{'rtl' if rtl else 'ltr'}@{scale}"
-                suffix = f"{host}-{'rtl' if rtl else 'ltr'}-{scale}"
-                off, off_set = out / f"band-off-{suffix}.png", out / f"band-off-set-{suffix}.png"
-                # Shots left by an earlier run must not pass for this one.
-                for png in (off, off_set):
-                    png.unlink(missing_ok=True)
-                results.append(
-                    run_shell(
-                        "SettingsHeader.qml",
-                        host,
-                        plugin,
-                        tag,
-                        {"FOAMY_RTL": "1" if rtl else "0"},
-                        scale=scale,
-                        keep_pngs_to=out,
-                        suffix=suffix,
-                        # The action turned off while it has the keys.
-                        forbid=("Cannot set activeFocusOnTab",),
-                    )
+        runs = [(rtl, scale, "dark") for rtl in (False, True) for scale in (1.0, 1.25)] + [(False, 1.0, "light")]
+        for rtl, scale, theme in runs:
+            tag = f"{host}/{'rtl' if rtl else 'ltr'}@{scale}" + ("" if theme == "dark" else f"/{theme}")
+            suffix = f"{host}-{'rtl' if rtl else 'ltr'}-{scale}" + ("" if theme == "dark" else f"-{theme}")
+            off, off_set = out / f"band-off-{suffix}.png", out / f"band-off-set-{suffix}.png"
+            # Shots left by an earlier run must not pass for this one.
+            for png in (off, off_set):
+                png.unlink(missing_ok=True)
+            results.append(
+                run_shell(
+                    "SettingsHeader.qml",
+                    host,
+                    plugin,
+                    tag,
+                    {"FOAMY_RTL": "1" if rtl else "0"},
+                    scale=scale,
+                    theme=theme,
+                    language="ar" if rtl else None,
+                    keep_pngs_to=out,
+                    suffix=suffix,
+                    # The action turned off while it has the keys and its
+                    # menu is open; a null control or anchor read.
+                    forbid=("Cannot set activeFocusOnTab", "TypeError", "ReferenceError"),
                 )
-                why = same_pixels(off, off_set) if off.is_file() and off_set.is_file() else "no shots"
-                results.append(
-                    report(
-                        f"settings header {tag}: off, its properties set draw the same pixels", why is None, why or ""
-                    )
-                )
+            )
+            why = same_pixels(off, off_set) if off.is_file() and off_set.is_file() else "no shots"
+            results.append(
+                report(f"settings header {tag}: off, its properties set draw the same pixels", why is None, why or "")
+            )
     shutil.rmtree(plugin.parent, ignore_errors=True)
     return 0 if all(results) else 1
 

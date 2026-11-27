@@ -1,8 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
-import qs.Commons as Commons
-import qs.Ui
-import "FoamyText.js" as FoamyText
 
 // Settings page header: back button, "Settings", and "Saving…" while a save
 // is in flight. Part of FoamySettingsPage; use it alone only for a custom page.
@@ -10,18 +8,17 @@ import "FoamyText.js" as FoamyText
 // actions (FoamyAction) at the trailing end with `trailing`, after "Saving…".
 //
 // Title action (off by default): with `titleAction: true` the title is a
-// control that opens something about it (an editor page's place: the move
-// menu). It shows `titleIconName` (in `titleIconColor`) before the title and
-// a chevron after it, on a hover fill, with the keys' ring; it is the next
-// Tab stop after Back. A click, Enter or Space emits
-// `titleActivated(keyboard)` (true from the keys, for FoamyMenu.open).
-// `titleAccessibleName` names the button (default: the title); a title cut
-// with "…" shows whole in a tooltip on hover, wrapped, at most the header's
-// width. `titleButton` is the control (give it the keys back with
-// forceActiveFocus()); `titleMenuAnchor` is an item as wide as a FoamyMenu
-// (FoamyStyle.menuWidth) at the control's start: a menu anchored to it
-// hangs under the control from its start. Off, the title is the plain text
-// it always was.
+// FoamyTitleAction, a control that opens something about it (an editor
+// page's place: the move menu), the next Tab stop after Back. It shows
+// `titleIconName` (in `titleIconColor`) before the title and a chevron
+// after it; a click, Enter or Space emits `titleActivated(keyboard)` (true
+// from the keys, for FoamyMenu.open). `titleAccessibleName` names the
+// button (default: the title); a cut title shows in a tooltip on hover
+// (FoamyTitleAction: capped). `titleButton` is the control (give it the
+// keys back with forceActiveFocus()) and `titleMenuAnchor` its menuAnchor
+// (a menu anchored to it hangs under the control from its start); both are
+// null while the action is off, when the title is the plain text it always
+// was and no control is created.
 Item {
   id: root
 
@@ -37,8 +34,9 @@ Item {
   property string titleIconName: ""
   property color titleIconColor: FoamyPalette.secondaryText
   property string titleAccessibleName: title
-  readonly property alias titleButton: titleButton
-  readonly property alias titleMenuAnchor: titleMenuAnchor
+  // The control and its menu anchor while the action is on; else null.
+  readonly property FoamyTitleAction titleButton: titleLoader.item as FoamyTitleAction
+  readonly property Item titleMenuAnchor: titleButton ? titleButton.menuAnchor : null
 
   signal back
   signal titleActivated(bool keyboard)
@@ -77,125 +75,35 @@ Item {
       font.pixelSize: FoamyStyle.font.title
       font.weight: Font.DemiBold
     }
-    // The title action: as wide as its content, at most the room left.
+    // The title action, created only while it is on: as wide as its
+    // content, at most the room left. Created from the slot's visibility,
+    // so when it turns off the slot hides first: a menu anchored to it
+    // closes (FoamyMenu closes when its anchor hides) and the keys leave
+    // it before it goes.
     Item {
       id: titleSlot
       visible: root.titleAction
       Layout.fillWidth: true
       Layout.alignment: Qt.AlignVCenter
-      implicitHeight: titleButton.height
+      implicitHeight: FoamyStyle.settingsButtonSize
 
-      Rectangle {
-        id: titleButton
-        objectName: "foamyTitleAction"
-        readonly property real padding: FoamyStyle.gap
-        readonly property bool hovered: titleMouse.containsMouse
-        // Everything but the title's words: paddings, mark, chevron.
-        readonly property real chrome: padding * 2 + (titleMark.visible ? titleMark.width + titleContent.spacing : 0) + titleContent.spacing + titleChevron.width
+      Loader {
+        id: titleLoader
+        active: titleSlot.visible
         // Anchored, so a mirrored header starts it at the right.
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        implicitWidth: chrome + titleLabel.implicitWidth
-        width: Math.min(implicitWidth, titleSlot.width)
-        height: FoamyStyle.settingsButtonSize
-        radius: FoamyStyle.radius
-        color: titleMouse.containsMouse || activeFocus ? FoamyPalette.hoverFill : "transparent"
-        border.width: activeFocus ? 1 : 0
-        border.color: Commons.Color.accent
-        // Off, the slot is hidden: never a Tab stop. (Bound to titleAction,
-        // Qt warns when it turns off while the control has the keys.)
-        activeFocusOnTab: true
-
-        Behavior on color {
-          ColorAnimation {
-            duration: FoamyMotion.hover
+        sourceComponent: FoamyTitleAction {
+          width: Math.min(implicitWidth, titleSlot.width)
+          height: FoamyStyle.settingsButtonSize
+          text: root.title
+          iconName: root.titleIconName
+          iconColor: root.titleIconColor
+          accessibleName: root.titleAccessibleName
+          onActivated: function (keyboard) {
+            root.titleActivated(keyboard)
           }
         }
-
-        Accessible.role: Accessible.Button
-        Accessible.name: root.titleAccessibleName
-        Accessible.onPressAction: root.titleActivated(false)
-        Keys.onPressed: function (event) {
-          if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            event.accepted = true
-            root.titleActivated(true)
-          }
-        }
-
-        Row {
-          id: titleContent
-          anchors.left: parent.left
-          anchors.leftMargin: titleButton.padding
-          anchors.verticalCenter: parent.verticalCenter
-          spacing: FoamyStyle.gapSmall
-          FoamyIcon {
-            id: titleMark
-            visible: root.titleIconName !== ""
-            anchors.verticalCenter: parent.verticalCenter
-            width: FoamyStyle.iconSize
-            height: width
-            name: root.titleIconName
-            color: root.titleIconColor
-          }
-          Text {
-            id: titleLabel
-            objectName: "foamyTitleActionText"
-            anchors.verticalCenter: parent.verticalCenter
-            width: Math.max(0, titleButton.width - titleButton.chrome)
-            text: root.title
-            textFormat: Text.PlainText
-            horizontalAlignment: Text.AlignLeft
-            elide: Text.ElideRight
-            color: FoamyPalette.text
-            font.family: FoamyStyle.fontFamily
-            font.pixelSize: FoamyStyle.font.title
-            font.weight: Font.DemiBold
-          }
-          FoamyIcon {
-            id: titleChevron
-            anchors.verticalCenter: parent.verticalCenter
-            width: FoamyStyle.iconSize
-            height: width
-            name: "chevron-down"
-            color: FoamyPalette.secondaryText
-          }
-        }
-
-        MouseArea {
-          id: titleMouse
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.titleActivated(false)
-        }
-
-        // Cut: the whole title on hover, at most as wide as the header.
-        PanelToolTip {
-          id: titleTip
-          objectName: "foamyTitleActionTip"
-          visible: titleMouse.containsMouse && titleLabel.truncated
-          implicitWidth: Math.min(implicitContentWidth + leftPadding + rightPadding, root.width)
-          text: FoamyText.cap(root.title, 3, 200)
-          // The host's text wraps at word boundaries only; a name typed
-          // without spaces may break anywhere.
-          Binding {
-            target: titleTip.contentItem
-            property: "wrapMode"
-            value: Text.WrapAtWordBoundaryOrAnywhere
-            when: titleTip.contentItem !== null
-          }
-        }
-      }
-
-      // A FoamyMenu's width at the control's start (the menu's trailing
-      // edge goes on its anchor's): the menu hangs from the control's start.
-      Item {
-        id: titleMenuAnchor
-        objectName: "foamyTitleMenuAnchor"
-        anchors.left: titleButton.left
-        anchors.top: titleButton.top
-        width: FoamyStyle.menuWidth
-        height: titleButton.height
       }
     }
     Text {
