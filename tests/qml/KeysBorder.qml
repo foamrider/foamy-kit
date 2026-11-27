@@ -15,7 +15,8 @@ import "plugin/kit"
 // control), pointer (the cursor, no flag) and keys (both), each saved to
 // FOAMY_OUT/<mode>.png. FOAMY KEYS <json> says where each control's
 // outline is on the card, per mode, which colour its keys' border is to be
-// drawn in ("accent", or "text" on an accent fill) and at what strength
+// drawn in ("accent", or "ink" on an accent fill: the text or the
+// background colour) and at what strength
 // (the control's own fading); test_keys_border.py reads the pixels.
 //
 // Then the pointer, per control that reports it (each report clears the
@@ -362,7 +363,7 @@ ShellRoot {
       for (var k = 0; k < kinds.length; k++) {
         var b = find(body.buttons, kinds[k] + "-" + states[s])
         // A button draws its border at full strength in every state.
-        out["button-" + kinds[k] + "-" + states[s]] = [b, b, kinds[k] === "primary" ? "text" : "accent", 1, states[s] !== "active"]
+        out["button-" + kinds[k] + "-" + states[s]] = [b, b, kinds[k] === "primary" ? "ink" : "accent", 1, states[s] !== "active"]
       }
     }
     var fill = find(body.toggle, "foamyToggleFill")
@@ -516,6 +517,7 @@ ShellRoot {
       card: [popup.cardItem.width, popup.cardItem.height],
       accent: String(Commons.Color.accent),
       text: String(FoamyPalette.text),
+      background: String(FoamyPalette.background),
       cases: {}
     }
     var all = cases()

@@ -312,7 +312,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   the `cursorByKeys` of every other control that takes the cursor:
   FoamyAction, FoamyButton, FoamyTabs, FoamyToggle, FoamyDropdown, the text
   and number fields; set `byKeys` when a key handler sets `index` itself);
-  on a primary button the border is the text colour, as its focus ring. It
+  on a primary button the border is the text or the background colour,
+  whichever reads better on the fill inside it (at least 3:1). It
   is the control's own outline and never changes its size, and an inert or
   disabled control shows it too (with no hover fill). FoamyHeader,
   FoamyHeroBand, FoamyPanelFooter and FoamyInfoNote pass their

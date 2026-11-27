@@ -22,9 +22,10 @@ import "FoamyText.js" as FoamyText
 // glyph when there is none) and keeps the button inert; actionEnabled: false
 // keeps it visible but inert; enabled: false greys it out.
 // `cursorByKeys: cursor.byKeys` draws the keys' cursor: the 1 px border in
-// the accent (a primary: in the text colour, as its focus ring), at full
-// strength also on an inert, busy or disabled button, which still shows no
-// hover fill. The border keeps its width, so nothing moves.
+// the accent (a primary: the text or the background colour, whichever
+// reads better on the fill inside it), at full strength also on an inert,
+// busy or disabled button, which still shows no hover fill. The border
+// keeps its width, so nothing moves.
 // Inert and disabled are drawn weaker, not faded: a lighter tint of the
 // kind's fill and a label that still reads on it over the popup
 // background (inert 4.5:1, disabled 3:1). `foreground` is the label's
@@ -163,7 +164,7 @@ Rectangle {
     if (!busy && mouse.pressed)
       return primary ? Qt.darker(Commons.Color.accent, 1.12) : destructive ? Qt.alpha(Commons.Color.urgent, 0.26) : Qt.alpha(FoamyPalette.text, 0.14)
     if (!busy && (hasCursor || mouse.containsMouse))
-      return primary ? Qt.lighter(Commons.Color.accent, 1.1) : destructive ? Qt.alpha(Commons.Color.urgent, 0.2) : Qt.alpha(FoamyPalette.text, 0.1)
+      return primary ? _primaryHover : destructive ? Qt.alpha(Commons.Color.urgent, 0.2) : Qt.alpha(FoamyPalette.text, 0.1)
     return _restFill
   }
   Behavior on _activeFill {
@@ -173,6 +174,20 @@ Rectangle {
     }
   }
   color: _quiet ? _quiet.fill : _activeFill
+  readonly property color _primaryHover: Qt.lighter(Commons.Color.accent, 1.1)
+
+  // A primary's keys' border: the text or the background, whichever reads
+  // better on the fill the keys' cursor shows inside it (the hover fill;
+  // busy: the rest fill; inert, disabled: theirs) over the popup
+  // background. Measured on the settled fill, so it doesn't flip while the
+  // fill animates. The text alone read 1.23:1 on the dark preview's hover
+  // fill, the background (accentInk) 1.55:1 on the light preview's inert one.
+  readonly property color _keysEdge: {
+    const fill = Qt.tint(FoamyPalette.background, _quiet ? _quiet.fill : active ? _primaryHover : _restFill)
+    const text = FoamyPalette.text
+    const back = FoamyPalette.background
+    return FoamyPalette.contrastRatio(text, fill) >= FoamyPalette.contrastRatio(back, fill) ? text : back
+  }
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight
@@ -181,8 +196,10 @@ Rectangle {
   // Inert and disabled fade the border as the fill; the focus ring and the
   // keys' border stay.
   border.color: {
-    if ((activeFocus && focusable) || (hasCursor && cursorByKeys))
+    if (activeFocus && focusable)
       return primary ? FoamyPalette.text : Commons.Color.accent
+    if (hasCursor && cursorByKeys)
+      return primary ? _keysEdge : Commons.Color.accent
     if (primary)
       return "transparent"
     const edge = destructive ? Qt.alpha(Commons.Color.urgent, root.hot ? 0.7 : 0.45) : Qt.alpha(FoamyPalette.text, root.hot ? 0.3 : 0.18)

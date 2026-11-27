@@ -103,8 +103,10 @@ declares its own `columnWidth` (Plugin change below).
   `FoamyButton`, `FoamyToggle`, `FoamyDropdown`, `FoamyNumberField`,
   `FoamyTextSettingField`, `SafeTextField` and `SafeTextArea`. With the
   cursor on the control, the control's own 1 px outline is drawn in the
-  accent: a button's border (a primary's in the text colour, as its focus
-  ring, since an accent border can't be seen on its accent fill), the
+  accent: a button's border (a primary's, since an accent border can't be
+  seen on its accent fill, in the text or the background colour,
+  whichever reads better on the fill inside it: the hover fill, or an
+  inert or disabled button's own), the
   toggle row's fill (as its focus ring), the dropdown's trigger and a
   field's border at the cursor border's width. Nothing moves: no width
   changes. A text field with the text focus keeps the focus look (the
@@ -117,9 +119,11 @@ declares its own `columnWidth` (Plugin change below).
   (FoamyAction's faded with it, .7 and .45, as FoamyTabs fades; a
   button's at full strength, as its focus ring), and still no hover
   fill and the plain pointer; before, an inert FoamyAction showed no
-  cursor at all. A primary button in a dark theme with a light accent
-  shows its text-coloured border weakly against its hover fill (1.23:1 in
-  the dark preview; 6.4:1 against the popup). DESIGN.md: Keyboard.
+  cursor at all. A primary's border against the fill inside it, active /
+  inert / disabled: dark preview 9.24 / 4.64 / 4.27:1, light 3.67 / 4.55
+  / 5.29:1 (the text colour alone read 1.23 / 2.44 dark and 1.92 light
+  active; `accentInk` alone 2.66 dark disabled, 1.55 and 1.33 light inert
+  and disabled). DESIGN.md: Keyboard.
   Plugin change, to show the keys' cursor on these: bind `cursorByKeys:
   cursor.byKeys` on each such control that has a stop in the panel's
   cursor, and on the FoamyHeroBand, FoamyHeader, FoamyPanelFooter or
@@ -144,7 +148,8 @@ declares its own `columnWidth` (Plugin change below).
   pixels): every such control, each FoamyButton kind and FoamyAction
   active, inert and disabled, and the four components' buttons, with the
   cursor and the flag: the outline in the stated colour at the control's
-  strength and apart from the fill inside it; with the cursor alone or
+  strength and apart from the fill inside it (a primary's at least 3:1
+  against it); with the cursor alone or
   the flag alone: not that colour, and the flag alone draws the rest look;
   inside the outline the pixels are the pointer cursor's, every control
   keeps its place and size, and an inert or disabled one has no hover
@@ -152,7 +157,9 @@ declares its own `columnWidth` (Plugin change below).
   (inert and disabled: no border, 8 checks), without the action's or the
   button's keys' border (36 and 28 checks: every action, the band's,
   header's, note's and footer's buttons; every button), a primary's in
-  the accent, the toggle's, the dropdown's, a text field's or text area's
+  the accent, in the text colour (3 checks: dark active and inert, light
+  active) or in `accentInk` (3: dark disabled, light inert and
+  disabled), the toggle's, the dropdown's, a text field's or text area's
   left out, each component's forwarding left out (2 to 8 checks each),
   the button's keys' border 2 px (place, size and the inside: 40
   checks), an inert action with the hover fill, the border on the flag

@@ -8,10 +8,10 @@ SafeTextArea) and the buttons FoamyHeroBand, FoamyHeader, FoamyPanelFooter
 and FoamyInfoNote own (`cursorByKeys` on the component):
 
 - with the cursor and `cursorByKeys`, the control's outline is drawn in the
-  stated colour (the accent; the text colour on a primary button's accent
-  fill) at the control's strength, and differs from the fill inside it
-  (the contrast is printed: the text colour on a dark theme's light accent
-  is the weakest, 1.23:1 in the dark preview);
+  stated colour (the accent; on a primary button's accent fill the text or
+  the background colour) at the control's strength, and differs from the
+  fill inside it; on a primary it reads at least 3:1 against that fill
+  (the contrast is printed);
 - with the cursor and no flag (the pointer's cursor), or the flag and no
   cursor, the outline is not that colour; the flag without the cursor
   draws exactly the rest look;
@@ -47,6 +47,8 @@ NEAR = 3
 # outline is at least this far from the keys' colour, and the keys' border
 # at least this far from the fill just inside it.
 APART = 24
+# A primary's keys' border against its fill, WCAG 2 (non-text contrast).
+INK_READS = 3.0
 
 
 def relative(p):
@@ -107,7 +109,7 @@ def whole(r):
 
 def check_theme(tag, info, shots):
     """Every case's checks for one theme; shots: mode -> pixel(x, y)."""
-    colours = {"accent": rgb(info["accent"]), "text": rgb(info["text"])}
+    colours = {"accent": rgb(info["accent"]), "text": rgb(info["text"]), "background": rgb(info["background"])}
     results = []
     for name, case in info["cases"].items():
         rects = case["rects"]
@@ -121,15 +123,17 @@ def check_theme(tag, info, shots):
                 ", ".join(f"{m} {rects[m]}" for m in MODES),
             )
         )
-        want = colours[case["ring"]]
+        ink = case["ring"] == "ink"
         lines, ok_ring, ok_reads, ok_off = [], True, True, True
         for outline, inner, outer in edges(r):
             under = shots["keys"](*outer)
-            expected = over(want, under, case["strength"])
             drawn = shots["keys"](*outline)
             fill = shots["keys"](*inner)
+            # "ink": whichever of the text and background colours it is.
+            wants = [colours["text"], colours["background"]] if ink else [colours[case["ring"]]]
+            expected = min((over(w, under, case["strength"]) for w in wants), key=lambda e: distance(drawn, e))
             ok_ring &= distance(drawn, expected) <= NEAR
-            ok_reads &= distance(drawn, fill) >= APART
+            ok_reads &= contrast(drawn, fill) >= INK_READS if ink else distance(drawn, fill) >= APART
             lines.append(
                 f"{outline}: {drawn[:3]} want {expected}, {contrast(drawn, fill):.2f}:1 on the fill {fill[:3]}"
             )
