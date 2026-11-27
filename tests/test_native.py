@@ -1305,6 +1305,99 @@ def std_notice_tests(plugin, base, env, text):
     return ok
 
 
+def download_fallback_tests():
+    import socket
+    import threading
+    from unittest.mock import patch
+
+    native = foamykit.native
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen()
+        host, port = server.getsockname()
+        v6 = (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("::1", port, 0, 0))
+        v4 = (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (host, port))
+        resolve = socket.getaddrinfo
+
+        def resolve_fixture(hostname, *args, **kwargs):
+            if hostname == "crates.test":
+                return [v6, v6, v6, v4]
+            return resolve(hostname, *args, **kwargs)
+
+        connect = socket.socket.connect
+        elapsed = 0.0
+
+        def stalled_ipv6(sock, address):
+            nonlocal elapsed
+            if sock.family == socket.AF_INET6:
+                elapsed += sock.gettimeout()
+                raise TimeoutError("silent IPv6 route")
+            return connect(sock, address)
+
+        def serve():
+            with server.accept()[0] as peer:
+                peer.settimeout(5)
+                with peer.makefile("rb") as request:
+                    while request.readline() not in (b"\r\n", b""):
+                        pass
+                peer.sendall(b"HTTP/1.0 200 OK\r\nContent-Length: 5\r\n\r\ncrate")
+
+        server.settimeout(5)
+        worker = threading.Thread(target=serve)
+        worker.start()
+        try:
+            with (
+                patch.object(native, "CRATES_IO_DOWNLOAD", f"http://crates.test:{port}/crate"),
+                patch.dict(os.environ, {"no_proxy": "*"}),
+                patch.object(socket, "getaddrinfo", resolve_fixture),
+                patch.object(socket.socket, "connect", stalled_ipv6),
+            ):
+                data = native.download_crate("demo", "1")
+        finally:
+            worker.join()
+        return report(
+            "a crate downloads over IPv4 after a silent IPv6 route",
+            data == b"crate" and elapsed <= 3,
+            f"IPv6 consumed {elapsed:.1f}s before IPv4",
+        )
+
+
+def download_deadline_test():
+    import socket
+    from unittest.mock import patch
+
+    native = foamykit.native
+    resolve = socket.getaddrinfo
+    elapsed = 0.0
+
+    def resolve_fixture(host, *args, **kwargs):
+        if host == "crates.test":
+            return resolve("::1", 443, type=socket.SOCK_STREAM) + resolve("127.0.0.1", 443, type=socket.SOCK_STREAM)
+        return resolve(host, *args, **kwargs)
+
+    def never_answers(sock, _address):
+        nonlocal elapsed
+        elapsed += sock.gettimeout()
+        raise TimeoutError("silent route")
+
+    with (
+        patch.object(native, "CRATES_IO_DOWNLOAD", "https://crates.test/archive"),
+        patch.dict(os.environ, {"no_proxy": "*"}),
+        patch.object(socket, "getaddrinfo", resolve_fixture),
+        patch.object(socket.socket, "connect", never_answers),
+        patch.object(time, "monotonic", lambda: elapsed),
+    ):
+        try:
+            native.download_crate("demo", "1")
+        except native.KitError as error:
+            return report(
+                "silent crate addresses share one connect deadline",
+                elapsed == 60 and "silent route" in str(error),
+                f"connecting took {elapsed:.1f}s",
+            )
+    return report("a silent crate host reports a download failure", False)
+
+
 def std_archive_tests(base):
     """std_crate_files: the .crate with the standard library lock's checksum,
     from cargo's cache, the foamy-native cache or crates.io (then cached);
@@ -1541,6 +1634,7 @@ def two_helpers_test(base, env):
     not block the notices). A current build's paths are still checked.
     Cargo and the builds are stubbed: the graph is `shared` 1.0.0, then 2.0.0."""
     import argparse
+    from unittest.mock import patch
 
     native = foamykit.native
     ok = True
@@ -1585,13 +1679,21 @@ def two_helpers_test(base, env):
         )
 
     crates = {"native": BINARY, "second": "foamy-native-demo-second"}
-    real = (native.linked_packages, native.lock_packages, native.cargo_home, native.build_native)
+    crate_files = native.crate_files
+
+    def fixture_crate(*args):
+        # Only the shared dependency is synthetic. Toolchain notices still
+        # come from the real, checksum-verified offline registry.
+        with patch.object(native, "cargo_home", return_value=home):
+            return crate_files(*args)
+
+    real = (native.linked_packages, native.lock_packages, native.crate_files, native.build_native)
     saved = dict(os.environ)
     os.environ.update(env or {})
-    native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = (
+    native.linked_packages, native.lock_packages, native.crate_files, native.build_native = (
         linked,
         lock,
-        lambda: home,
+        fixture_crate,
         build,
     )
     try:
@@ -1640,7 +1742,7 @@ def two_helpers_test(base, env):
             )
             shutil.rmtree(work)
     finally:
-        native.linked_packages, native.lock_packages, native.cargo_home, native.build_native = real
+        native.linked_packages, native.lock_packages, native.crate_files, native.build_native = real
         os.environ.clear()
         os.environ.update(saved)
     return ok
@@ -1699,6 +1801,8 @@ def main():
     ok = sync_tests(base)
     ok &= crate_archive_tests(base)
     ok &= std_archive_tests(base)
+    ok &= download_fallback_tests()
+    ok &= download_deadline_test()
     if shutil.which("cargo") and shutil.which("rustup"):
         ok &= rust_tests(base)
     else:

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.17.1 — 2026-11-27
+
+### Fixed
+- Crate downloads for native helper notices could wait 60 seconds per address
+  on an unresponsive route. The downloader now alternates IPv6 and IPv4
+  within one 60-second connect budget. Earlier attempts get at most 2.5
+  seconds and half the remaining time. The final address gets the rest.
+- The shared Rust crate adds `net::connect_addresses` for helpers that
+  previously had to manage fallback themselves. It uses the same address
+  order and attempt limits under the caller’s deadline. Loopback tests cover
+  a silent IPv6 route followed by working IPv4, deadline expiry and refusal.
+  A crate download test exercises urllib fallback with a local HTTP server.
+
+  **Plugin change: sync and rebuild the native helper.** Refresh Cargo.lock
+  with `cargo update -p foamy-helper --offline` for version 0.1.3. Raw TCP
+  callers must pass their approved addresses to `connect_addresses` to use
+  the new behavior. Plugins with their own HTTP connectors own their fallback.
+
 ## 0.17.0 — 2026-11-27
 
 ### Changed
