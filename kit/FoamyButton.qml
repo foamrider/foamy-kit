@@ -142,29 +142,31 @@ Rectangle {
     }
   }
 
-  // An active button's fill: hover and press animate. A change of state
-  // draws at once, so the label never sits on the other state's fill (an
+  // The fill at full strength (active or busy): hover and press animate,
+  // and so does a change to or from busy under the pointer, since busy
+  // draws the rest fill. A change between active, inert and disabled draws
+  // at once, so the label never sits on the other state's fill (an
   // animated `color` under the new label read 1.57:1 just after inert to
   // active in the light preview): `color` is bound to the inert or
-  // disabled fill, and while the button is not active this fill follows
-  // the pointer without animating, so it is in place when the button turns
-  // active. A theme or `kind` change of an active button still animates
-  // its fill under the new label, for one hover time, as before 0.15.2.
+  // disabled fill, and while the button draws weaker this fill follows the
+  // pointer without animating, so it is in place when the button turns
+  // active. A theme or `kind` change of an active or busy button still
+  // animates its fill under the new label, for one hover time, as before
+  // 0.15.2.
   property color _activeFill: {
-    if (mouse.pressed)
+    if (!busy && mouse.pressed)
       return primary ? Qt.darker(Commons.Color.accent, 1.12) : destructive ? Qt.alpha(Commons.Color.urgent, 0.26) : Qt.alpha(FoamyPalette.text, 0.14)
-    if (hasCursor || mouse.containsMouse)
+    if (!busy && (hasCursor || mouse.containsMouse))
       return primary ? Qt.lighter(Commons.Color.accent, 1.1) : destructive ? Qt.alpha(Commons.Color.urgent, 0.2) : Qt.alpha(FoamyPalette.text, 0.1)
     return _restFill
   }
   Behavior on _activeFill {
-    enabled: root.active
+    enabled: root._strength === 1
     ColorAnimation {
       duration: FoamyMotion.hover
     }
   }
-  // Busy draws as active at rest.
-  color: _quiet ? _quiet.fill : active ? _activeFill : _restFill
+  color: _quiet ? _quiet.fill : _activeFill
 
   implicitWidth: Math.max(FoamyStyle.controlHeight * 2, content.implicitWidth + FoamyStyle.gapLarge * 2 + border.width * 2)
   implicitHeight: FoamyStyle.controlHeight

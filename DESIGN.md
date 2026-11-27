@@ -134,8 +134,8 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
   (the fill steps up to at most .8 for it) and mostly takes the text's ink
   when disabled; a primary in a light theme, or with an accent that reads
   weakly on the background, turns to a pale accent with the text's ink. A
-  change of state shows its fill and label at once; hover and press
-  animate. Nothing inside a button fades with it: content a button draws
+  change between active, inert and disabled shows its fill and label at
+  once; hover, press and a change to or from busy animate. Nothing inside a button fades with it: content a button draws
   itself takes `foreground`.
 - **Footer**: `FoamyPanelFooter` when a panel shows where its data comes from or
   how fresh it is: hairline, the source or a leading action ("Calendar") on the
