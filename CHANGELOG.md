@@ -34,6 +34,24 @@ No plugin must change.
 - FoamyIcon: `corner-down-left` and `arrow-big-up` (Lucide 1.65.0,
   lucide-static), 127 names, for key caps (Enter, Shift). No other icon
   changed.
+- A field slot in `FoamyHeroBand`'s field mode: `fieldX` and
+  `fieldWidth` (off by default: `fieldWidth` -1). Set, the open field
+  spans just that part of the title row (band coordinates as drawn;
+  mirror them in RTL), growing there from its origin as before; the
+  title row stays: the title column ends a gap before the field (cut
+  with "…"), and the buttons stay shown and usable (`buttonsActive`
+  stays true: pointer, cursor stops and the ⋯ menu). `fieldRect` is the
+  open field's rectangle in the band, slotted or not, for what hangs
+  from it. It uses `FoamyHeader.titleMaxWidth` (new, -1 by default: the
+  title/meta column at most this wide, the buttons kept at the trailing
+  end). DESIGN.md: Hero band. `tests/test_band_field.py` (LTR and RTL):
+  slotted, the open field and `fieldRect` on the slot, the title row
+  opaque and enabled, a long title cut a gap before the field (after it
+  in RTL), Settings and "+" take clicks, a cursor stop lights its button
+  and the ⋯ menu opens while the field is open; the slot off again, the
+  field spans the row and the buttons are inert. Seen failing with the
+  title not capped and the buttons inert while slotted (6 checks LTR, 4
+  RTL).
 
 ## 0.16.0 — 2026-11-27
 

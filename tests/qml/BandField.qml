@@ -418,8 +418,81 @@ ShellRoot {
       check(near(cb.height, before.height) && sameRect(rectOf(body.centeredHero, cb), before.hero) && sameRect(rectOf(title, cb), before.title), "centred: the band, its hero and its title don't move")
       check(cb.titleRow.opacity === before.header && cb.titleRow.enabled, "centred: the buttons stay shown and active")
       cb.fieldOpen = false
-      shell.finish()
+      shell.slotted()
     })
+  }
+
+  // A field slot (fieldX, fieldWidth): the open field spans just the slot,
+  // in its row; the title stays, ending a gap before the field, and the
+  // buttons stay shown and take clicks, cursor and menu. Off again, the
+  // field spans the row and the buttons go inert.
+  function slotted() {
+    var body = popup.bodyItem
+    var b = body.band
+    var slot = findByName(b, "foamyHeroBandField")
+    var titleText = findByText(b.titleRow, "Todoist")
+    var h = Math.min(b.titleRow.height, FoamyStyle.controlHeight)
+    var fx = Math.round(b.width * 0.35)
+    var fw = Math.round(b.width * 0.3)
+    b.title = "Todoist with a title long enough to run under the field"
+    titleText = findByText(b.titleRow, b.title)
+    Style.reduceMotion = true
+    b.fieldX = fx
+    b.fieldWidth = fw
+    b.fieldOpen = true
+    var want = [fx, b.titleRow.y + (b.titleRow.height - h) / 2, fw, h]
+    check(sameRect(rectOf(slot, b), want) && sameRect([b.fieldRect.x, b.fieldRect.y, b.fieldRect.width, b.fieldRect.height], want), "slotted: the open field spans the slot " + JSON.stringify([rectOf(slot, b), want, b.fieldRect]))
+    check(b.buttonsActive && b.titleRow.enabled && b.titleRow.opacity === 1, "slotted: the title row stays, its buttons active")
+    wait.waitFor(function () {
+      var t = rectOf(titleText, b)
+      return shell.rtl ? t[0] >= fx + fw + FoamyStyle.gapLarge - 0.5 : t[0] + t[2] <= fx - FoamyStyle.gapLarge + 0.5
+    }, 2000, function () {
+      var t = rectOf(titleText, b)
+      check(titleText.truncated, "slotted: the long title is cut before the field " + JSON.stringify(t))
+      check(t[2] > FoamyStyle.gapLarge, "slotted: the title keeps its room " + JSON.stringify(t))
+      var clicks = settingsClicks
+      ev.mouseClick(b.settingsButton, b.settingsButton.width / 2, b.settingsButton.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+      check(settingsClicks === clicks + 1, "slotted: Settings takes a click while the field is open")
+      var adds = addClicks
+      ev.mouseClick(body.addAction, body.addAction.width / 2, body.addAction.height / 2, Qt.LeftButton, Qt.NoModifier, -1)
+      check(addClicks === adds + 1, "slotted: \"+\" takes a click while the field is open")
+      b.settingsHasCursor = true
+      check(b.settingsButton.hasCursor, "slotted: a cursor stop lights its button")
+      b.settingsHasCursor = false
+      b.menuItems = [menuEntry]
+      b.openMenu(true)
+      wait.waitFor(function () {
+        return b.menuOpen
+      }, 2000, function () {
+        b.closeMenu()
+        b.menuItems = []
+        // Off again: the whole row, the buttons inert, the title whole.
+        b.fieldWidth = -1
+        var whole = [FoamyStyle.padding, want[1], b.width - FoamyStyle.padding * 2, h]
+        check(sameRect(rectOf(slot, b), whole) && !b.buttonsActive && b.titleRow.opacity === 0, "slot off: the field spans the row, the buttons inert " + JSON.stringify(rectOf(slot, b)))
+        b.fieldOpen = false
+        b.fieldX = 0
+        b.title = "Todoist"
+        wait.waitFor(function () {
+          return !titleText.truncated && b.titleRow.opacity === 1
+        }, 2000, function () {
+          Style.reduceMotion = false
+          shell.finish()
+        }, tag + " the title whole again")
+      }, tag + " slotted: the ⋯ menu opens")
+    }, tag + " slotted: the title ends before the field")
+  }
+  function findByText(item, text) {
+    if (!item)
+      return null
+    if (item.text === text && item.truncated !== undefined)
+      return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = findByText(item.children[i], text)
+      if (found)
+        return found
+    }
+    return null
   }
 
   function findByName(item, name) {

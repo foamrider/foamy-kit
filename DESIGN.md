@@ -83,7 +83,12 @@ component instead of restating the rule. `check.sh` lints the rules marked *(lin
     (`buttonsActive`); the panel owns the keys (Esc closes, the focus goes
     back to the key catcher). Closing, the field is inert at once and drops
     the focus. Field mode is for bands with a title row: a centred band
-    ignores `fieldOpen`.
+    ignores `fieldOpen`. A wide panel whose columns make a full-width field
+    a slab (a rail, a list, a pane) gives it a slot (`fieldX`,
+    `fieldWidth`: the list column): the title stays over the rail, cut
+    before the field, and the buttons stay over the pane, usable while the
+    field is open (+ gives the keys back to the field). What hangs from
+    the field places itself by `fieldRect`.
   - **Centred** (`centered: true`): for a panel about one big value read at a
     glance (clock: the time; weather: the temperature and sky). No title icon;
     the hero comes first, centred (give hero items `Layout.alignment:
