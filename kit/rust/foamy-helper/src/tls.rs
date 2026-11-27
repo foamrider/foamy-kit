@@ -37,7 +37,10 @@
 //! ureq's `timeout_global` bounds each read by the time left, but its CONNECT
 //! proxy reply loop does not: put a deadline-capping transport in ureq's
 //! connector chain (foamy-train's `native/src/net.rs` `DeadlineConnector`), or
-//! use [`crate::net::DeadlineStream`] under your own HTTP code.
+//! use [`crate::net::DeadlineStream`] under your own HTTP code. For raw TCP,
+//! pass all approved addresses to [`crate::net::connect_addresses`] before
+//! TLS. For ureq, the TCP connector must alternate families and limit each
+//! attempt before passing its transport to the TLS connector.
 
 use std::fmt;
 use std::sync::{Arc, OnceLock};

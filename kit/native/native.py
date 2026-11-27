@@ -29,12 +29,17 @@ import json
 import os
 import re
 import shutil
+import socket
 import stat
 import struct
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
+import urllib.request
+from collections import deque
+from functools import partial
 from pathlib import Path
 
 LOCK_NAME = "foamy-kit.lock"
@@ -1277,14 +1282,57 @@ def read_crate(name, version, data, origin):
     return files
 
 
+class CrateDownloadHandler(urllib.request.HTTPSHandler, urllib.request.HTTPHandler):
+    """Use one TCP connect deadline across addresses and HTTP(S) redirects."""
+
+    def __init__(self, deadline):
+        super().__init__()
+        self.deadline = deadline
+
+    def do_open(self, http_class, req, **kwargs):
+        def connection(*args, **options):
+            client = http_class(*args, **options)
+            # Keep http.client in charge of proxy tunnels, TLS and host checks.
+            client._create_connection = partial(self.connect, client._create_connection)
+            return client
+
+        return super().do_open(connection, req, **kwargs)
+
+    def connect(self, dial, address, timeout, source_address):
+        addresses = socket.getaddrinfo(*address, type=socket.SOCK_STREAM)
+        if not addresses:
+            raise OSError("no addresses for crate download")
+        first_family = addresses[0][0]
+        pending = deque(a for a in addresses if a[0] == first_family)
+        other = deque(a for a in addresses if a[0] != first_family)
+        while pending:
+            target = pending.popleft()[4]
+            if other:
+                pending, other = other, pending
+            left = self.deadline - time.monotonic()
+            if left <= 0:
+                raise TimeoutError("crate download connect deadline exceeded")
+            # Dial the numeric endpoint, including the scope of link-local IPv6.
+            # The original connector owns source binding and failed-socket cleanup.
+            endpoint = socket.getnameinfo(target, socket.NI_NUMERICHOST | socket.NI_NUMERICSERV)
+            try:
+                sock = dial(endpoint, min(2.5, left / 2) if pending else left, source_address)
+            except OSError:
+                if not pending:
+                    raise
+                continue
+            sock.settimeout(timeout)  # TLS and reads keep the download's I/O timeout.
+            return sock
+
+
 def download_crate(name, version):
     """The .crate from crates.io (verified by the caller)."""
-    import urllib.request
-
     url = CRATES_IO_DOWNLOAD.format(name=name, version=version)
     request = urllib.request.Request(url, headers={"User-Agent": "foamy-kit-native-notices"})
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        timeout = 60
+        opener = urllib.request.build_opener(CrateDownloadHandler(time.monotonic() + timeout))
+        with opener.open(request, timeout=timeout) as response:
             data = response.read(MAX_CRATE_BYTES + 1)
     except OSError as error:
         raise KitError(
