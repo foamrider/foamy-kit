@@ -36,7 +36,12 @@ QtObject {
   // --- type ------------------------------------------------------------------
   // Body text is the foamy sans; numbers, code and glyph fonts use monoFamily
   // (the Omarchy font, which follows `omarchy font set`).
-  readonly property string fontFamily: "sans-serif"
+  // Adwaita Sans (package adwaita-fonts) has a real semi-bold, so DemiBold
+  // titles draw at 600; the usual system sans (Liberation Sans) has none and
+  // draws them Bold. Asked only when installed, so without it the family is
+  // exactly the system's "sans-serif", as before kit 0.17.0. Read once: a
+  // font installed while the shell runs takes effect at its next start.
+  readonly property string fontFamily: Qt.fontFamilies().indexOf("Adwaita Sans") >= 0 ? "Adwaita Sans" : "sans-serif"
   readonly property string monoFamily: Style.font.family
   // A named type, so qmllint knows the members (FoamyStyle.font.body).
   component TypeScale: QtObject {
